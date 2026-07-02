@@ -102,20 +102,20 @@ write_manifest() {
 
 build_fujinet_tcp() {
   require_dir "$FUJINET_NIO"
-  run_in fujinet-tcp-debug-build "$FUJINET_NIO" cmake --build --preset fujibus-tcp-debug-build
+  run_in fujinet-tcp-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-tcp-debug
   run_in fujinet-tcp-debug-test "$FUJINET_NIO" ctest --test-dir build/fujibus-tcp-debug --output-on-failure
-  run_in fujinet-tcp-release-build "$FUJINET_NIO" cmake --build --preset fujibus-tcp-release-build
+  run_in fujinet-tcp-release-build "$FUJINET_NIO" ./build.sh -cp fujibus-tcp-release
 }
 
 build_fujinet_pty() {
   require_dir "$FUJINET_NIO"
-  run_in fujinet-pty-debug-build "$FUJINET_NIO" cmake --build --preset fujibus-pty-debug-build
+  run_in fujinet-pty-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-pty-debug
   run_in fujinet-pty-debug-test "$FUJINET_NIO" ctest --test-dir build/fujibus-pty-debug --output-on-failure
 }
 
 build_fujinet_rs232() {
   require_dir "$FUJINET_NIO"
-  run_in fujinet-rs232-debug-build "$FUJINET_NIO" cmake --build --preset fujibus-rs232-debug-build
+  run_in fujinet-rs232-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-rs232-debug
   run_in fujinet-rs232-debug-test "$FUJINET_NIO" ctest --test-dir build/fujibus-rs232-debug --output-on-failure
 }
 
