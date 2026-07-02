@@ -19,9 +19,6 @@
 [submodule "repos/fujinet-msdos"]
 	path = repos/fujinet-msdos
 	url = git@github.com:markjfisher/fujinet-msdos.git
-[submodule "repos/fujinet-lib"]
-	path = repos/fujinet-lib
-	url = git@github.com:markjfisher/fujinet-lib.git
 [submodule "repos/bounce-world-client-nio"]
 	path = repos/bounce-world-client-nio
 	url = git@github.com:markjfisher/bounce-world-client-nio.git

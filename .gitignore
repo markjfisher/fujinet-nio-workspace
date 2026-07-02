@@ -1,3 +1,7 @@
 /build/
 /local/config.env
 *.log
+
+/.vscode/
+/.kilo/
+/.cursor/

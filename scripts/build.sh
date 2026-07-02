@@ -90,7 +90,6 @@ write_manifest() {
     git_ref_line nio-docs "$NIO_DOCS"
     git_ref_line fujinet-qemu-msdos "$FUJINET_QEMU_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
-    git_ref_line fujinet-lib "$FUJINET_LIB"
     git_ref_line fn-rom "$FN_ROM"
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"

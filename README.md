@@ -17,7 +17,6 @@ fujinet-nio-workspace/
     nio-docs/
     fujinet-qemu-msdos/
     fujinet-msdos/
-    fujinet-lib/
     fn-rom/
     bounce-world-client-nio/
   scripts/
@@ -76,7 +75,6 @@ NIO_APPS=repos/nio-apps
 NIO_DOCS=repos/nio-docs
 FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
 FUJINET_MSDOS=repos/fujinet-msdos
-FUJINET_LIB=repos/fujinet-lib
 FN_ROM=repos/fn-rom
 ```
 

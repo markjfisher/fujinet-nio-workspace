@@ -20,7 +20,6 @@ for repo in \
   "$NIO_DOCS" \
   "$FUJINET_QEMU_MSDOS" \
   "$FUJINET_MSDOS" \
-  "$FUJINET_LIB" \
   "$FN_ROM" \
   "$BOUNCE_WORLD"
 do
