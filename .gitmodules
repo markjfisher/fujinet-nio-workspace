@@ -1,0 +1,27 @@
+[submodule "repos/fujinet-nio"]
+	path = repos/fujinet-nio
+	url = git@github.com:markjfisher/fujinet-nio.git
+[submodule "repos/fujinet-nio-lib"]
+	path = repos/fujinet-nio-lib
+	url = git@github.com:markjfisher/fujinet-nio-lib.git
+[submodule "repos/nio-apps"]
+	path = repos/nio-apps
+	url = git@github.com:markjfisher/nio-apps.git
+[submodule "repos/nio-docs"]
+	path = repos/nio-docs
+	url = ../repos/nio-docs
+[submodule "repos/fujinet-qemu-msdos"]
+	path = repos/fujinet-qemu-msdos
+	url = git@github.com:markjfisher/fujinet-qemu-msdos.git
+[submodule "repos/fn-rom"]
+	path = repos/fn-rom
+	url = git@github.com:markjfisher/fn-rom.git
+[submodule "repos/fujinet-msdos"]
+	path = repos/fujinet-msdos
+	url = git@github.com:markjfisher/fujinet-msdos.git
+[submodule "repos/fujinet-lib"]
+	path = repos/fujinet-lib
+	url = git@github.com:markjfisher/fujinet-lib.git
+[submodule "repos/bounce-world-client-nio"]
+	path = repos/bounce-world-client-nio
+	url = git@github.com:markjfisher/bounce-world-client-nio.git
