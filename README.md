@@ -142,7 +142,7 @@ scripts/build.sh qemu-run
 Additional arguments are passed to `run-qemu-nio`:
 
 ```sh
-scripts/build.sh qemu-run -- --hda build/msdos-nio-apps.qcow2
+scripts/build.sh qemu-run -- --hda repos/fujinet-qemu-msdos/build/msdos-nio-apps.qcow2
 ```
 
 ## Status And Manifest

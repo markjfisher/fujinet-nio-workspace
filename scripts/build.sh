@@ -178,6 +178,9 @@ build_qemu_image() {
 
 run_qemu() {
   require_dir "$FUJINET_QEMU_MSDOS"
+  if [ "${1:-}" = "--" ]; then
+    shift
+  fi
   run qemu-run env \
     FUJINET_NIO_PATH="$FUJINET_NIO" \
     FUJINET_NIO_BIN="${FUJINET_NIO_BIN:-$FUJINET_NIO_TCP_DEBUG_BIN}" \
