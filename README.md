@@ -72,7 +72,6 @@ The defaults point at the submodules:
 FUJINET_NIO=repos/fujinet-nio
 FUJINET_NIO_LIB=repos/fujinet-nio-lib
 NIO_APPS=repos/nio-apps
-NIO_DOCS=repos/nio-docs
 FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
 FUJINET_MSDOS=repos/fujinet-msdos
 FN_ROM=repos/fn-rom

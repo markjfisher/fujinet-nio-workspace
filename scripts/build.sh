@@ -88,7 +88,6 @@ write_manifest() {
     git_ref_line fujinet-nio "$FUJINET_NIO"
     git_ref_line fujinet-nio-lib "$FUJINET_NIO_LIB"
     git_ref_line nio-apps "$NIO_APPS"
-    git_ref_line nio-docs "$NIO_DOCS"
     git_ref_line fujinet-qemu-msdos "$FUJINET_QEMU_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
     git_ref_line fn-rom "$FN_ROM"

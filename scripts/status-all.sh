@@ -17,7 +17,6 @@ for repo in \
   "$FUJINET_NIO" \
   "$FUJINET_NIO_LIB" \
   "$NIO_APPS" \
-  "$NIO_DOCS" \
   "$FUJINET_QEMU_MSDOS" \
   "$FUJINET_MSDOS" \
   "$FN_ROM" \
