@@ -131,7 +131,8 @@ build_lib_msdos() {
 
 build_msdos_driver() {
   require_dir "$FUJINET_MSDOS"
-  run_in msdos-driver "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO
+  run_in msdos-driver-clean "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO clean
+  run_in msdos-driver-build "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO
 }
 
 build_apps_msdos() {
@@ -157,6 +158,7 @@ build_msdos_image() {
 build_qemu_image() {
   require_dir "$FUJINET_QEMU_MSDOS"
   require_dir "$FUJINET_MSDOS"
+  build_msdos_driver
   if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
     build_bounce_world
   fi
@@ -193,7 +195,6 @@ target_all() {
   build_fujinet_rs232
   build_lib_linux
   build_lib_msdos
-  build_msdos_driver
   build_apps_msdos
   build_msdos_image
   build_qemu_image
