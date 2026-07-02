@@ -7,9 +7,6 @@
 [submodule "repos/nio-apps"]
 	path = repos/nio-apps
 	url = git@github.com:markjfisher/nio-apps.git
-[submodule "repos/nio-docs"]
-	path = repos/nio-docs
-	url = ../repos/nio-docs
 [submodule "repos/fujinet-qemu-msdos"]
 	path = repos/fujinet-qemu-msdos
 	url = git@github.com:markjfisher/fujinet-qemu-msdos.git
