@@ -14,7 +14,6 @@ fujinet-nio-workspace/
     fujinet-nio/
     fujinet-nio-lib/
     nio-apps/
-    nio-docs/
     fujinet-qemu-msdos/
     fujinet-msdos/
     fn-rom/
