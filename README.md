@@ -120,9 +120,10 @@ scripts/build.sh qemu-image
 - fujinet-msdos `FUJINET.SYS` with `FUJINET_TRANSPORT=NIO`
 - nio-apps MS-DOS tools
 - raw FAT image from `nio-apps/msdos/bin`
+- QEMU qcow image through `fujinet-qemu-msdos`
 
-The QEMU qcow image is built by `all` only when `BASE_IMAGE` is configured or a
-usable existing QEMU image is already present. Build it explicitly with:
+The QEMU image builder defaults to `repos/fujinet-qemu-msdos/msdos.qcow2`.
+Set `BASE_IMAGE` only when you want to use a different base image:
 
 ```sh
 BASE_IMAGE=/path/to/base-dos.qcow2 scripts/build.sh qemu-image

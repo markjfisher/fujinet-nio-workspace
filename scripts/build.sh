@@ -183,11 +183,7 @@ target_all() {
   build_msdos_driver
   build_apps_msdos
   build_msdos_image
-  if [ -n "${BASE_IMAGE:-}" ] || [ -f "$FUJINET_QEMU_MSDOS/build/msdos-nio.qcow2" ]; then
-    build_qemu_image
-  else
-    echo "==> qemu-image skipped: set BASE_IMAGE or create $FUJINET_QEMU_MSDOS/build/msdos-nio.qcow2"
-  fi
+  build_qemu_image
   write_manifest
 }
 
