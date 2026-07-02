@@ -30,7 +30,9 @@ export BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO"
 
 if [ -f "$HOME/.local/bin/add_watcom.sh" ]; then
   # shellcheck source=/dev/null
+  set +e
   source "$HOME/.local/bin/add_watcom.sh"
+  set -e
 fi
 
 if [ -f "$NIO_WORKSPACE/local/config.env" ]; then
