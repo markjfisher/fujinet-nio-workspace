@@ -76,6 +76,7 @@ NIO_DOCS=repos/nio-docs
 FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
 FUJINET_MSDOS=repos/fujinet-msdos
 FN_ROM=repos/fn-rom
+BOUNCE_WORLD_CLIENT_NIO=repos/bounce-world-client-nio
 ```
 
 Override any of them in `local/config.env`:
@@ -107,6 +108,7 @@ scripts/build.sh fujinet-rs232
 scripts/build.sh lib
 scripts/build.sh msdos-driver
 scripts/build.sh apps-msdos
+scripts/build.sh bounce-world
 scripts/build.sh msdos-image
 scripts/build.sh qemu-image
 ```
@@ -119,6 +121,7 @@ scripts/build.sh qemu-image
 - fujinet-nio-lib Linux and MS-DOS libraries
 - fujinet-msdos `FUJINET.SYS` with `FUJINET_TRANSPORT=NIO`
 - nio-apps MS-DOS tools
+- bounce-world-client-nio
 - raw FAT image from `nio-apps/msdos/bin`
 - QEMU qcow image through `fujinet-qemu-msdos`
 

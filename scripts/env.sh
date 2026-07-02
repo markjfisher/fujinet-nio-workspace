@@ -25,7 +25,8 @@ export FUJINET_QEMU_MSDOS="$NIO_WORKSPACE/repos/fujinet-qemu-msdos"
 export FUJINET_MSDOS="$NIO_WORKSPACE/repos/fujinet-msdos"
 export FUJINET_LIB="$NIO_WORKSPACE/repos/fujinet-lib"
 export FN_ROM="$NIO_WORKSPACE/repos/fn-rom"
-export BOUNCE_WORLD="$NIO_WORKSPACE/repos/bounce-world-client-nio"
+export BOUNCE_WORLD_CLIENT_NIO="$NIO_WORKSPACE/repos/bounce-world-client-nio"
+export BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO"
 
 if [ -f "$HOME/.local/bin/add_watcom.sh" ]; then
   # shellcheck source=/dev/null
@@ -45,5 +46,7 @@ export FUJINET_NIO_TCP_DEBUG_BIN="${FUJINET_NIO_TCP_DEBUG_BIN:-$FUJINET_NIO/buil
 export FUJINET_NIO_TCP_RELEASE_BIN="${FUJINET_NIO_TCP_RELEASE_BIN:-$FUJINET_NIO/build/fujibus-tcp-release/fujinet-nio}"
 
 export NIO_APPS_MSDOS="${NIO_APPS_MSDOS:-$NIO_APPS/msdos}"
+export BOUNCE_WORLD_CLIENT_NIO="${BOUNCE_WORLD_CLIENT_NIO:-$BOUNCE_WORLD}"
+export BOUNCE_WORLD="${BOUNCE_WORLD:-$BOUNCE_WORLD_CLIENT_NIO}"
 
 mkdir -p "$NIO_LOG_DIR" "$NIO_IMAGE_DIR"

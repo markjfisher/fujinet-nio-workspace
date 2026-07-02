@@ -20,6 +20,7 @@ Targets:
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
   msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
   apps-msdos          Build nio-apps MS-DOS tools
+  bounce-world        Build bounce-world-client-nio
   msdos-image         Build raw FAT image from nio-apps/msdos/bin
   qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
   qemu-run            Run fujinet-qemu-msdos/run-qemu-nio with workspace defaults
@@ -91,7 +92,7 @@ write_manifest() {
     git_ref_line fujinet-qemu-msdos "$FUJINET_QEMU_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
     git_ref_line fn-rom "$FN_ROM"
-    git_ref_line bounce-world-client-nio "$BOUNCE_WORLD"
+    git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
@@ -139,6 +140,12 @@ build_apps_msdos() {
   run_in apps-msdos "$NIO_APPS_MSDOS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
 }
 
+build_bounce_world() {
+  require_dir "$BOUNCE_WORLD_CLIENT_NIO"
+  run_in bounce-world-clean "$BOUNCE_WORLD_CLIENT_NIO" make clean
+  run_in bounce-world-build "$BOUNCE_WORLD_CLIENT_NIO" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
 build_msdos_image() {
   require_dir "$NIO_APPS_MSDOS"
   mkdir -p "$NIO_IMAGE_DIR"
@@ -151,6 +158,9 @@ build_msdos_image() {
 build_qemu_image() {
   require_dir "$FUJINET_QEMU_MSDOS"
   require_dir "$FUJINET_MSDOS"
+  if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
+    build_bounce_world
+  fi
   local args=()
   if [ -n "${APPS_MANIFEST:-}" ]; then
     args+=(--apps-manifest "$APPS_MANIFEST")
@@ -161,7 +171,8 @@ build_qemu_image() {
     FUJINET_MSDOS="$FUJINET_MSDOS" \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
     NIO_APPS_MSDOS="$NIO_APPS_MSDOS" \
-    BOUNCE_WORLD="$BOUNCE_WORLD" \
+    BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
+    BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
     DRIVER="${DRIVER:-$FUJINET_MSDOS/sys/fujinet.sys}" \
     "$FUJINET_QEMU_MSDOS/build-nio-qcow" "${args[@]}"
 }
@@ -204,6 +215,7 @@ for target in "$@"; do
     lib-msdos) build_lib_msdos; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
+    bounce-world) build_bounce_world; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;
     qemu-run) shift; run_qemu "$@"; exit $? ;;
