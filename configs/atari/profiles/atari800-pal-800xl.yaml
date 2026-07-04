@@ -1,0 +1,14 @@
+machine:
+  system: 800xl
+  video: pal
+  ram_kb: 64
+  rom:
+    os: ~/8bit/atari/images/os/REV04.ROM
+
+atari800:
+  config: null
+  windowed: true
+
+startup:
+  program: ${NIO_APPS_ATARI_BIN}/fhost.xex
+  disks: []

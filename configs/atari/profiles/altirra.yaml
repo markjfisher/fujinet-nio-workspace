@@ -1,0 +1,29 @@
+machine:
+  system: 800xl
+  video: pal
+  ram_kb: 1088
+  kernel: xl
+  basic: false
+  sio_patch: true
+  accurate_disk: true
+
+altirra:
+  settings_template: configs/atari/settings/altirraSDL-settings.ini
+  rom_roots:
+    os: ${ATARI_OS_ROMS}
+    basic: ${ATARI_BASIC_ROMS}
+  profile: null
+  portable: false
+  debug: false
+  debug_commands: []
+  devices:
+    - type: custom
+      params:
+        hotreload: false
+        path: ${HOME}/dev/atari/fujinet-emulator-bridge/altirra-custom-device/netsio.atdevice
+        allowunsafe: false
+
+startup:
+  programX: ${NIO_APPS_ATARI_BIN}/fhost.xex
+  disks:
+    - /home/markf/dev/atari/fujinet-config-ng/dist/config-z.atr

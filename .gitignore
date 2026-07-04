@@ -5,3 +5,8 @@
 /.vscode/
 /.kilo/
 /.cursor/
+
+# python
+*.pyc
+__pycache__/
+*.py[cod]

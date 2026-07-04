@@ -22,6 +22,7 @@ Targets:
   apps-all            Build all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
   apps-atari          Build nio-apps Atari tools
+  atari-run           Run an Atari app under the configured emulator
   bounce-world        Build bounce-world-client-nio
   msdos-image         Build raw FAT image from nio-apps/build/msdos/bin
   qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
@@ -97,6 +98,7 @@ write_manifest() {
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
+    printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
     printf 'qemu_image=%s\n' "${OUTPUT_IMAGE:-$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2}"
   } > "$NIO_BUILD_DIR/manifest.txt"
@@ -206,6 +208,20 @@ run_qemu() {
     "$FUJINET_QEMU_MSDOS/run-qemu-nio" "$@"
 }
 
+run_atari() {
+  require_dir "$NIO_APPS"
+  if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
+    build_apps_atari
+  fi
+  if [ "${1:-}" = "--" ]; then
+    shift
+  fi
+  if [ $# -eq 0 ] || [[ "${1:-}" == -* ]]; then
+    set -- altirra "$@"
+  fi
+  run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
+}
+
 target_all() {
   build_fujinet_tcp
   build_fujinet_pty
@@ -237,6 +253,7 @@ for target in "$@"; do
     apps-all) build_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
     apps-atari) build_apps_atari; write_manifest ;;
+    atari-run) shift; run_atari "$@"; exit $? ;;
     bounce-world) build_bounce_world; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;

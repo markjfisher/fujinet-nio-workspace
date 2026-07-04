@@ -1,0 +1,9 @@
+emulators:
+  altirra:
+    command_env: ALTIRRA_BIN
+    default_command: AltirraSDL
+    kind: altirra
+  atari800:
+    command_env: ATARI800_BIN
+    default_command: atari800
+    kind: atari800

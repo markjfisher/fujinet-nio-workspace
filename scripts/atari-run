@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=env.sh
+source "$SCRIPT_DIR/env.sh"
+
+export NIO_APPS_ATARI_BIN
+exec python3 "$NIO_WORKSPACE/tools/atari_emulator/run.py" "$@"
