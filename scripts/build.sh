@@ -15,6 +15,7 @@ Targets:
   fujinet-tcp         Build/test fujinet-nio TCP debug and build TCP release
   fujinet-pty         Build/test fujinet-nio PTY debug
   fujinet-rs232       Build/test fujinet-nio RS-232 debug
+  fujinet-atari-netsio Build/test fujinet-nio Atari FujiBus over NetSIO debug
   lib                 Build fujinet-nio-lib Linux and MS-DOS libraries
   lib-linux           Build fujinet-nio-lib Linux library
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
@@ -97,6 +98,7 @@ write_manifest() {
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
+    printf 'fujinet_nio_atari_fujibus_netsio_bin=%s\n' "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN"
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
@@ -122,6 +124,11 @@ build_fujinet_rs232() {
   require_dir "$FUJINET_NIO"
   run_in fujinet-rs232-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-rs232-debug
   run_in fujinet-rs232-debug-test "$FUJINET_NIO" ctest --test-dir build/fujibus-rs232-debug --output-on-failure
+}
+
+build_fujinet_atari_fujibus_netsio() {
+  require_dir "$FUJINET_NIO"
+  run_in fujinet-atari-fujibus-netsio-build "$FUJINET_NIO" ./build.sh -cp atari-fujibus-netsio-debug
 }
 
 build_lib_linux() {
@@ -213,12 +220,69 @@ run_atari() {
   if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
     build_apps_atari
   fi
+  if [ ! -x "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" ]; then
+    build_fujinet_atari_fujibus_netsio
+  fi
   if [ "${1:-}" = "--" ]; then
     shift
   fi
   if [ $# -eq 0 ] || [[ "${1:-}" == -* ]]; then
     set -- altirra "$@"
   fi
+
+  local dry_run=false
+  for arg in "$@"; do
+    if [ "$arg" = "--dry-run" ]; then
+      dry_run=true
+      break
+    fi
+  done
+
+  local netsio_port="${ATARI_NETSIO_PORT:-9997}"
+  local atdev_port="${ATARI_NETSIO_ATDEV_PORT:-9996}"
+  local run_root
+  run_root="$(mktemp -d "${TMPDIR:-/tmp}/fujinet-atari-run.XXXXXX")"
+  mkdir -p "$run_root/fujinet-data"
+  cat > "$run_root/fujinet-data/fujinet.yaml" <<EOF
+netsio:
+  enabled: true
+  host: "localhost"
+  port: $netsio_port
+EOF
+
+  local hub_cmd=(python3 -m netsiohub --port "$atdev_port" --netsio-port "$netsio_port")
+  local nio_cmd=("$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN")
+
+  if [ "$dry_run" = true ]; then
+    printf 'ATARI_RUN_ROOT=%q\n' "$run_root"
+    printf 'cd %q && %q ' "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" "${hub_cmd[0]}"
+    printf '%q ' "${hub_cmd[@]:1}"
+    printf '\n'
+    printf 'cd %q && %q\n' "$run_root" "${nio_cmd[0]}"
+    run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
+    rm -rf "$run_root"
+    return
+  fi
+
+  require_dir "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge"
+
+  local hub_pid=
+  local nio_pid=
+  cleanup_atari_run() {
+    if [ -n "$nio_pid" ]; then kill "$nio_pid" 2>/dev/null || true; fi
+    if [ -n "$hub_pid" ]; then kill "$hub_pid" 2>/dev/null || true; fi
+    wait "$nio_pid" 2>/dev/null || true
+    wait "$hub_pid" 2>/dev/null || true
+    rm -rf "$run_root"
+  }
+  trap cleanup_atari_run EXIT
+
+  (cd "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" && "${hub_cmd[@]}") &
+  hub_pid=$!
+  (cd "$run_root" && "${nio_cmd[@]}") &
+  nio_pid=$!
+  sleep 1
+
   run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
 }
 
@@ -246,6 +310,7 @@ for target in "$@"; do
     fujinet-tcp) build_fujinet_tcp; write_manifest ;;
     fujinet-pty) build_fujinet_pty; write_manifest ;;
     fujinet-rs232) build_fujinet_rs232; write_manifest ;;
+    fujinet-atari-netsio) build_fujinet_atari_fujibus_netsio; write_manifest ;;
     lib) build_lib_linux; build_lib_msdos; write_manifest ;;
     lib-linux) build_lib_linux; write_manifest ;;
     lib-msdos) build_lib_msdos; write_manifest ;;

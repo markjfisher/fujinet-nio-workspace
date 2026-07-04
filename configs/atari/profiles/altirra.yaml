@@ -24,6 +24,6 @@ altirra:
         allowunsafe: false
 
 startup:
-  programX: ${NIO_APPS_ATARI_BIN}/fhost.xex
+  program: ${NIO_APPS_ATARI_BIN}/fhost.xex
   disks:
     - /home/markf/dev/atari/fujinet-config-ng/dist/config-z.atr

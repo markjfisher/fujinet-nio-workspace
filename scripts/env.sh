@@ -45,6 +45,8 @@ export NIO_IMAGE_DIR="${NIO_IMAGE_DIR:-$NIO_BUILD_DIR/images}"
 
 export FUJINET_NIO_TCP_DEBUG_BIN="${FUJINET_NIO_TCP_DEBUG_BIN:-$FUJINET_NIO/build/fujibus-tcp-debug/fujinet-nio}"
 export FUJINET_NIO_TCP_RELEASE_BIN="${FUJINET_NIO_TCP_RELEASE_BIN:-$FUJINET_NIO/build/fujibus-tcp-release/fujinet-nio}"
+export FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN="${FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN:-$FUJINET_NIO/build/atari-fujibus-netsio-debug/fujinet-nio}"
+export FUJINET_EMULATOR_BRIDGE="${FUJINET_EMULATOR_BRIDGE:-$HOME/dev/atari/fujinet-emulator-bridge}"
 
 export NIO_APPS_MSDOS_BIN="${NIO_APPS_MSDOS_BIN:-$NIO_APPS/build/msdos/bin}"
 export NIO_APPS_ATARI_BIN="${NIO_APPS_ATARI_BIN:-$NIO_APPS/build/atari/bin}"

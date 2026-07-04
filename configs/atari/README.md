@@ -22,6 +22,23 @@ Run the default Atari application build under Altirra:
 ./scripts/build.sh atari-run
 ```
 
+This workspace-level target also starts the Atari FujiBus NetSIO sidecars:
+
+- `python3 -m netsiohub` from `FUJINET_EMULATOR_BRIDGE/fujinet-bridge`
+- `repos/fujinet-nio/build/atari-fujibus-netsio-debug/fujinet-nio`
+
+The generated FujiNet config is written below a temporary run root as
+`fujinet-data/fujinet.yaml`, which is the POSIX host filesystem used by
+`fujinet-nio`. This keeps the emulator bridge unchanged: the bridge still
+exposes Altirra's custom NetSIO device on TCP and forwards NetSIO packets over
+UDP, while `fujinet-nio` unwraps/wraps FujiBus bytes inside NetSIO data packets.
+
+Dry-run the full sidecar command set:
+
+```sh
+./scripts/build.sh atari-run -- altirra --dry-run
+```
+
 Override the program under test:
 
 ```sh
@@ -54,6 +71,14 @@ than another branch inside the Altirra or atari800 code.
   settings templates unless `altirra.rom_roots.basic` is set in the profile.
 - `NIO_APPS_ATARI_BIN` points at Atari app outputs. Default:
   `repos/nio-apps/build/atari/bin`.
+- `FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN` overrides the sidecar
+  `fujinet-nio` binary. Default:
+  `repos/fujinet-nio/build/atari-fujibus-netsio-debug/fujinet-nio`.
+- `FUJINET_EMULATOR_BRIDGE` points at the unchanged Altirra NetSIO bridge
+  checkout. Default: `~/dev/atari/fujinet-emulator-bridge`.
+- `ATARI_NETSIO_ATDEV_PORT` overrides the Altirra custom device TCP port.
+  Default: `9996`.
+- `ATARI_NETSIO_PORT` overrides the NetSIO UDP port. Default: `9997`.
 
 ## Profile Shape
 
