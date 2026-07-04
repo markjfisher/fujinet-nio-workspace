@@ -19,9 +19,11 @@ Targets:
   lib-linux           Build fujinet-nio-lib Linux library
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
   msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
+  apps-all            Build all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
+  apps-atari          Build nio-apps Atari tools
   bounce-world        Build bounce-world-client-nio
-  msdos-image         Build raw FAT image from nio-apps/msdos/bin
+  msdos-image         Build raw FAT image from nio-apps/build/msdos/bin
   qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
   qemu-run            Run fujinet-qemu-msdos/run-qemu-nio with workspace defaults
   manifest            Write build/manifest.txt only
@@ -94,6 +96,7 @@ write_manifest() {
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
+    printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
     printf 'qemu_image=%s\n' "${OUTPUT_IMAGE:-$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2}"
   } > "$NIO_BUILD_DIR/manifest.txt"
@@ -136,8 +139,18 @@ build_msdos_driver() {
 }
 
 build_apps_msdos() {
-  require_dir "$NIO_APPS_MSDOS"
-  run_in apps-msdos "$NIO_APPS_MSDOS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+  require_dir "$NIO_APPS"
+  run_in apps-msdos "$NIO_APPS" make TARGET=msdos FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_apps_atari() {
+  require_dir "$NIO_APPS"
+  run_in apps-atari "$NIO_APPS" make TARGET=atari FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_apps_all() {
+  require_dir "$NIO_APPS"
+  run_in apps-all "$NIO_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
 }
 
 build_bounce_world() {
@@ -147,10 +160,13 @@ build_bounce_world() {
 }
 
 build_msdos_image() {
-  require_dir "$NIO_APPS_MSDOS"
+  require_dir "$NIO_APPS"
+  if [ ! -d "$NIO_APPS_MSDOS_BIN" ]; then
+    build_apps_msdos
+  fi
   mkdir -p "$NIO_IMAGE_DIR"
-  run msdos-image "$NIO_APPS_MSDOS/scripts/create_msdos_img.py" \
-    -i "$NIO_APPS_MSDOS/bin" \
+  run msdos-image "$NIO_APPS/msdos/scripts/create_msdos_img.py" \
+    -i "$NIO_APPS_MSDOS_BIN" \
     -o "$NIO_IMAGE_DIR/nio-apps.img" \
     -l NIOAPPS
 }
@@ -171,7 +187,8 @@ build_qemu_image() {
   run qemu-image env \
     FUJINET_MSDOS="$FUJINET_MSDOS" \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
-    NIO_APPS_MSDOS="$NIO_APPS_MSDOS" \
+    NIO_APPS="$NIO_APPS" \
+    NIO_APPS_MSDOS_BIN="$NIO_APPS_MSDOS_BIN" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
     DRIVER="${DRIVER:-$FUJINET_MSDOS/sys/fujinet.sys}" \
@@ -195,7 +212,7 @@ target_all() {
   build_fujinet_rs232
   build_lib_linux
   build_lib_msdos
-  build_apps_msdos
+  build_apps_all
   build_msdos_image
   build_qemu_image
   write_manifest
@@ -217,7 +234,9 @@ for target in "$@"; do
     lib-linux) build_lib_linux; write_manifest ;;
     lib-msdos) build_lib_msdos; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
+    apps-all) build_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
+    apps-atari) build_apps_atari; write_manifest ;;
     bounce-world) build_bounce_world; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;
