@@ -20,7 +20,8 @@ for repo in \
   "$FUJINET_QEMU_MSDOS" \
   "$FUJINET_MSDOS" \
   "$FN_ROM" \
-  "$BOUNCE_WORLD"
+  "$BOUNCE_WORLD" \
+  "$FUJINET_EMULATOR_BRIDGE"
 do
   if [ ! -d "$repo" ]; then
     echo "== $repo"

@@ -20,3 +20,6 @@
 [submodule "repos/bounce-world-client-nio"]
 	path = repos/bounce-world-client-nio
 	url = git@github.com:markjfisher/bounce-world-client-nio.git
+[submodule "repos/fujinet-emulator-bridge"]
+	path = repos/fujinet-emulator-bridge
+	url = git@github.com:markjfisher/fujinet-emulator-bridge.git

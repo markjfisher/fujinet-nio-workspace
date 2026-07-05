@@ -22,6 +22,11 @@ Run the default Atari application build under Altirra:
 ./scripts/build.sh atari-run
 ```
 
+The default profile boots an Atari DOS disk instead of directly loading a XEX.
+That is the right default for command-line style tools: the emulator reaches a
+DOS prompt, and the built Atari app directory is mounted as an H: device through
+AltirraSDL's host-folder support.
+
 This workspace-level target also starts the Atari FujiBus NetSIO sidecars:
 
 - `python3 -m netsiohub` from `FUJINET_EMULATOR_BRIDGE/fujinet-bridge`
@@ -79,6 +84,8 @@ than another branch inside the Altirra or atari800 code.
 - `ATARI_NETSIO_ATDEV_PORT` overrides the Altirra custom device TCP port.
   Default: `9996`.
 - `ATARI_NETSIO_PORT` overrides the NetSIO UDP port. Default: `9997`.
+- `ATARI_DOS_BOOT_DISK` points at the DOS boot ATR used by the default Altirra
+  profile. Default: `~/dev/atari/fujinet-apps/netcat/atari/ados20d.atr`.
 
 ## Profile Shape
 
@@ -95,9 +102,8 @@ machine:
     os: ~/8bit/atari/images/os/REV04.ROM
 
 startup:
-  program: ${NIO_APPS_ATARI_BIN}/fhost.xex
   disks:
-    - ~/atari/disks/spartados.atr
+    - ${ATARI_DOS_BOOT_DISK}
 
 altirra:
   settings_template: configs/atari/settings/altirraSDL-settings.ini
@@ -113,6 +119,9 @@ altirra:
         hotreload: false
         path: ~/dev/atari/fujinet-emulator-bridge/altirra-custom-device/netsio.atdevice
         allowunsafe: false
+  host_paths:
+    - mode: rw
+      path: ${NIO_APPS_ATARI_BIN}
   debug_commands:
     - bp _main
 ```
@@ -121,6 +130,8 @@ For AltirraSDL, the runner copies `altirra.settings_template` to a temporary
 `XDG_CONFIG_HOME/altirra/settings.ini`, replacing `__OS_ROMS__` and
 `__BASIC_ROMS__`. The temporary config directory is passed only to the launched
 process. Device entries render as repeated `--adddevice` arguments.
+Host path entries render as `--hdpath` or `--hdpathrw`; the default profile
+uses this to mount the Atari app build output as a writable H: device.
 
 The Altirra command currently translates these `machine` keys:
 

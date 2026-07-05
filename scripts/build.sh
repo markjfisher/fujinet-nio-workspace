@@ -19,11 +19,13 @@ Targets:
   lib                 Build fujinet-nio-lib Linux and MS-DOS libraries
   lib-linux           Build fujinet-nio-lib Linux library
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
+  lib-atari           Build fujinet-nio-lib Atari library
   msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
   apps-all            Build all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
   apps-atari          Build nio-apps Atari tools
   atari-run           Run an Atari app under the configured emulator
+  atari-stop          Stop stale Atari emulator sidecars started by atari-run
   bounce-world        Build bounce-world-client-nio
   msdos-image         Build raw FAT image from nio-apps/build/msdos/bin
   qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
@@ -96,6 +98,7 @@ write_manifest() {
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
     git_ref_line fn-rom "$FN_ROM"
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
+    git_ref_line fujinet-emulator-bridge "$FUJINET_EMULATOR_BRIDGE"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
     printf 'fujinet_nio_atari_fujibus_netsio_bin=%s\n' "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN"
@@ -141,6 +144,11 @@ build_lib_msdos() {
   run_in lib-msdos "$FUJINET_NIO_LIB" make msdos
 }
 
+build_lib_atari() {
+  require_dir "$FUJINET_NIO_LIB"
+  run_in lib-atari "$FUJINET_NIO_LIB" make atari
+}
+
 build_msdos_driver() {
   require_dir "$FUJINET_MSDOS"
   run_in msdos-driver-clean "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO clean
@@ -154,6 +162,7 @@ build_apps_msdos() {
 
 build_apps_atari() {
   require_dir "$NIO_APPS"
+  build_lib_atari
   run_in apps-atari "$NIO_APPS" make TARGET=atari FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
 }
 
@@ -215,6 +224,38 @@ run_qemu() {
     "$FUJINET_QEMU_MSDOS/run-qemu-nio" "$@"
 }
 
+port_in_use() {
+  local port="$1"
+  ss -ltnu "sport = :$port" 2>/dev/null | awk 'NR > 1 { found=1 } END { exit found ? 0 : 1 }'
+}
+
+print_port_owner() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -iUDP:"$port" 2>/dev/null || true
+  else
+    ss -ltnup "sport = :$port" 2>/dev/null || true
+  fi
+}
+
+stop_atari_sidecars() {
+  local rc=0
+  if pgrep -f "python3 -m netsiohub --port ${ATARI_NETSIO_ATDEV_PORT:-9996} --netsio-port ${ATARI_NETSIO_PORT:-9997}" >/dev/null 2>&1; then
+    pkill -TERM -f "python3 -m netsiohub --port ${ATARI_NETSIO_ATDEV_PORT:-9996} --netsio-port ${ATARI_NETSIO_PORT:-9997}" || rc=$?
+  fi
+  if pgrep -f "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" >/dev/null 2>&1; then
+    pkill -TERM -f "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" || rc=$?
+  fi
+  sleep 1
+  if pgrep -f "python3 -m netsiohub --port ${ATARI_NETSIO_ATDEV_PORT:-9996} --netsio-port ${ATARI_NETSIO_PORT:-9997}" >/dev/null 2>&1; then
+    pkill -KILL -f "python3 -m netsiohub --port ${ATARI_NETSIO_ATDEV_PORT:-9996} --netsio-port ${ATARI_NETSIO_PORT:-9997}" || rc=$?
+  fi
+  if pgrep -f "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" >/dev/null 2>&1; then
+    pkill -KILL -f "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" || rc=$?
+  fi
+  return "$rc"
+}
+
 run_atari() {
   require_dir "$NIO_APPS"
   if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
@@ -240,6 +281,11 @@ run_atari() {
 
   local netsio_port="${ATARI_NETSIO_PORT:-9997}"
   local atdev_port="${ATARI_NETSIO_ATDEV_PORT:-9996}"
+  local run_id
+  run_id="$(date +%Y%m%d-%H%M%S)"
+  local hub_log="$NIO_LOG_DIR/atari-netsiohub-$run_id.log"
+  local nio_log="$NIO_LOG_DIR/atari-fujinet-nio-$run_id.log"
+  local latest_run_file="$NIO_LOG_DIR/atari-run-latest.txt"
   local run_root
   run_root="$(mktemp -d "${TMPDIR:-/tmp}/fujinet-atari-run.XXXXXX")"
   mkdir -p "$run_root/fujinet-data"
@@ -251,10 +297,18 @@ netsio:
 EOF
 
   local hub_cmd=(python3 -m netsiohub --port "$atdev_port" --netsio-port "$netsio_port")
+  if [ "${ATARI_NETSIO_VERBOSE:-1}" != "0" ]; then
+    hub_cmd+=(--verbose)
+  fi
+  if [ "${ATARI_NETSIO_DEBUG:-0}" != "0" ]; then
+    hub_cmd+=(--debug)
+  fi
   local nio_cmd=("$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN")
 
   if [ "$dry_run" = true ]; then
     printf 'ATARI_RUN_ROOT=%q\n' "$run_root"
+    printf 'ATARI_NETSIOHUB_LOG=%q\n' "$hub_log"
+    printf 'ATARI_FUJINET_NIO_LOG=%q\n' "$nio_log"
     printf 'cd %q && %q ' "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" "${hub_cmd[0]}"
     printf '%q ' "${hub_cmd[@]:1}"
     printf '\n'
@@ -266,24 +320,71 @@ EOF
 
   require_dir "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge"
 
+  if port_in_use "$atdev_port"; then
+    echo "Atari NetSIO custom-device port $atdev_port is already in use." >&2
+    print_port_owner "$atdev_port" >&2
+    echo "Run: $0 atari-stop" >&2
+    exit 1
+  fi
+  if port_in_use "$netsio_port"; then
+    echo "Atari NetSIO UDP port $netsio_port is already in use." >&2
+    print_port_owner "$netsio_port" >&2
+    echo "Run: $0 atari-stop" >&2
+    exit 1
+  fi
+
   local hub_pid=
   local nio_pid=
+  local cleaned=false
   cleanup_atari_run() {
+    if [ "$cleaned" = true ]; then
+      return
+    fi
+    cleaned=true
     if [ -n "$nio_pid" ]; then kill "$nio_pid" 2>/dev/null || true; fi
     if [ -n "$hub_pid" ]; then kill "$hub_pid" 2>/dev/null || true; fi
     wait "$nio_pid" 2>/dev/null || true
     wait "$hub_pid" 2>/dev/null || true
     rm -rf "$run_root"
   }
-  trap cleanup_atari_run EXIT
+  trap cleanup_atari_run EXIT INT TERM
 
-  (cd "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" && "${hub_cmd[@]}") &
+  {
+    printf 'run_id=%s\n' "$run_id"
+    printf 'run_root=%s\n' "$run_root"
+    printf 'netsiohub_log=%s\n' "$hub_log"
+    printf 'fujinet_nio_log=%s\n' "$nio_log"
+    printf 'atari_run_log=%s\n' "$NIO_LOG_DIR/atari-run.log"
+  } > "$latest_run_file"
+  echo "Atari run root: $run_root"
+  echo "netsiohub log: $hub_log"
+  echo "fujinet-nio log: $nio_log"
+
+  (cd "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" && stdbuf -oL -eL "${hub_cmd[@]}") >"$hub_log" 2>&1 &
   hub_pid=$!
-  (cd "$run_root" && "${nio_cmd[@]}") &
+  sleep "${ATARI_NETSIO_HUB_STARTUP_DELAY:-1}"
+  if ! kill -0 "$hub_pid" 2>/dev/null; then
+    echo "netsiohub exited during startup." >&2
+    cleanup_atari_run
+    exit 1
+  fi
+  (cd "$run_root" && stdbuf -oL -eL "${nio_cmd[@]}") >"$nio_log" 2>&1 &
   nio_pid=$!
   sleep 1
+  if ! kill -0 "$nio_pid" 2>/dev/null; then
+    echo "fujinet-nio exited during startup." >&2
+    cleanup_atari_run
+    exit 1
+  fi
 
+  local rc=0
+  set +e
   run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
+  rc=$?
+  set -e
+  cleanup_atari_run
+  trap - EXIT INT TERM
+  return "$rc"
 }
 
 target_all() {
@@ -311,14 +412,16 @@ for target in "$@"; do
     fujinet-pty) build_fujinet_pty; write_manifest ;;
     fujinet-rs232) build_fujinet_rs232; write_manifest ;;
     fujinet-atari-netsio) build_fujinet_atari_fujibus_netsio; write_manifest ;;
-    lib) build_lib_linux; build_lib_msdos; write_manifest ;;
+    lib) build_lib_linux; build_lib_msdos; build_lib_atari; write_manifest ;;
     lib-linux) build_lib_linux; write_manifest ;;
     lib-msdos) build_lib_msdos; write_manifest ;;
+    lib-atari) build_lib_atari; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
     apps-all) build_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
     apps-atari) build_apps_atari; write_manifest ;;
     atari-run) shift; run_atari "$@"; exit $? ;;
+    atari-stop) stop_atari_sidecars; exit $? ;;
     bounce-world) build_bounce_world; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;

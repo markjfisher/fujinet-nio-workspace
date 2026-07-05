@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,28 @@ def _device_arg(device: Any) -> str:
             value = abs_path(str(value))
         parts.append(f"{key}={_bool_value(value)}")
     return ",".join(parts)
+
+
+def _append_host_path(cmd: list[str], entry: Any) -> None:
+    if isinstance(entry, str):
+        cmd.extend(["--hdpath", abs_path(entry) or entry])
+        return
+    if not isinstance(entry, dict):
+        raise ValueError(f"Altirra host path entry must be a mapping or string: {entry!r}")
+
+    path = entry.get("path")
+    if not path:
+        raise ValueError(f"Altirra host path entry missing path: {entry!r}")
+
+    mode = str(entry.get("mode", "ro")).lower()
+    if mode in {"rw", "write", "writable"}:
+        switch = "--hdpathrw"
+    elif mode in {"ro", "read", "readonly"}:
+        switch = "--hdpath"
+    else:
+        raise ValueError(f"Unsupported Altirra host path mode: {mode}")
+
+    cmd.extend([switch, abs_path(str(path)) or str(path)])
 
 
 def _rom_root(profile: dict[str, Any], key: str, env_name: str) -> str | None:
@@ -83,10 +106,59 @@ def _render_settings(profile: dict[str, Any]) -> tempfile.TemporaryDirectory[str
     return tmp
 
 
+def _patched_atdevice_path(path: str, tmp_root: Path, cfg: dict[str, Any]) -> str:
+    src = Path(abs_path(path) or path)
+    text = src.read_text(encoding="utf-8")
+    if os.environ.get("ATARI_NETSIO_ATDEVICE_DEBUG", "0") != "0":
+        text, count = re.subn(r'option "debug":\s*(true|false)\s*;', 'option "debug": true;', text, count=1)
+        if count != 1:
+            raise ValueError(f"Could not enable debug option in {src}")
+
+    command_ack_delay_tics = cfg.get("netsio_command_ack_delay_tics")
+    if command_ack_delay_tics is not None:
+        delay = int(command_ack_delay_tics)
+        text, count = re.subn(
+            r"\s*//Thread\.sleep\(1800\); // 1 ms delay \(850 us - 16 ms\) before sending ACK/NAK to data frame",
+            f"\n    Debug.log(\"NIO command ACK delay: {delay} tics\");"
+            f"\n    Thread.sleep({delay}); // configured delay before command ACK/NAK",
+            text,
+            count=1,
+        )
+        if count != 1:
+            raise ValueError(f"Could not patch command ACK delay in {src}")
+
+    dst = tmp_root / src.name
+    dst.write_text(text, encoding="utf-8")
+    return str(dst)
+
+
 def _append_bool_switch(cmd: list[str], value: Any, enabled: str, disabled: str) -> None:
     if value is None:
         return
     cmd.append(enabled if bool(value) else disabled)
+
+
+def _is_altirrasdl_command(cmd: list[str]) -> bool:
+    if not cmd:
+        return False
+    executable = Path(cmd[0]).name.lower()
+    return executable == "altirrasdl"
+
+
+def _requires_altirrasdl(profile: dict[str, Any]) -> bool:
+    cfg = profile.get("altirra", {}) or {}
+    template = str(cfg.get("settings_template") or "").lower()
+    return "altirrasdl" in template
+
+
+def _validate_command(cmd: list[str], profile: dict[str, Any]) -> None:
+    if _requires_altirrasdl(profile) and not _is_altirrasdl_command(cmd):
+        command = " ".join(cmd) if cmd else "<empty>"
+        raise ValueError(
+            "This profile uses AltirraSDL settings and native --options, "
+            f"but the configured Altirra command is '{command}'. "
+            "Unset ALTIRRA_BIN or set ALTIRRA_BIN=AltirraSDL."
+        )
 
 
 def _append_machine_switches(cmd: list[str], profile: dict[str, Any]) -> None:
@@ -153,10 +225,23 @@ def build_command(args: Any) -> tuple[list[str], dict[str, str], tempfile.Tempor
     profile = load_yaml(args.profile)
     cfg = profile.get("altirra", {}) or {}
     cmd = emulator_command("altirra", args.emulators)
+    _validate_command(cmd, profile)
     env = {}
     settings_tmp = _render_settings(profile)
+    debug_device_tmp: tempfile.TemporaryDirectory[str] | None = None
+    patch_atdevice = (
+        os.environ.get("ATARI_NETSIO_ATDEVICE_DEBUG", "0") != "0"
+        or cfg.get("netsio_command_ack_delay_tics") is not None
+    )
     if settings_tmp is not None:
         env["XDG_CONFIG_HOME"] = settings_tmp.name
+    if patch_atdevice:
+        debug_device_tmp = tempfile.TemporaryDirectory(prefix="fujinet-atdevice-")
+        device_root = Path(debug_device_tmp.name)
+        if settings_tmp is not None:
+            settings_tmp._atdevice_debug_tmp = debug_device_tmp  # type: ignore[attr-defined]
+        else:
+            settings_tmp = debug_device_tmp
 
     program, disks = profile_startup(args, profile)
 
@@ -176,12 +261,20 @@ def build_command(args: Any) -> tuple[list[str], dict[str, str], tempfile.Tempor
         cmd.append(f"/debugcmd:{str(debug_cmd)}")
 
     for device in sequence(cfg.get("devices")):
+        if debug_device_tmp is not None and isinstance(device, dict):
+            params = device.get("params", {}) or {}
+            if isinstance(params, dict) and "path" in params:
+                device = dict(device)
+                device["params"] = dict(params)
+                device["params"]["path"] = _patched_atdevice_path(str(params["path"]), device_root, cfg)
         cmd.extend(["--adddevice", _device_arg(device)])
+    for host_path in sequence(cfg.get("host_paths")):
+        _append_host_path(cmd, host_path)
 
     for disk in disks:
         cmd.append(abs_path(disk) or disk)
     if program:
-        cmd.append(abs_path(program) or program)
+        cmd.extend(["--run", abs_path(program) or program])
     return cmd, env, settings_tmp
 
 

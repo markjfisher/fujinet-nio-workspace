@@ -4,7 +4,7 @@ machine:
   ram_kb: 1088
   kernel: xl
   basic: false
-  sio_patch: true
+  sio_patch: false
   accurate_disk: true
 
 altirra:
@@ -15,15 +15,20 @@ altirra:
   profile: null
   portable: false
   debug: false
+  netsio_command_ack_delay_tics: 1800
   debug_commands: []
   devices:
     - type: custom
       params:
         hotreload: false
-        path: ${HOME}/dev/atari/fujinet-emulator-bridge/altirra-custom-device/netsio.atdevice
+        path: ${FUJINET_EMULATOR_BRIDGE}/altirra-custom-device/netsio.atdevice
         allowunsafe: false
+  host_paths:
+    - mode: rw
+      path: ${NIO_APPS_ATARI_BIN}
 
 startup:
-  program: ${NIO_APPS_ATARI_BIN}/fhost.xex
-  disks:
-    - /home/markf/dev/atari/fujinet-config-ng/dist/config-z.atr
+  program: ${NIO_APPS_ATARI_BIN}/fdrive.xex
+
+  # disks:
+  #   - ${ATARI_DOS_BOOT_DISK}
