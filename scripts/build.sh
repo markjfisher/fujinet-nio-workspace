@@ -288,13 +288,15 @@ run_atari() {
   local latest_run_file="$NIO_LOG_DIR/atari-run-latest.txt"
   local run_root
   run_root="$(mktemp -d "${TMPDIR:-/tmp}/fujinet-atari-run.XXXXXX")"
-  mkdir -p "$run_root/fujinet-data"
-  cat > "$run_root/fujinet-data/fujinet.yaml" <<EOF
-netsio:
-  enabled: true
-  host: "localhost"
-  port: $netsio_port
-EOF
+  local fujinet_config_template="${ATARI_FUJINET_CONFIG_TEMPLATE:-$FUJINET_NIO/distfiles/atari-fdrive-fujinet.yaml}"
+  if [ ! -f "$fujinet_config_template" ]; then
+    echo "Missing Atari FujiNet config template: $fujinet_config_template" >&2
+    exit 1
+  fi
+  mkdir -p "$run_root/fujinet-data/disks"
+  : > "$run_root/fujinet-data/disks/slot0-fdrive-test.atr"
+  : > "$run_root/fujinet-data/disks/slot1-readwrite-test.atr"
+  sed "s/__NETSIO_PORT__/$netsio_port/g" "$fujinet_config_template" > "$run_root/fujinet-data/fujinet.yaml"
 
   local hub_cmd=(python3 -m netsiohub --port "$atdev_port" --netsio-port "$netsio_port")
   if [ "${ATARI_NETSIO_VERBOSE:-1}" != "0" ]; then
@@ -307,6 +309,8 @@ EOF
 
   if [ "$dry_run" = true ]; then
     printf 'ATARI_RUN_ROOT=%q\n' "$run_root"
+    printf 'ATARI_FUJINET_CONFIG_TEMPLATE=%q\n' "$fujinet_config_template"
+    printf 'ATARI_FUJINET_CONFIG=%q\n' "$run_root/fujinet-data/fujinet.yaml"
     printf 'ATARI_NETSIOHUB_LOG=%q\n' "$hub_log"
     printf 'ATARI_FUJINET_NIO_LOG=%q\n' "$nio_log"
     printf 'cd %q && %q ' "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" "${hub_cmd[0]}"
@@ -352,6 +356,8 @@ EOF
   {
     printf 'run_id=%s\n' "$run_id"
     printf 'run_root=%s\n' "$run_root"
+    printf 'fujinet_config_template=%s\n' "$fujinet_config_template"
+    printf 'fujinet_config=%s\n' "$run_root/fujinet-data/fujinet.yaml"
     printf 'netsiohub_log=%s\n' "$hub_log"
     printf 'fujinet_nio_log=%s\n' "$nio_log"
     printf 'atari_run_log=%s\n' "$NIO_LOG_DIR/atari-run.log"

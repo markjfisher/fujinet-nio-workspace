@@ -37,6 +37,17 @@ The generated FujiNet config is written below a temporary run root as
 `fujinet-nio`. This keeps the emulator bridge unchanged: the bridge still
 exposes Altirra's custom NetSIO device on TCP and forwards NetSIO packets over
 UDP, while `fujinet-nio` unwraps/wraps FujiBus bytes inside NetSIO data packets.
+By default the generated config comes from
+`repos/fujinet-nio/distfiles/atari-fdrive-fujinet.yaml`, which includes
+deterministic mount records for `fdrive.xex`:
+
+- persisted `slot: 1` appears in the Atari tool as `slot 0`
+- persisted `slot: 2` appears as `slot 1`
+- persisted `slot: 3` appears as `slot 2`
+
+Override this with `ATARI_FUJINET_CONFIG_TEMPLATE=/path/to/fujinet.yaml`. The
+template may use `__NETSIO_PORT__`, which the wrapper replaces with the
+allocated NetSIO UDP port.
 
 Dry-run the full sidecar command set:
 
