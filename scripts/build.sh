@@ -256,19 +256,62 @@ stop_atari_sidecars() {
   return "$rc"
 }
 
+atari_arg_profile() {
+  local profile="$NIO_WORKSPACE/configs/atari/profiles/altirra.yaml"
+  local arg
+  while [ $# -gt 0 ]; do
+    arg="$1"
+    case "$arg" in
+      -p|--profile)
+        if [ $# -gt 1 ]; then
+          profile="$2"
+          shift 2
+          continue
+        fi
+        ;;
+      --profile=*)
+        profile="${arg#--profile=}"
+        ;;
+    esac
+    shift
+  done
+  case "$profile" in
+    /*) printf '%s\n' "$profile" ;;
+    *) printf '%s\n' "$NIO_WORKSPACE/$profile" ;;
+  esac
+}
+
+atari_profile_embeds_fujinet_nio() {
+  local profile="$1"
+  [ -f "$profile" ] || return 1
+  grep -Eq 'embedded_fujinet_nio:[[:space:]]*true|type:[[:space:]]*fujinetnio' "$profile"
+}
+
 run_atari() {
   require_dir "$NIO_APPS"
-  if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
-    build_apps_atari
-  fi
-  if [ ! -x "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" ]; then
-    build_fujinet_atari_fujibus_netsio
-  fi
   if [ "${1:-}" = "--" ]; then
     shift
   fi
   if [ $# -eq 0 ] || [[ "${1:-}" == -* ]]; then
     set -- altirra "$@"
+  fi
+
+  local profile_path
+  profile_path="$(atari_arg_profile "$@")"
+  local embedded_fujinet_nio=false
+  if atari_profile_embeds_fujinet_nio "$profile_path"; then
+    embedded_fujinet_nio=true
+  fi
+  local run_args=("$@")
+  if [ "$embedded_fujinet_nio" = true ]; then
+    run_args+=("--profile" "$profile_path")
+  fi
+
+  if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
+    build_apps_atari
+  fi
+  if [ "$embedded_fujinet_nio" != true ] && [ ! -x "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" ]; then
+    build_fujinet_atari_fujibus_netsio
   fi
 
   local dry_run=false
@@ -311,15 +354,61 @@ run_atari() {
     printf 'ATARI_RUN_ROOT=%q\n' "$run_root"
     printf 'ATARI_FUJINET_CONFIG_TEMPLATE=%q\n' "$fujinet_config_template"
     printf 'ATARI_FUJINET_CONFIG=%q\n' "$run_root/fujinet-data/fujinet.yaml"
-    printf 'ATARI_NETSIOHUB_LOG=%q\n' "$hub_log"
-    printf 'ATARI_FUJINET_NIO_LOG=%q\n' "$nio_log"
-    printf 'cd %q && %q ' "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" "${hub_cmd[0]}"
-    printf '%q ' "${hub_cmd[@]:1}"
-    printf '\n'
-    printf 'cd %q && %q\n' "$run_root" "${nio_cmd[0]}"
-    run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
+    if [ "$embedded_fujinet_nio" = true ]; then
+      printf 'ALTIRRA_BIN=%q\n' "$ALTIRRA_WORKSPACE_BIN"
+      printf 'cd %q && %q ' "$run_root" "$NIO_WORKSPACE/scripts/atari-run"
+      printf '%q ' "${run_args[@]}"
+      printf '\n'
+      (cd "$run_root" && ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}" --dry-run)
+    else
+      printf 'ATARI_NETSIOHUB_LOG=%q\n' "$hub_log"
+      printf 'ATARI_FUJINET_NIO_LOG=%q\n' "$nio_log"
+      printf 'cd %q && %q ' "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge" "${hub_cmd[0]}"
+      printf '%q ' "${hub_cmd[@]:1}"
+      printf '\n'
+      printf 'cd %q && %q\n' "$run_root" "${nio_cmd[0]}"
+      run atari-run "$NIO_WORKSPACE/scripts/atari-run" "$@"
+    fi
     rm -rf "$run_root"
     return
+  fi
+
+  if [ "$embedded_fujinet_nio" = true ]; then
+    if [ ! -x "$ALTIRRA_WORKSPACE_BIN" ]; then
+      echo "Embedded FujiNet-NIO profile needs AltirraSDL." >&2
+      echo "Missing ALTIRRA_WORKSPACE_BIN: $ALTIRRA_WORKSPACE_BIN" >&2
+      exit 1
+    fi
+
+    {
+      printf 'run_id=%s\n' "$run_id"
+      printf 'run_root=%s\n' "$run_root"
+      printf 'fujinet_config_template=%s\n' "$fujinet_config_template"
+      printf 'fujinet_config=%s\n' "$run_root/fujinet-data/fujinet.yaml"
+      printf 'altirra_bin=%s\n' "$ALTIRRA_WORKSPACE_BIN"
+      printf 'atari_run_log=%s\n' "$NIO_LOG_DIR/atari-run.log"
+    } > "$latest_run_file"
+    echo "Atari embedded FujiNet-NIO run root: $run_root"
+    echo "AltirraSDL: $ALTIRRA_WORKSPACE_BIN"
+
+    local embedded_cleaned=false
+    cleanup_embedded_atari_run() {
+      if [ "$embedded_cleaned" = true ]; then
+        return
+      fi
+      embedded_cleaned=true
+      rm -rf "$run_root"
+    }
+    trap cleanup_embedded_atari_run EXIT INT TERM
+
+    local rc=0
+    set +e
+    (cd "$run_root" && ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}") 2>&1 | tee "$NIO_LOG_DIR/atari-run.log"
+    rc=${PIPESTATUS[0]}
+    set -e
+    cleanup_embedded_atari_run
+    trap - EXIT INT TERM
+    return "$rc"
   fi
 
   require_dir "$FUJINET_EMULATOR_BRIDGE/fujinet-bridge"

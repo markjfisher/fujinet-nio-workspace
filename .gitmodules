@@ -23,3 +23,6 @@
 [submodule "repos/fujinet-emulator-bridge"]
 	path = repos/fujinet-emulator-bridge
 	url = git@github.com:markjfisher/fujinet-emulator-bridge.git
+[submodule "repos/AltirraSDL"]
+	path = repos/AltirraSDL
+	url = git@github.com:markjfisher/AltirraSDL.git

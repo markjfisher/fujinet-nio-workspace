@@ -46,6 +46,7 @@ export NIO_IMAGE_DIR="${NIO_IMAGE_DIR:-$NIO_BUILD_DIR/images}"
 export FUJINET_NIO_TCP_DEBUG_BIN="${FUJINET_NIO_TCP_DEBUG_BIN:-$FUJINET_NIO/build/fujibus-tcp-debug/fujinet-nio}"
 export FUJINET_NIO_TCP_RELEASE_BIN="${FUJINET_NIO_TCP_RELEASE_BIN:-$FUJINET_NIO/build/fujibus-tcp-release/fujinet-nio}"
 export FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN="${FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN:-$FUJINET_NIO/build/atari-fujibus-netsio-debug/fujinet-nio}"
+export ALTIRRA_WORKSPACE_BIN="${ALTIRRA_WORKSPACE_BIN:-$NIO_WORKSPACE/repos/AltirraSDL/build/linux-debug/src/AltirraSDL/AltirraSDL}"
 export FUJINET_EMULATOR_BRIDGE="${FUJINET_EMULATOR_BRIDGE:-$NIO_WORKSPACE/repos/fujinet-emulator-bridge}"
 export ATARI_DOS_BOOT_DISK="${ATARI_DOS_BOOT_DISK:-$HOME/dev/atari/fujinet-apps/netcat/atari/ados20d.atr}"
 
