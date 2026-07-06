@@ -37,7 +37,7 @@ def _device_arg(device: Any) -> str:
 
     parts = [str(kind)]
     for key, value in params.items():
-        if key == "path":
+        if key in {"configdir", "path"}:
             value = abs_path(str(value))
         parts.append(f"{key}={_bool_value(value)}")
     return ",".join(parts)

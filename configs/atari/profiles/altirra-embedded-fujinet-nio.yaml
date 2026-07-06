@@ -19,6 +19,8 @@ altirra:
   debug_commands: []
   devices:
     - type: fujinetnio
+      params:
+        configdir: ${ATARI_FUJINET_CONFIG_DIR}
   host_paths:
     - mode: rw
       path: ${NIO_APPS_ATARI_BIN}

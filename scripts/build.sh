@@ -356,10 +356,11 @@ run_atari() {
     printf 'ATARI_FUJINET_CONFIG=%q\n' "$run_root/fujinet-data/fujinet.yaml"
     if [ "$embedded_fujinet_nio" = true ]; then
       printf 'ALTIRRA_BIN=%q\n' "$ALTIRRA_WORKSPACE_BIN"
+      printf 'ATARI_FUJINET_CONFIG_DIR=%q\n' "$run_root/fujinet-data"
       printf 'cd %q && %q ' "$run_root" "$NIO_WORKSPACE/scripts/atari-run"
       printf '%q ' "${run_args[@]}"
       printf '\n'
-      (cd "$run_root" && ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}" --dry-run)
+      (cd "$run_root" && ATARI_FUJINET_CONFIG_DIR="$run_root/fujinet-data" ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}" --dry-run)
     else
       printf 'ATARI_NETSIOHUB_LOG=%q\n' "$hub_log"
       printf 'ATARI_FUJINET_NIO_LOG=%q\n' "$nio_log"
@@ -385,6 +386,7 @@ run_atari() {
       printf 'run_root=%s\n' "$run_root"
       printf 'fujinet_config_template=%s\n' "$fujinet_config_template"
       printf 'fujinet_config=%s\n' "$run_root/fujinet-data/fujinet.yaml"
+      printf 'fujinet_config_dir=%s\n' "$run_root/fujinet-data"
       printf 'altirra_bin=%s\n' "$ALTIRRA_WORKSPACE_BIN"
       printf 'atari_run_log=%s\n' "$NIO_LOG_DIR/atari-run.log"
     } > "$latest_run_file"
@@ -403,7 +405,7 @@ run_atari() {
 
     local rc=0
     set +e
-    (cd "$run_root" && ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}") 2>&1 | tee "$NIO_LOG_DIR/atari-run.log"
+    (cd "$run_root" && ATARI_FUJINET_CONFIG_DIR="$run_root/fujinet-data" ALTIRRA_BIN="$ALTIRRA_WORKSPACE_BIN" "$NIO_WORKSPACE/scripts/atari-run" "${run_args[@]}") 2>&1 | tee "$NIO_LOG_DIR/atari-run.log"
     rc=${PIPESTATUS[0]}
     set -e
     cleanup_embedded_atari_run
