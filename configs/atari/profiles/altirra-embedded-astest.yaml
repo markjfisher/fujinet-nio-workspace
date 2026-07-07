@@ -1,0 +1,29 @@
+machine:
+  system: 800xl
+  video: pal
+  ram_kb: 1088
+  kernel: xl
+  basic: false
+  sio_patch: false
+  accurate_disk: true
+
+altirra:
+  embedded_fujinet_nio: true
+  settings_template: ${NIO_WORKSPACE}/configs/atari/settings/altirraSDL-settings.ini
+  rom_roots:
+    os: ${ATARI_OS_ROMS}
+    basic: ${ATARI_BASIC_ROMS}
+  profile: null
+  portable: false
+  debug: false
+  debug_commands: []
+  devices:
+    - type: fujinetnio
+      params:
+        configdir: ${ATARI_FUJINET_CONFIG_DIR}
+  host_paths:
+    - mode: rw
+      path: ${NIO_APPS_ATARI_BIN}
+
+startup:
+  program: ${NIO_APPS_ATARI_BIN}/astest.xex

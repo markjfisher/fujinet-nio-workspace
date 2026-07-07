@@ -171,6 +171,11 @@ build_apps_all() {
   run_in apps-all "$NIO_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
 }
 
+clean_apps_all() {
+  require_dir "$NIO_APPS"
+  run_in apps-all "$NIO_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" clean
+}
+
 build_bounce_world() {
   require_dir "$BOUNCE_WORLD_CLIENT_NIO"
   run_in bounce-world-clean "$BOUNCE_WORLD_CLIENT_NIO" make clean
@@ -490,6 +495,7 @@ target_all() {
   build_fujinet_rs232
   build_lib_linux
   build_lib_msdos
+  clean_apps_all
   build_apps_all
   build_msdos_image
   build_qemu_image
@@ -515,6 +521,7 @@ for target in "$@"; do
     lib-atari) build_lib_atari; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
     apps-all) build_apps_all; write_manifest ;;
+    apps-clean) clean_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
     apps-atari) build_apps_atari; write_manifest ;;
     atari-run) shift; run_atari "$@"; exit $? ;;
