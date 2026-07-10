@@ -11,6 +11,7 @@ Usage: scripts/build.sh <target> [target...]
 
 Targets:
   all                 Build the usual integrated stack
+  altirra             Configure/build AltirraSDL with the workspace preset
   fujinet             Build/test fujinet-nio TCP debug, TCP release, PTY debug, RS-232 debug
   fujinet-tcp         Build/test fujinet-nio TCP debug and build TCP release
   fujinet-pty         Build/test fujinet-nio PTY debug
@@ -99,15 +100,27 @@ write_manifest() {
     git_ref_line fn-rom "$FN_ROM"
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
     git_ref_line fujinet-emulator-bridge "$FUJINET_EMULATOR_BRIDGE"
+    git_ref_line AltirraSDL "$NIO_WORKSPACE/repos/AltirraSDL"
     printf 'fujinet_nio_tcp_debug_bin=%s\n' "$FUJINET_NIO_TCP_DEBUG_BIN"
     printf 'fujinet_nio_tcp_release_bin=%s\n' "$FUJINET_NIO_TCP_RELEASE_BIN"
     printf 'fujinet_nio_atari_fujibus_netsio_bin=%s\n' "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN"
+    printf 'altirra_workspace_bin=%s\n' "$ALTIRRA_WORKSPACE_BIN"
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
     printf 'qemu_image=%s\n' "${OUTPUT_IMAGE:-$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2}"
   } > "$NIO_BUILD_DIR/manifest.txt"
   echo "Wrote $NIO_BUILD_DIR/manifest.txt"
+}
+
+build_altirra() {
+  local altirra_repo="$NIO_WORKSPACE/repos/AltirraSDL"
+  local preset="${ALTIRRA_CMAKE_PRESET:-linux-debug}"
+  local jobs="${ALTIRRA_BUILD_JOBS:-$(nproc)}"
+  require_dir "$altirra_repo"
+
+  run_in altirra-configure "$altirra_repo" cmake --preset "$preset"
+  run_in altirra-build "$altirra_repo" cmake --build "build/$preset" --target AltirraSDL -j "$jobs"
 }
 
 build_fujinet_tcp() {
@@ -490,6 +503,7 @@ run_atari() {
 }
 
 target_all() {
+  build_altirra
   build_fujinet_tcp
   build_fujinet_pty
   build_fujinet_rs232
@@ -510,6 +524,7 @@ fi
 for target in "$@"; do
   case "$target" in
     all) target_all ;;
+    altirra) build_altirra; write_manifest ;;
     fujinet) build_fujinet_tcp; build_fujinet_pty; build_fujinet_rs232; write_manifest ;;
     fujinet-tcp) build_fujinet_tcp; write_manifest ;;
     fujinet-pty) build_fujinet_pty; write_manifest ;;

@@ -26,3 +26,10 @@
 [submodule "repos/AltirraSDL"]
 	path = repos/AltirraSDL
 	url = git@github.com:markjfisher/AltirraSDL.git
+[submodule "repos/cc65"]
+	path = repos/cc65
+	url = git@github.com:markjfisher/cc65.git
+	branch = bbc-clib
+[submodule "repos/qemu-msdos-init"]
+	path = repos/qemu-msdos-init
+	url = git@github.com:markjfisher/qemu-msdos-init.git
