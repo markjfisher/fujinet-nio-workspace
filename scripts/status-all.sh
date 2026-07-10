@@ -21,7 +21,9 @@ for repo in \
   "$FUJINET_MSDOS" \
   "$FN_ROM" \
   "$BOUNCE_WORLD" \
-  "$FUJINET_EMULATOR_BRIDGE"
+  "$FUJINET_EMULATOR_BRIDGE" \
+  "$CC65_HOME" \
+  "$QEMU_MSDOS_INIT"
 do
   if [ ! -d "$repo" ]; then
     echo "== $repo"

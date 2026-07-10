@@ -26,6 +26,8 @@ export FUJINET_LIB="$NIO_WORKSPACE/repos/fujinet-lib"
 export FN_ROM="$NIO_WORKSPACE/repos/fn-rom"
 export BOUNCE_WORLD_CLIENT_NIO="$NIO_WORKSPACE/repos/bounce-world-client-nio"
 export BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO"
+export CC65_HOME="$NIO_WORKSPACE/repos/cc65"
+export QEMU_MSDOS_INIT="$NIO_WORKSPACE/repos/qemu-msdos-init"
 
 if [ -f "$HOME/.local/bin/add_watcom.sh" ]; then
   # shellcheck source=/dev/null
