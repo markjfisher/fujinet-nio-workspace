@@ -23,6 +23,7 @@ Targets:
   lib-atari           Build fujinet-nio-lib Atari library
   msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
   apps-all            Build all nio-apps targets
+  apps-clean          Clean all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
   apps-atari          Build nio-apps Atari tools
   atari-run           Run an Atari app under the configured emulator
@@ -87,6 +88,8 @@ git_ref_line() {
 }
 
 write_manifest() {
+  local qemu_image
+  qemu_image="$(default_qemu_image)"
   mkdir -p "$NIO_BUILD_DIR"
   {
     printf 'built_at=%s\n' "$(date -Is)"
@@ -108,9 +111,19 @@ write_manifest() {
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
-    printf 'qemu_image=%s\n' "${OUTPUT_IMAGE:-$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2}"
+    printf 'qemu_image=%s\n' "$qemu_image"
   } > "$NIO_BUILD_DIR/manifest.txt"
   echo "Wrote $NIO_BUILD_DIR/manifest.txt"
+}
+
+default_qemu_image() {
+  if [ -n "${OUTPUT_IMAGE:-}" ]; then
+    printf '%s\n' "$OUTPUT_IMAGE"
+  elif [ -n "${APPS_MANIFEST:-}" ] || [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2"
+  else
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/build/msdos-nio.qcow2"
+  fi
 }
 
 build_altirra() {
@@ -236,7 +249,10 @@ run_qemu() {
   if [ "${1:-}" = "--" ]; then
     shift
   fi
+  local hda
+  hda="${HDA:-$(default_qemu_image)}"
   run qemu-run env \
+    HDA="$hda" \
     FUJINET_NIO_PATH="$FUJINET_NIO" \
     FUJINET_NIO_BIN="${FUJINET_NIO_BIN:-$FUJINET_NIO_TCP_DEBUG_BIN}" \
     "$FUJINET_QEMU_MSDOS/run-qemu-nio" "$@"
