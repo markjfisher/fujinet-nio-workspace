@@ -29,7 +29,9 @@ Targets:
   atari-run           Run an Atari app under the configured emulator
   atari-stop          Stop stale Atari emulator sidecars started by atari-run
   bounce-world        Build bounce-world-client-nio
+  bounce-world-disk   Build Bounce World MS-DOS raw FAT disk image
   msdos-image         Build raw FAT image from nio-apps/build/msdos/bin
+  apps-image          Build raw FAT image from fujinet-qemu-msdos apps manifest
   qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
   qemu-run            Run fujinet-qemu-msdos/run-qemu-nio with workspace defaults
   manifest            Write build/manifest.txt only
@@ -111,6 +113,8 @@ write_manifest() {
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
     printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
+    printf 'manifest_apps_image=%s\n' "$NIO_IMAGE_DIR/msdos-nio-apps.img"
+    printf 'bounce_world_msdos_image=%s\n' "$NIO_IMAGE_DIR/bwcn-msdos.img"
     printf 'qemu_image=%s\n' "$qemu_image"
   } > "$NIO_BUILD_DIR/manifest.txt"
   echo "Wrote $NIO_BUILD_DIR/manifest.txt"
@@ -208,6 +212,16 @@ build_bounce_world() {
   run_in bounce-world-build "$BOUNCE_WORLD_CLIENT_NIO" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
 }
 
+build_bounce_world_disk() {
+  require_dir "$BOUNCE_WORLD_CLIENT_NIO"
+  mkdir -p "$NIO_IMAGE_DIR"
+  run_in bounce-world-disk "$BOUNCE_WORLD_CLIENT_NIO" make \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    CREATE_MSDOS_IMG="$NIO_APPS/msdos/scripts/create_msdos_img.py" \
+    MSDOS_IMAGE="$NIO_IMAGE_DIR/bwcn-msdos.img" \
+    disk-msdos
+}
+
 build_msdos_image() {
   require_dir "$NIO_APPS"
   if [ ! -d "$NIO_APPS_MSDOS_BIN" ]; then
@@ -218,6 +232,38 @@ build_msdos_image() {
     -i "$NIO_APPS_MSDOS_BIN" \
     -o "$NIO_IMAGE_DIR/nio-apps.img" \
     -l NIOAPPS
+}
+
+default_apps_manifest() {
+  if [ -n "${APPS_MANIFEST:-}" ]; then
+    printf '%s\n' "$APPS_MANIFEST"
+  elif [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.yaml"
+  else
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.example.yaml"
+  fi
+}
+
+build_apps_image() {
+  require_dir "$FUJINET_QEMU_MSDOS"
+  mkdir -p "$NIO_IMAGE_DIR"
+  local apps_manifest
+  apps_manifest="$(default_apps_manifest)"
+  if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
+    build_bounce_world
+  fi
+  if [ ! -d "$NIO_APPS_MSDOS_BIN" ]; then
+    build_apps_msdos
+  fi
+  run apps-image env \
+    NIO_APPS_MSDOS="$NIO_APPS_MSDOS_BIN" \
+    BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
+    BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
+    "$FUJINET_QEMU_MSDOS/build-apps-img" \
+    --apps-manifest "$apps_manifest" \
+    --repo-root "$FUJINET_QEMU_MSDOS" \
+    --output "$NIO_IMAGE_DIR/msdos-nio-apps.img" \
+    --label NIOAPPS
 }
 
 build_qemu_image() {
@@ -558,7 +604,9 @@ for target in "$@"; do
     atari-run) shift; run_atari "$@"; exit $? ;;
     atari-stop) stop_atari_sidecars; exit $? ;;
     bounce-world) build_bounce_world; write_manifest ;;
+    bounce-world-disk) build_bounce_world_disk; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
+    apps-image) build_apps_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;
     qemu-run) shift; run_qemu "$@"; exit $? ;;
     manifest) write_manifest ;;
