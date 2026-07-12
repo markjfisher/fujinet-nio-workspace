@@ -22,6 +22,7 @@ Targets:
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
   lib-atari           Build fujinet-nio-lib Atari library
   msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
+  msdos-niodump       Build fujinet-msdos NIODUMP.EXE diagnostics utility
   apps-all            Build all nio-apps targets
   apps-clean          Clean all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
@@ -183,6 +184,12 @@ build_msdos_driver() {
   require_dir "$FUJINET_MSDOS"
   run_in msdos-driver-clean "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO clean
   run_in msdos-driver-build "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO
+  build_msdos_niodump
+}
+
+build_msdos_niodump() {
+  require_dir "$FUJINET_MSDOS"
+  run_in msdos-niodump "$FUJINET_MSDOS/niodump" make
 }
 
 build_apps_msdos() {
@@ -257,6 +264,7 @@ build_apps_image() {
   fi
   run apps-image env \
     NIO_APPS_MSDOS="$NIO_APPS_MSDOS_BIN" \
+    FUJINET_MSDOS="$FUJINET_MSDOS" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
     "$FUJINET_QEMU_MSDOS/build-apps-img" \
@@ -597,6 +605,7 @@ for target in "$@"; do
     lib-msdos) build_lib_msdos; write_manifest ;;
     lib-atari) build_lib_atari; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
+    msdos-niodump) build_msdos_niodump; write_manifest ;;
     apps-all) build_apps_all; write_manifest ;;
     apps-clean) clean_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
