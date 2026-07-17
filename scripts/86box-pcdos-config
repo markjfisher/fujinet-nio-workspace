@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+DEFAULT_IMAGE="/home/markf/vm/dosjr/pcdos210-test/floppies/pcdos210-fujinet-test.img"
+IMAGE="${DOSJR_BOOT_IMG:-$DEFAULT_IMAGE}"
+DEFAULT_SYS="$WORKSPACE_DIR/repos/fujinet-msdos/sys/fujinet.sys"
+
+usage() {
+  cat <<EOF
+Usage: scripts/86box-pcdos-config <command> [args]
+
+Commands:
+  show                         Print CONFIG.SYS and AUTOEXEC.BAT from the image
+  pull [dir]                   Extract CONFIG.SYS and AUTOEXEC.BAT to dir
+  push [--config file] [--autoexec file]
+                               Replace either or both files, converting to CRLF
+  push-sys [--build] [--sys file]
+                               Replace FUJINET.SYS in the image
+  set-bps <baud>               Update FUJI_BPS in CONFIG.SYS inside the image
+  dir                          Show the image root directory
+
+Environment:
+  DOSJR_BOOT_IMG               Override boot image path
+
+Default image:
+  $DEFAULT_IMAGE
+
+Default SYS:
+  $DEFAULT_SYS
+EOF
+}
+
+require_tool() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing dependency: $1" >&2
+    exit 1
+  fi
+}
+
+require_image() {
+  if [ ! -f "$IMAGE" ]; then
+    echo "Boot image not found: $IMAGE" >&2
+    exit 1
+  fi
+}
+
+dos_text_copy() {
+  local src="$1"
+  local dst="$2"
+  python3 - "$src" "$dst" <<'PY'
+import pathlib
+import sys
+
+src = pathlib.Path(sys.argv[1])
+dst = pathlib.Path(sys.argv[2])
+text = src.read_text(encoding="ascii")
+lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+if lines and lines[-1] == "":
+    lines = lines[:-1]
+dst.write_bytes(("\r\n".join(lines) + "\r\n").encode("ascii"))
+PY
+}
+
+show_file() {
+  local name="$1"
+  echo "==> $name"
+  mtype -i "$IMAGE" "::$name"
+  echo
+}
+
+cmd_show() {
+  require_image
+  show_file CONFIG.SYS
+  show_file AUTOEXEC.BAT
+}
+
+cmd_pull() {
+  require_image
+  local out_dir="${1:-.}"
+  mkdir -p "$out_dir"
+  mcopy -o -i "$IMAGE" ::CONFIG.SYS "$out_dir/CONFIG.SYS"
+  mcopy -o -i "$IMAGE" ::AUTOEXEC.BAT "$out_dir/AUTOEXEC.BAT"
+  echo "Wrote $out_dir/CONFIG.SYS"
+  echo "Wrote $out_dir/AUTOEXEC.BAT"
+}
+
+cmd_push() {
+  require_image
+  local config=""
+  local autoexec=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --config)
+        config="${2:-}"
+        shift 2
+        ;;
+      --autoexec)
+        autoexec="${2:-}"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Unknown push argument: $1" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  if [ -z "$config" ] && [ -z "$autoexec" ]; then
+    echo "Nothing to push; pass --config and/or --autoexec" >&2
+    exit 1
+  fi
+
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '$tmpdir'" EXIT
+
+  if [ -n "$config" ]; then
+    dos_text_copy "$config" "$tmpdir/CONFIG.SYS"
+    mcopy -o -i "$IMAGE" "$tmpdir/CONFIG.SYS" ::CONFIG.SYS
+    echo "Updated CONFIG.SYS"
+  fi
+
+  if [ -n "$autoexec" ]; then
+    dos_text_copy "$autoexec" "$tmpdir/AUTOEXEC.BAT"
+    mcopy -o -i "$IMAGE" "$tmpdir/AUTOEXEC.BAT" ::AUTOEXEC.BAT
+    echo "Updated AUTOEXEC.BAT"
+  fi
+}
+
+cmd_push_sys() {
+  require_image
+  local sys="$DEFAULT_SYS"
+  local build=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --sys)
+        sys="${2:-}"
+        shift 2
+        ;;
+      --build)
+        build=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Unknown push-sys argument: $1" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  if [ "$build" -eq 1 ]; then
+    # Build the legacy firmware transport. Do not pass FUJINET_TRANSPORT=NIO here.
+    (cd "$WORKSPACE_DIR/repos/fujinet-msdos/sys" && make clean && make)
+  fi
+
+  if [ ! -f "$sys" ]; then
+    echo "FUJINET.SYS not found: $sys" >&2
+    echo "Run: scripts/86box-pcdos-config push-sys --build" >&2
+    exit 1
+  fi
+
+  mcopy -o -i "$IMAGE" "$sys" ::FUJINET.SYS
+  echo "Updated FUJINET.SYS from $sys"
+}
+
+cmd_set_bps() {
+  require_image
+  local bps="${1:-}"
+  if [ -z "$bps" ] || ! [[ "$bps" =~ ^[0-9]+$ ]]; then
+    echo "Usage: scripts/86box-pcdos-config set-bps <baud>" >&2
+    exit 1
+  fi
+
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '$tmpdir'" EXIT
+
+  mcopy -o -i "$IMAGE" ::CONFIG.SYS "$tmpdir/CONFIG.SYS"
+  python3 - "$tmpdir/CONFIG.SYS" "$bps" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+bps = sys.argv[2]
+text = path.read_text(encoding="ascii").replace("\r\n", "\n").replace("\r", "\n")
+lines = text.split("\n")
+changed = False
+out = []
+for line in lines:
+    if not line:
+        continue
+    if re.match(r"(?i)^\s*DEVICE\s*=\s*FUJINET\.SYS\b", line):
+        if re.search(r"(?i)\bFUJI_BPS\s*=", line):
+            line = re.sub(r"(?i)\bFUJI_BPS\s*=\s*\d+", f"FUJI_BPS={bps}", line)
+        else:
+            line = line.rstrip() + f" FUJI_BPS={bps}"
+        changed = True
+    out.append(line)
+
+if not changed:
+    out.append(f"DEVICE=FUJINET.SYS FUJI_BPS={bps}")
+
+path.write_bytes(("\r\n".join(out) + "\r\n").encode("ascii"))
+PY
+  mcopy -o -i "$IMAGE" "$tmpdir/CONFIG.SYS" ::CONFIG.SYS
+  echo "Set FUJI_BPS=$bps in CONFIG.SYS"
+}
+
+main() {
+  require_tool mcopy
+  require_tool mdir
+  require_tool mtype
+  require_tool python3
+
+  local cmd="${1:-}"
+  case "$cmd" in
+    show)
+      shift
+      cmd_show "$@"
+      ;;
+    pull)
+      shift
+      cmd_pull "$@"
+      ;;
+    push)
+      shift
+      cmd_push "$@"
+      ;;
+    push-sys)
+      shift
+      cmd_push_sys "$@"
+      ;;
+    set-bps)
+      shift
+      cmd_set_bps "$@"
+      ;;
+    dir)
+      require_image
+      mdir -i "$IMAGE" ::
+      ;;
+    -h|--help|"")
+      usage
+      ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

@@ -21,7 +21,10 @@ Targets:
   lib-linux           Build fujinet-nio-lib Linux library
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
   lib-atari           Build fujinet-nio-lib Atari library
-  msdos-driver        Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
+  msdos-driver        Build fujinet-nio-msdos FUJINET.SYS
+  msdos-tests         Run fujinet-nio-msdos host unit tests
+  msdos-driver-legacy Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
+  msdos-tests-legacy  Run fujinet-msdos host unit tests
   msdos-niodump       Build fujinet-msdos NIODUMP.EXE diagnostics utility
   apps-all            Build all nio-apps targets
   apps-clean          Clean all nio-apps targets
@@ -102,6 +105,7 @@ write_manifest() {
     git_ref_line fujinet-nio-lib "$FUJINET_NIO_LIB"
     git_ref_line nio-apps "$NIO_APPS"
     git_ref_line fujinet-qemu-msdos "$FUJINET_QEMU_MSDOS"
+    git_ref_line fujinet-nio-msdos "$FUJINET_NIO_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
     git_ref_line fn-rom "$FN_ROM"
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
@@ -181,14 +185,34 @@ build_lib_atari() {
 }
 
 build_msdos_driver() {
+  require_dir "$FUJINET_NIO_MSDOS"
+  run_in msdos-driver-clean "$FUJINET_NIO_MSDOS" make clean
+  run_in msdos-driver-build "$FUJINET_NIO_MSDOS" make
+}
+
+build_msdos_tests() {
+  require_dir "$FUJINET_NIO_MSDOS"
+  run_in msdos-tests "$FUJINET_NIO_MSDOS" make tests
+}
+
+build_msdos_driver_legacy() {
   require_dir "$FUJINET_MSDOS"
-  run_in msdos-driver-clean "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO clean
-  run_in msdos-driver-build "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO
+  run_in msdos-driver-legacy-clean "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO clean
+  run_in msdos-driver-legacy-build "$FUJINET_MSDOS/sys" make FUJINET_TRANSPORT=NIO
   build_msdos_niodump
+}
+
+build_msdos_tests_legacy() {
+  require_dir "$FUJINET_MSDOS"
+  run_in msdos-tests-legacy "$FUJINET_MSDOS/tests" make test
 }
 
 build_msdos_niodump() {
   require_dir "$FUJINET_MSDOS"
+  if [[ ! -f "$FUJINET_MSDOS/niodump/makefile" && ! -f "$FUJINET_MSDOS/niodump/Makefile" ]]; then
+    echo "Skipping msdos-niodump: $FUJINET_MSDOS/niodump not present on this branch"
+    return 0
+  fi
   run_in msdos-niodump "$FUJINET_MSDOS/niodump" make
 }
 
@@ -217,6 +241,18 @@ build_bounce_world() {
   require_dir "$BOUNCE_WORLD_CLIENT_NIO"
   run_in bounce-world-clean "$BOUNCE_WORLD_CLIENT_NIO" make clean
   run_in bounce-world-build "$BOUNCE_WORLD_CLIENT_NIO" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_bounce_world_ioctl() {
+  require_dir "$BOUNCE_WORLD_CLIENT_NIO"
+  run_in bounce-world-clean "$BOUNCE_WORLD_CLIENT_NIO" make clean
+  run_in bounce-world-build "$BOUNCE_WORLD_CLIENT_NIO" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" MSDOS_NIO_BACKEND="ioctl"
+}
+
+build_bounce_world_f5() {
+  require_dir "$BOUNCE_WORLD_CLIENT_NIO"
+  run_in bounce-world-clean "$BOUNCE_WORLD_CLIENT_NIO" make clean
+  run_in bounce-world-build "$BOUNCE_WORLD_CLIENT_NIO" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" MSDOS_NIO_BACKEND="f5"
 }
 
 build_bounce_world_disk() {
@@ -276,7 +312,7 @@ build_apps_image() {
 
 build_qemu_image() {
   require_dir "$FUJINET_QEMU_MSDOS"
-  require_dir "$FUJINET_MSDOS"
+  require_dir "$FUJINET_NIO_MSDOS"
   build_msdos_driver
   if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
     build_bounce_world
@@ -294,7 +330,7 @@ build_qemu_image() {
     NIO_APPS_MSDOS_BIN="$NIO_APPS_MSDOS_BIN" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
-    DRIVER="${DRIVER:-$FUJINET_MSDOS/sys/fujinet.sys}" \
+    DRIVER="${DRIVER:-$FUJINET_NIO_MSDOS/build/dos/fujinet.sys}" \
     "$FUJINET_QEMU_MSDOS/build-nio-qcow" "${args[@]}"
 }
 
@@ -605,6 +641,9 @@ for target in "$@"; do
     lib-msdos) build_lib_msdos; write_manifest ;;
     lib-atari) build_lib_atari; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
+    msdos-tests) build_msdos_tests; write_manifest ;;
+    msdos-driver-legacy) build_msdos_driver_legacy; write_manifest ;;
+    msdos-tests-legacy) build_msdos_tests_legacy; write_manifest ;;
     msdos-niodump) build_msdos_niodump; write_manifest ;;
     apps-all) build_apps_all; write_manifest ;;
     apps-clean) clean_apps_all; write_manifest ;;
@@ -613,6 +652,8 @@ for target in "$@"; do
     atari-run) shift; run_atari "$@"; exit $? ;;
     atari-stop) stop_atari_sidecars; exit $? ;;
     bounce-world) build_bounce_world; write_manifest ;;
+    bounce-world-f5) build_bounce_world_f5; write_manifest ;;
+    bounce-world-ioctl) build_bounce_world_ioctl; write_manifest ;;
     bounce-world-disk) build_bounce_world_disk; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     apps-image) build_apps_image; write_manifest ;;
