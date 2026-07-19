@@ -1,0 +1,32 @@
+# Workspace-owned MS-DOS application disk.
+#
+# Paths support shell-style environment expansion (${VAR}) and ~.
+# Relative paths are resolved from the workspace root by scripts/build.sh.
+#
+# This manifest is for a raw FAT image that can be mounted by FujiNet. It is not
+# the QEMU hard disk image.
+
+apps:
+  - src: ${BOUNCE_WORLD_CLIENT_NIO}/build/bwcn.msdos.exe
+    name: BWCN.EXE
+    required: false
+  - src: ${NIO_APPS_MSDOS_BIN}/fdrive.exe
+    name: FDRIVE.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fhost.exe
+    name: FHOST.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fin.exe
+    name: FIN.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fout.exe
+    name: FOUT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fls.exe
+    name: FLS.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fmount.exe
+    name: FMOUNT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fboot.exe
+    name: FBOOT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fapp.exe
+    name: FAPP.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fhttpbin.exe
+    name: FHTTPBIN.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/config-nio.exe
+    name: CONFNIO.EXE

@@ -107,9 +107,15 @@ scripts/build.sh lib
 scripts/build.sh msdos-driver
 scripts/build.sh apps-msdos
 scripts/build.sh bounce-world
-scripts/build.sh msdos-image
-scripts/build.sh qemu-image
+scripts/build.sh msdos-apps-image
+scripts/build.sh msdos-boot-config-image
+scripts/build.sh qemu-msdos-image
+scripts/build.sh msdos-dev-curses
 ```
+
+Disk and image build ownership is documented in
+[docs/disk-image-builds.md](docs/disk-image-builds.md). Start there when
+deciding whether a disk recipe belongs in a sub-repo or the workspace.
 
 `scripts/build.sh all` builds:
 
@@ -117,11 +123,26 @@ scripts/build.sh qemu-image
 - fujinet-nio PTY debug preset
 - fujinet-nio RS-232 debug preset
 - fujinet-nio-lib Linux and MS-DOS libraries
-- fujinet-msdos `FUJINET.SYS` with `FUJINET_TRANSPORT=NIO`
+- fujinet-nio-msdos `FUJINET.SYS`
 - nio-apps MS-DOS tools
 - bounce-world-client-nio
-- raw FAT image from `nio-apps/msdos/bin`
-- QEMU qcow image through `fujinet-qemu-msdos`
+- raw FAT image from `manifests/disks/msdos-apps.yaml`
+- QEMU qcow image from `manifests/disks/qemu-msdos-apps.yaml`
+
+Legacy aliases remain for existing muscle memory:
+
+```sh
+scripts/build.sh msdos-image
+scripts/build.sh apps-image
+scripts/build.sh qemu-image
+```
+
+To build a mountable MS-DOS utility disk containing the current
+`FUJINET.SYS` plus `config-nio` and the command-line tools:
+
+```sh
+scripts/build.sh msdos-boot-config-image
+```
 
 The QEMU image builder defaults to `repos/fujinet-qemu-msdos/msdos.qcow2`.
 Set `BASE_IMAGE` only when you want to use a different base image:
@@ -143,6 +164,16 @@ Additional arguments are passed to `run-qemu-nio`:
 ```sh
 scripts/build.sh qemu-run -- --hda repos/fujinet-qemu-msdos/build/msdos-nio-apps.qcow2
 ```
+
+For MS-DOS NIO app UI work, use the terminal/curses feedback loop:
+
+```sh
+scripts/build.sh msdos-dev-curses
+```
+
+That ensures the POSIX TCP FujiNet exists, builds `FUJINET.SYS`, MS-DOS apps,
+the QEMU image, then runs QEMU with `--display curses`. See
+[docs/msdos-qemu-nio-curses.md](docs/msdos-qemu-nio-curses.md).
 
 ## Status And Manifest
 

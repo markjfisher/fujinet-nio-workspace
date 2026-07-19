@@ -1,0 +1,27 @@
+# Workspace-owned MS-DOS boot/config utility disk.
+#
+# This raw FAT image is intended to be mounted from FujiNet on an existing DOS
+# machine so the user can copy or run the current FUJINET.SYS and config tools
+# without moving files via NIC/FTPD.
+
+apps:
+  - src: ${FUJINET_NIO_MSDOS}/build/dos/fujinet.sys
+    name: FUJINET.SYS
+  - src: ${NIO_APPS_MSDOS_BIN}/config-nio.exe
+    name: CONFNIO.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fboot.exe
+    name: FBOOT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fdrive.exe
+    name: FDRIVE.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fhost.exe
+    name: FHOST.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fin.exe
+    name: FIN.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fls.exe
+    name: FLS.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fmount.exe
+    name: FMOUNT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fout.exe
+    name: FOUT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fapp.exe
+    name: FAPP.EXE

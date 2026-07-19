@@ -26,18 +26,25 @@ Targets:
   msdos-driver-legacy Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
   msdos-tests-legacy  Run fujinet-msdos host unit tests
   msdos-niodump       Build fujinet-msdos NIODUMP.EXE diagnostics utility
+  pdcurses-msdos      Fetch/build PDCurses for Open Watcom MS-DOS
   apps-all            Build all nio-apps targets
   apps-clean          Clean all nio-apps targets
   apps-msdos          Build nio-apps MS-DOS tools
   apps-atari          Build nio-apps Atari tools
+  boot-disks          Build/install nio-apps boot disks into fujinet-nio distfiles
   atari-run           Run an Atari app under the configured emulator
   atari-stop          Stop stale Atari emulator sidecars started by atari-run
   bounce-world        Build bounce-world-client-nio
   bounce-world-disk   Build Bounce World MS-DOS raw FAT disk image
-  msdos-image         Build raw FAT image from nio-apps/build/msdos/bin
-  apps-image          Build raw FAT image from fujinet-qemu-msdos apps manifest
-  qemu-image          Build qcow2 image through fujinet-qemu-msdos/build-nio-qcow
+  msdos-apps-image    Build workspace raw FAT MS-DOS apps image
+  msdos-boot-config-image
+                      Build workspace raw FAT MS-DOS FUJINET.SYS/config image
+  qemu-msdos-image    Build workspace QEMU MS-DOS qcow2 image
+  msdos-image         Compatibility alias for msdos-apps-image
+  apps-image          Compatibility alias for msdos-apps-image
+  qemu-image          Compatibility alias for qemu-msdos-image
   qemu-run            Run fujinet-qemu-msdos/run-qemu-nio with workspace defaults
+  msdos-dev-curses    Build and run MS-DOS NIO app image in QEMU curses mode
   manifest            Write build/manifest.txt only
 
 Environment overrides live in local/config.env.
@@ -94,7 +101,10 @@ git_ref_line() {
 }
 
 write_manifest() {
-  local qemu_image
+  local msdos_apps_manifest qemu_msdos_apps_manifest msdos_boot_config_manifest qemu_image
+  msdos_apps_manifest="$(default_msdos_apps_manifest)"
+  qemu_msdos_apps_manifest="$(default_qemu_msdos_apps_manifest)"
+  msdos_boot_config_manifest="$(default_msdos_boot_config_manifest)"
   qemu_image="$(default_qemu_image)"
   mkdir -p "$NIO_BUILD_DIR"
   {
@@ -117,8 +127,13 @@ write_manifest() {
     printf 'altirra_workspace_bin=%s\n' "$ALTIRRA_WORKSPACE_BIN"
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
-    printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
-    printf 'manifest_apps_image=%s\n' "$NIO_IMAGE_DIR/msdos-nio-apps.img"
+    printf 'msdos_apps_manifest=%s\n' "$msdos_apps_manifest"
+    printf 'qemu_msdos_apps_manifest=%s\n' "$qemu_msdos_apps_manifest"
+    printf 'msdos_boot_config_manifest=%s\n' "$msdos_boot_config_manifest"
+    printf 'msdos_apps_image=%s\n' "$NIO_IMAGE_DIR/msdos-apps.img"
+    printf 'msdos_boot_config_image=%s\n' "$NIO_IMAGE_DIR/msdos-boot-config.img"
+    printf 'legacy_msdos_image=%s\n' "$NIO_IMAGE_DIR/nio-apps.img"
+    printf 'legacy_manifest_apps_image=%s\n' "$NIO_IMAGE_DIR/msdos-nio-apps.img"
     printf 'bounce_world_msdos_image=%s\n' "$NIO_IMAGE_DIR/bwcn-msdos.img"
     printf 'qemu_image=%s\n' "$qemu_image"
   } > "$NIO_BUILD_DIR/manifest.txt"
@@ -128,10 +143,42 @@ write_manifest() {
 default_qemu_image() {
   if [ -n "${OUTPUT_IMAGE:-}" ]; then
     printf '%s\n' "$OUTPUT_IMAGE"
-  elif [ -n "${APPS_MANIFEST:-}" ] || [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
+  elif [ -n "${APPS_MANIFEST:-}" ] || [ -f "$NIO_WORKSPACE/manifests/disks/qemu-msdos-apps.yaml" ] || [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
     printf '%s\n' "$FUJINET_QEMU_MSDOS/build/msdos-nio-apps.qcow2"
   else
     printf '%s\n' "$FUJINET_QEMU_MSDOS/build/msdos-nio.qcow2"
+  fi
+}
+
+default_msdos_apps_manifest() {
+  if [ -n "${APPS_MANIFEST:-}" ]; then
+    printf '%s\n' "$APPS_MANIFEST"
+  elif [ -f "$NIO_WORKSPACE/manifests/disks/msdos-apps.yaml" ]; then
+    printf '%s\n' "$NIO_WORKSPACE/manifests/disks/msdos-apps.yaml"
+  elif [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.yaml"
+  else
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.example.yaml"
+  fi
+}
+
+default_qemu_msdos_apps_manifest() {
+  if [ -n "${APPS_MANIFEST:-}" ]; then
+    printf '%s\n' "$APPS_MANIFEST"
+  elif [ -f "$NIO_WORKSPACE/manifests/disks/qemu-msdos-apps.yaml" ]; then
+    printf '%s\n' "$NIO_WORKSPACE/manifests/disks/qemu-msdos-apps.yaml"
+  elif [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.yaml"
+  else
+    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.example.yaml"
+  fi
+}
+
+default_msdos_boot_config_manifest() {
+  if [ -n "${MSDOS_BOOT_CONFIG_MANIFEST:-}" ]; then
+    printf '%s\n' "$MSDOS_BOOT_CONFIG_MANIFEST"
+  else
+    printf '%s\n' "$NIO_WORKSPACE/manifests/disks/msdos-boot-config.yaml"
   fi
 }
 
@@ -147,9 +194,21 @@ build_altirra() {
 
 build_fujinet_tcp() {
   require_dir "$FUJINET_NIO"
-  run_in fujinet-tcp-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-tcp-debug
+  build_fujinet_tcp_debug
   run_in fujinet-tcp-debug-test "$FUJINET_NIO" ctest --test-dir build/fujibus-tcp-debug --output-on-failure
   run_in fujinet-tcp-release-build "$FUJINET_NIO" ./build.sh -cp fujibus-tcp-release
+}
+
+build_fujinet_tcp_debug() {
+  require_dir "$FUJINET_NIO"
+  run_in fujinet-tcp-debug-build "$FUJINET_NIO" ./build.sh -cp fujibus-tcp-debug
+}
+
+ensure_fujinet_tcp_debug() {
+  require_dir "$FUJINET_NIO"
+  if [ ! -x "$FUJINET_NIO_TCP_DEBUG_BIN" ]; then
+    build_fujinet_tcp_debug
+  fi
 }
 
 build_fujinet_pty() {
@@ -216,9 +275,18 @@ build_msdos_niodump() {
   run_in msdos-niodump "$FUJINET_MSDOS/niodump" make
 }
 
+build_pdcurses_msdos() {
+  run pdcurses-msdos "$NIO_WORKSPACE/scripts/build-pdcurses-msdos.sh"
+}
+
 build_apps_msdos() {
   require_dir "$NIO_APPS"
-  run_in apps-msdos "$NIO_APPS" make TARGET=msdos FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+  build_pdcurses_msdos
+  run_in apps-msdos "$NIO_APPS" make \
+    TARGET=msdos \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    PDCURSES_DIR="$PDCURSES_DIR" \
+    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB"
 }
 
 build_apps_atari() {
@@ -229,7 +297,36 @@ build_apps_atari() {
 
 build_apps_all() {
   require_dir "$NIO_APPS"
-  run_in apps-all "$NIO_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+  build_pdcurses_msdos
+  run_in apps-all "$NIO_APPS" make \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    PDCURSES_DIR="$PDCURSES_DIR" \
+    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB"
+}
+
+build_boot_disks() {
+  require_dir "$NIO_APPS"
+  require_dir "$FUJINET_NIO"
+  require_dir "$FUJINET_NIO_LIB"
+  build_pdcurses_msdos
+
+  run_in boot-disk-msdos "$NIO_APPS" make \
+    TARGET=msdos \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    PDCURSES_DIR="$PDCURSES_DIR" \
+    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB" \
+    FUJINET_NIO="$FUJINET_NIO" \
+    install-boot-disk
+  run_in boot-disk-atari "$NIO_APPS" make \
+    TARGET=atari \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    FUJINET_NIO="$FUJINET_NIO" \
+    install-boot-disk
+  run_in boot-disk-bbc "$NIO_APPS" make \
+    TARGET=bbc \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    FUJINET_NIO="$FUJINET_NIO" \
+    install-boot-disk
 }
 
 clean_apps_all() {
@@ -265,64 +362,76 @@ build_bounce_world_disk() {
     disk-msdos
 }
 
-build_msdos_image() {
-  require_dir "$NIO_APPS"
-  if [ ! -d "$NIO_APPS_MSDOS_BIN" ]; then
-    build_apps_msdos
-  fi
-  mkdir -p "$NIO_IMAGE_DIR"
-  run msdos-image "$NIO_APPS/msdos/scripts/create_msdos_img.py" \
-    -i "$NIO_APPS_MSDOS_BIN" \
-    -o "$NIO_IMAGE_DIR/nio-apps.img" \
-    -l NIOAPPS
-}
-
-default_apps_manifest() {
-  if [ -n "${APPS_MANIFEST:-}" ]; then
-    printf '%s\n' "$APPS_MANIFEST"
-  elif [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
-    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.yaml"
-  else
-    printf '%s\n' "$FUJINET_QEMU_MSDOS/manifests/apps.example.yaml"
-  fi
-}
-
-build_apps_image() {
+build_manifest_msdos_image() {
+  local name="$1"
+  local apps_manifest="$2"
+  local output="$3"
+  local label="$4"
+  shift 4
   require_dir "$FUJINET_QEMU_MSDOS"
   mkdir -p "$NIO_IMAGE_DIR"
-  local apps_manifest
-  apps_manifest="$(default_apps_manifest)"
-  if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
-    build_bounce_world
-  fi
-  if [ ! -d "$NIO_APPS_MSDOS_BIN" ]; then
-    build_apps_msdos
-  fi
-  run apps-image env \
+  run "$name" env \
     NIO_APPS_MSDOS="$NIO_APPS_MSDOS_BIN" \
+    NIO_APPS_MSDOS_BIN="$NIO_APPS_MSDOS_BIN" \
+    FUJINET_NIO_MSDOS="$FUJINET_NIO_MSDOS" \
     FUJINET_MSDOS="$FUJINET_MSDOS" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
-    "$FUJINET_QEMU_MSDOS/build-apps-img" \
+    "$NIO_WORKSPACE/scripts/build-msdos-manifest-img" \
     --apps-manifest "$apps_manifest" \
-    --repo-root "$FUJINET_QEMU_MSDOS" \
-    --output "$NIO_IMAGE_DIR/msdos-nio-apps.img" \
-    --label NIOAPPS
+    --output "$output" \
+    --label "$label" \
+    "$@"
+}
+
+build_msdos_apps_image() {
+  require_dir "$NIO_APPS"
+  local apps_manifest
+  apps_manifest="$(default_msdos_apps_manifest)"
+  build_apps_msdos
+  build_manifest_msdos_image msdos-apps-image \
+    "$apps_manifest" \
+    "$NIO_IMAGE_DIR/msdos-apps.img" \
+    NIOAPPS
+}
+
+build_msdos_boot_config_image() {
+  require_dir "$NIO_APPS"
+  require_dir "$FUJINET_NIO_MSDOS"
+  local apps_manifest
+  apps_manifest="$(default_msdos_boot_config_manifest)"
+  build_msdos_driver
+  build_apps_msdos
+  build_manifest_msdos_image msdos-boot-config-image \
+    "$apps_manifest" \
+    "$NIO_IMAGE_DIR/msdos-boot-config.img" \
+    FNCONFIG
+}
+
+build_msdos_image() {
+  echo "msdos-image is a compatibility alias; use msdos-apps-image."
+  build_msdos_apps_image
+  cp "$NIO_IMAGE_DIR/msdos-apps.img" "$NIO_IMAGE_DIR/nio-apps.img"
+  echo "Wrote compatibility copy: $NIO_IMAGE_DIR/nio-apps.img"
+}
+
+build_apps_image() {
+  echo "apps-image is a compatibility alias; use msdos-apps-image."
+  build_msdos_apps_image
+  cp "$NIO_IMAGE_DIR/msdos-apps.img" "$NIO_IMAGE_DIR/msdos-nio-apps.img"
+  echo "Wrote compatibility copy: $NIO_IMAGE_DIR/msdos-nio-apps.img"
 }
 
 build_qemu_image() {
   require_dir "$FUJINET_QEMU_MSDOS"
   require_dir "$FUJINET_NIO_MSDOS"
   build_msdos_driver
+  build_apps_msdos
   if [ ! -f "$BOUNCE_WORLD_CLIENT_NIO/build/bwcn.msdos.exe" ]; then
     build_bounce_world
   fi
   local args=()
-  if [ -n "${APPS_MANIFEST:-}" ]; then
-    args+=(--apps-manifest "$APPS_MANIFEST")
-  elif [ -f "$FUJINET_QEMU_MSDOS/manifests/apps.yaml" ]; then
-    args+=(--apps-manifest "$FUJINET_QEMU_MSDOS/manifests/apps.yaml")
-  fi
+  args+=(--apps-manifest "$(default_qemu_msdos_apps_manifest)")
   run qemu-image env \
     FUJINET_MSDOS="$FUJINET_MSDOS" \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
@@ -331,7 +440,13 @@ build_qemu_image() {
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
     DRIVER="${DRIVER:-$FUJINET_NIO_MSDOS/build/dos/fujinet.sys}" \
-    "$FUJINET_QEMU_MSDOS/build-nio-qcow" "${args[@]}"
+    "$FUJINET_QEMU_MSDOS/build-nio-qcow" \
+    --repo-root "$NIO_WORKSPACE" \
+    "${args[@]}"
+}
+
+build_qemu_msdos_image() {
+  build_qemu_image
 }
 
 run_qemu() {
@@ -339,6 +454,26 @@ run_qemu() {
   if [ "${1:-}" = "--" ]; then
     shift
   fi
+  local arg next_is_display
+  if [ "${QEMU_DISPLAY:-}" = "curses" ]; then
+    run_qemu_interactive -- "$@"
+    return $?
+  fi
+  next_is_display=false
+  for arg in "$@"; do
+    if [ "$next_is_display" = true ]; then
+      if [ "$arg" = "curses" ]; then
+        run_qemu_interactive -- "$@"
+        return $?
+      fi
+      next_is_display=false
+    elif [ "$arg" = "--display" ]; then
+      next_is_display=true
+    elif [ "$arg" = "--display=curses" ]; then
+      run_qemu_interactive -- "$@"
+      return $?
+    fi
+  done
   local hda
   hda="${HDA:-$(default_qemu_image)}"
   run qemu-run env \
@@ -346,6 +481,29 @@ run_qemu() {
     FUJINET_NIO_PATH="$FUJINET_NIO" \
     FUJINET_NIO_BIN="${FUJINET_NIO_BIN:-$FUJINET_NIO_TCP_DEBUG_BIN}" \
     "$FUJINET_QEMU_MSDOS/run-qemu-nio" "$@"
+}
+
+run_qemu_interactive() {
+  require_dir "$FUJINET_QEMU_MSDOS"
+  if [ "${1:-}" = "--" ]; then
+    shift
+  fi
+  local hda
+  hda="${HDA:-$(default_qemu_image)}"
+  echo "==> qemu-run"
+  echo "    interactive terminal mode; output is not piped to a log"
+  HDA="$hda" \
+    FUJINET_NIO_PATH="$FUJINET_NIO" \
+    FUJINET_NIO_BIN="${FUJINET_NIO_BIN:-$FUJINET_NIO_TCP_DEBUG_BIN}" \
+    "$FUJINET_QEMU_MSDOS/run-qemu-nio" "$@"
+}
+
+run_msdos_dev_curses() {
+  require_dir "$FUJINET_QEMU_MSDOS"
+  ensure_fujinet_tcp_debug
+  build_qemu_image
+  write_manifest
+  run_qemu_interactive -- --display curses
 }
 
 port_in_use() {
@@ -617,8 +775,8 @@ target_all() {
   build_lib_msdos
   clean_apps_all
   build_apps_all
-  build_msdos_image
-  build_qemu_image
+  build_msdos_apps_image
+  build_qemu_msdos_image
   write_manifest
 }
 
@@ -645,20 +803,26 @@ for target in "$@"; do
     msdos-driver-legacy) build_msdos_driver_legacy; write_manifest ;;
     msdos-tests-legacy) build_msdos_tests_legacy; write_manifest ;;
     msdos-niodump) build_msdos_niodump; write_manifest ;;
+    pdcurses-msdos) build_pdcurses_msdos; write_manifest ;;
     apps-all) build_apps_all; write_manifest ;;
     apps-clean) clean_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
     apps-atari) build_apps_atari; write_manifest ;;
+    boot-disks|boot-disk) build_boot_disks; write_manifest ;;
     atari-run) shift; run_atari "$@"; exit $? ;;
     atari-stop) stop_atari_sidecars; exit $? ;;
     bounce-world) build_bounce_world; write_manifest ;;
     bounce-world-f5) build_bounce_world_f5; write_manifest ;;
     bounce-world-ioctl) build_bounce_world_ioctl; write_manifest ;;
     bounce-world-disk) build_bounce_world_disk; write_manifest ;;
+    msdos-apps-image) build_msdos_apps_image; write_manifest ;;
+    msdos-boot-config-image) build_msdos_boot_config_image; write_manifest ;;
+    qemu-msdos-image) build_qemu_msdos_image; write_manifest ;;
     msdos-image) build_msdos_image; write_manifest ;;
     apps-image) build_apps_image; write_manifest ;;
     qemu-image) build_qemu_image; write_manifest ;;
     qemu-run) shift; run_qemu "$@"; exit $? ;;
+    msdos-dev-curses) run_msdos_dev_curses; exit $? ;;
     manifest) write_manifest ;;
     -h|--help|help) usage ;;
     *)

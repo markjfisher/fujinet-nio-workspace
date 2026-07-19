@@ -1,0 +1,39 @@
+# Workspace-owned QEMU MS-DOS app manifest.
+#
+# This is passed to repos/fujinet-qemu-msdos/build-nio-qcow when building the
+# bootable QEMU hard disk. The qemu repo keeps its own manifests for standalone
+# use; this workspace manifest is the cross-repo source of truth here.
+
+apps:
+  - src: ${NIO_APPS_MSDOS_BIN}/nioprobe.exe
+    name: NIOPROBE.EXE
+    required: false
+  - src: ${NIO_APPS_MSDOS_BIN}/nioread.exe
+    name: NIOREAD.EXE
+    required: false
+  - src: ${BOUNCE_WORLD_CLIENT_NIO}/build/bwcn.msdos.exe
+    name: BWCN.EXE
+    required: false
+  - src: ${FUJINET_MSDOS}/niodump/niodump.exe
+    name: NIODUMP.EXE
+    required: false
+  - src: ${NIO_APPS_MSDOS_BIN}/fdrive.exe
+    name: FDRIVE.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fhost.exe
+    name: FHOST.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fin.exe
+    name: FIN.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fout.exe
+    name: FOUT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fls.exe
+    name: FLS.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fmount.exe
+    name: FMOUNT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fboot.exe
+    name: FBOOT.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fapp.exe
+    name: FAPP.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/fhttpbin.exe
+    name: FHTTPBIN.EXE
+  - src: ${NIO_APPS_MSDOS_BIN}/config-nio.exe
+    name: CONFNIO.EXE

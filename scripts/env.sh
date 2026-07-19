@@ -29,6 +29,7 @@ export BOUNCE_WORLD_CLIENT_NIO="$NIO_WORKSPACE/repos/bounce-world-client-nio"
 export BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO"
 export CC65_HOME="$NIO_WORKSPACE/repos/cc65"
 export QEMU_MSDOS_INIT="$NIO_WORKSPACE/repos/qemu-msdos-init"
+export PDCURSES_DIR="${PDCURSES_DIR:-$NIO_WORKSPACE/repos/PDCurses}"
 
 if [ -f "$HOME/.local/bin/add_watcom.sh" ]; then
   # shellcheck source=/dev/null
@@ -57,5 +58,6 @@ export NIO_APPS_MSDOS_BIN="${NIO_APPS_MSDOS_BIN:-$NIO_APPS/build/msdos/bin}"
 export NIO_APPS_ATARI_BIN="${NIO_APPS_ATARI_BIN:-$NIO_APPS/build/atari/bin}"
 export BOUNCE_WORLD_CLIENT_NIO="${BOUNCE_WORLD_CLIENT_NIO:-$BOUNCE_WORLD}"
 export BOUNCE_WORLD="${BOUNCE_WORLD:-$BOUNCE_WORLD_CLIENT_NIO}"
+export PDCURSES_MSDOS_LIB="${PDCURSES_MSDOS_LIB:-$NIO_BUILD_DIR/pdcurses/msdos-small/pdcurses.lib}"
 
 mkdir -p "$NIO_LOG_DIR" "$NIO_IMAGE_DIR"
