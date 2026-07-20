@@ -5,18 +5,6 @@
 # use; this workspace manifest is the cross-repo source of truth here.
 
 apps:
-  - src: ${NIO_APPS_MSDOS_BIN}/nioprobe.exe
-    name: NIOPROBE.EXE
-    required: false
-  - src: ${NIO_APPS_MSDOS_BIN}/nioread.exe
-    name: NIOREAD.EXE
-    required: false
-  - src: ${BOUNCE_WORLD_CLIENT_NIO}/build/bwcn.msdos.exe
-    name: BWCN.EXE
-    required: false
-  - src: ${FUJINET_MSDOS}/niodump/niodump.exe
-    name: NIODUMP.EXE
-    required: false
   - src: ${NIO_APPS_MSDOS_BIN}/fdrive.exe
     name: FDRIVE.EXE
   - src: ${NIO_APPS_MSDOS_BIN}/fhost.exe

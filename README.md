@@ -126,6 +126,7 @@ deciding whether a disk recipe belongs in a sub-repo or the workspace.
 - fujinet-nio-msdos `FUJINET.SYS`
 - nio-apps MS-DOS tools
 - bounce-world-client-nio
+- nio-apps boot disks installed into `fujinet-nio/distfiles`
 - raw FAT image from `manifests/disks/msdos-apps.yaml`
 - QEMU qcow image from `manifests/disks/qemu-msdos-apps.yaml`
 
@@ -172,8 +173,15 @@ scripts/build.sh msdos-dev-curses
 ```
 
 That ensures the POSIX TCP FujiNet exists, builds `FUJINET.SYS`, MS-DOS apps,
-the QEMU image, then runs QEMU with `--display curses`. See
+the boot disks, the QEMU image, then runs QEMU with `--display curses`. See
 [docs/msdos-qemu-nio-curses.md](docs/msdos-qemu-nio-curses.md).
+
+While QEMU is running, drive keys through the QEMU monitor from another terminal:
+
+```sh
+scripts/build.sh qemu-monitor type CONFNIO ret
+scripts/build.sh qemu-monitor sendkey q
+```
 
 ## Status And Manifest
 
