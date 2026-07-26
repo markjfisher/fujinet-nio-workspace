@@ -22,6 +22,11 @@ Targets:
   lib-linux           Build fujinet-nio-lib Linux library
   lib-msdos           Build fujinet-nio-lib MS-DOS libraries
   lib-atari           Build fujinet-nio-lib Atari library
+  cc65                Incrementally build cc65 tools and BBC libraries
+  cc65-bbc            Incrementally build cc65 BBC and bbc-clib libraries
+  cc65-clib           Build cc65-clib ROM and rebuild cc65 BBC libraries
+  cc65-clib-tests     Run cc65-clib tests without Beebium integration
+  cc65-clib-full-tests Run cc65-clib full test matrix, including Beebium when configured
   msdos-driver        Build fujinet-nio-msdos FUJINET.SYS
   msdos-tests         Run fujinet-nio-msdos host unit tests
   msdos-driver-legacy Build fujinet-msdos FUJINET.SYS with FUJINET_TRANSPORT=NIO
@@ -126,6 +131,7 @@ write_manifest() {
     git_ref_line fujinet-nio-msdos "$FUJINET_NIO_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
     git_ref_line fn-rom "$FN_ROM"
+    git_ref_line cc65-clib "$CC65_CLIB"
     git_ref_line bounce-world-client-nio "$BOUNCE_WORLD_CLIENT_NIO"
     git_ref_line fujinet-emulator-bridge "$FUJINET_EMULATOR_BRIDGE"
     git_ref_line AltirraSDL "$NIO_WORKSPACE/repos/AltirraSDL"
@@ -254,6 +260,60 @@ build_lib_msdos() {
 build_lib_atari() {
   require_dir "$FUJINET_NIO_LIB"
   run_in lib-atari "$FUJINET_NIO_LIB" make atari
+}
+
+build_cc65_tools() {
+  require_dir "$CC65_HOME"
+  run_in cc65-tools "$CC65_HOME" make -C src
+}
+
+build_cc65_bbc_libs() {
+  require_dir "$CC65_HOME"
+  run_in cc65-bbc-libs "$CC65_HOME" make -C libsrc bbc bbc-clib
+}
+
+build_cc65() {
+  build_cc65_tools
+  build_cc65_bbc_libs
+}
+
+build_cc65_clib() {
+  require_dir "$CC65_CLIB"
+  require_dir "$CC65_SRC"
+  run_in cc65-clib "$CC65_CLIB" env \
+    CC65_ROOT="$CC65_ROOT" \
+    CC65_SRC="$CC65_SRC" \
+    CC65_HOME="$CC65_HOME" \
+    CLIB_ROOT="$CC65_CLIB" \
+    BEEBIUM_HOME="${BEEBIUM_HOME:-$HOME/dev/bbc/beebium}" \
+    PATH="$CC65_HOME/bin:$PATH" \
+    make -C build-rom all
+}
+
+test_cc65_clib_no_beebium() {
+  require_dir "$CC65_CLIB"
+  require_dir "$CC65_SRC"
+  run_in cc65-clib-tests "$CC65_CLIB" env \
+    CC65_ROOT="$CC65_ROOT" \
+    CC65_SRC="$CC65_SRC" \
+    CC65_HOME="$CC65_HOME" \
+    CLIB_ROOT="$CC65_CLIB" \
+    BEEBIUM_HOME="${BEEBIUM_HOME:-$HOME/dev/bbc/beebium}" \
+    PATH="$CC65_HOME/bin:$PATH" \
+    bash scripts/run_tests.sh --no-beebium
+}
+
+test_cc65_clib_full() {
+  require_dir "$CC65_CLIB"
+  require_dir "$CC65_SRC"
+  run_in cc65-clib-full-tests "$CC65_CLIB" env \
+    CC65_ROOT="$CC65_ROOT" \
+    CC65_SRC="$CC65_SRC" \
+    CC65_HOME="$CC65_HOME" \
+    CLIB_ROOT="$CC65_CLIB" \
+    BEEBIUM_HOME="${BEEBIUM_HOME:-$HOME/dev/bbc/beebium}" \
+    PATH="$CC65_HOME/bin:$PATH" \
+    bash scripts/run_tests.sh
 }
 
 build_msdos_driver() {
@@ -400,6 +460,26 @@ build_confnio_bbc_binary_for_machine() {
     config-nio
 }
 
+build_bbc_keycode_binary() {
+  require_dir "$NIO_APPS"
+  require_dir "$FUJINET_NIO_LIB"
+
+  run_in "bbc-keycode-build" "$NIO_APPS" make \
+    -f makefiles/build.mk \
+    TARGET=bbc \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    keycode
+}
+
+stage_bbc_keycode() {
+  local stage="$1"
+
+  build_bbc_keycode_binary
+  mkdir -p "$stage"
+  cp "$NIO_APPS/build/bbc/bin/keycode" "$stage/KEYCODE"
+  printf '$.KEYCODE 001900 001900\n' > "$stage/KEYCODE.inf"
+}
+
 stage_confnio_bbc_for_machine() {
   local machine="$1"
   local label="$2"
@@ -412,6 +492,7 @@ stage_confnio_bbc_for_machine() {
   mkdir -p "$stage"
   cp "$NIO_APPS/build/bbc/bin/config-nio" "$stage/CONFNIO"
   printf '$.CONFNIO %s %s\n' "$inf_addr" "$inf_addr" > "$stage/CONFNIO.inf"
+  stage_bbc_keycode "$stage"
 }
 
 build_confnio_bbc_disk_for_machine() {
@@ -442,17 +523,19 @@ build_boot_disk_for_machine() {
   local machine="$1"
   local label="$2"
   local ssd_name="$3"
-  local confnio_stage="$NIO_BUILD_DIR/confnio-$label-fn-utls"
+  local extra_stage="$NIO_BUILD_DIR/$label-fn-utls-extra"
 
   require_dir "$FN_ROM"
   require_dir "$FUJINET_NIO"
 
+  rm -rf "$extra_stage"
+  mkdir -p "$extra_stage"
   if [ "$machine" = "MASTER" ]; then
-    stage_confnio_bbc_for_machine "$machine" "$label" "$confnio_stage"
-    extra_stage_env=(FN_UTLS_EXTRA_STAGE="$confnio_stage")
+    stage_confnio_bbc_for_machine "$machine" "$label" "$extra_stage"
   else
-    extra_stage_env=()
+    stage_bbc_keycode "$extra_stage"
   fi
+  extra_stage_env=(FN_UTLS_EXTRA_STAGE="$extra_stage")
 
   run_in "$label-fn-utls" "$FN_ROM" env \
     BUILD_MACHINE="$machine" \
@@ -1023,6 +1106,11 @@ while [ $# -gt 0 ]; do
     lib-linux) build_lib_linux; write_manifest ;;
     lib-msdos) build_lib_msdos; write_manifest ;;
     lib-atari) build_lib_atari; write_manifest ;;
+    cc65) build_cc65; write_manifest ;;
+    cc65-bbc) build_cc65_bbc_libs; write_manifest ;;
+    cc65-clib) build_cc65_clib; write_manifest ;;
+    cc65-clib-tests) test_cc65_clib_no_beebium; write_manifest ;;
+    cc65-clib-full-tests) test_cc65_clib_full; write_manifest ;;
     msdos-driver) build_msdos_driver; write_manifest ;;
     msdos-tests) build_msdos_tests; write_manifest ;;
     msdos-driver-legacy) build_msdos_driver_legacy; write_manifest ;;

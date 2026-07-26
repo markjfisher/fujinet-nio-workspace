@@ -95,9 +95,12 @@ nio-apps BBC app disk.
 - BBC uses `FN-UTLS.ssd`, with transient utilities load/exec at `$1900`.
 - Master uses `FN-UTLS-M.ssd`, with transient utilities load/exec at `$0E00`.
 - The workspace Master utility disk also includes `CONFNIO`, built from
-  `repos/nio-apps/build/bbc/bin/config-nio` and staged as `$.CONFNIO`. The BBC
-  `$1900` build of `CONFNIO` does not fit yet, so the BBC utility disk omits it
-  until the BBC UI is reduced further.
+  `repos/nio-apps/build/bbc/bin/config-nio` and staged as `$.CONFNIO`.
+- Both workspace BBC utility disk builds include `KEYCODE`, built from
+  `repos/nio-apps/build/bbc/bin/keycode` and staged as `$.KEYCODE`. Run
+  `*KEYCODE` to inspect raw `cgetc()` key values in emulator/manual testing.
+- The BBC `$1900` build of `CONFNIO` does not fit yet, so the BBC utility disk
+  omits it until the BBC UI is reduced further.
 
 The fn-rom `*FLS` utility requests formatted FileDevice directory lines from
 FujiNet (`sort | formatted`, flag `$06`) and prints those strings directly on

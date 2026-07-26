@@ -36,3 +36,6 @@
 [submodule "repos/fujinet-nio-msdos"]
 	path = repos/fujinet-nio-msdos
 	url = git@github.com:markjfisher/fujinet-nio-msdos.git
+[submodule "repos/cc65-clib"]
+	path = repos/cc65-clib
+	url = git@github.com:markjfisher/cc65-clib.git
