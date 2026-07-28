@@ -24,6 +24,10 @@ altirra:
   host_paths:
     - mode: rw
       path: ${NIO_APPS_ATARI_BIN}
+    - mode: rw
+      path: ${NIO_CORE_APPS_ATARI_BIN}
+    - mode: rw
+      path: ${NIO_CONFIG_ATARI_BIN}
 
 startup:
-  program: ${NIO_APPS_ATARI_BIN}/fdrive.xex
+  program: ${NIO_CORE_APPS_ATARI_BIN}/fdrive.xex

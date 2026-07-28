@@ -77,7 +77,7 @@ CONFNIO
 image under `C:\FNAPPS` from `manifests/disks/qemu-msdos-apps.yaml`:
 
 ```yaml
-- src: ${NIO_APPS_MSDOS_BIN}/config-nio.exe
+- src: ${NIO_CONFIG_MSDOS_BIN}/config-nio.exe
   name: CONFNIO.EXE
 ```
 

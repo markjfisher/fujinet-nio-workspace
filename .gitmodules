@@ -39,3 +39,9 @@
 [submodule "repos/cc65-clib"]
 	path = repos/cc65-clib
 	url = git@github.com:markjfisher/cc65-clib.git
+[submodule "repos/nio-core-apps"]
+	path = repos/nio-core-apps
+	url = git@github.com:markjfisher/nio-core-apps.git
+[submodule "repos/nio-config"]
+	path = repos/nio-config
+	url = git@github.com:markjfisher/nio-config.git

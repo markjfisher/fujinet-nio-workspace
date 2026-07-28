@@ -10,5 +10,5 @@ atari800:
   windowed: true
 
 startup:
-  program: ${NIO_APPS_ATARI_BIN}/fhost.xex
+  program: ${NIO_CORE_APPS_ATARI_BIN}/fhost.xex
   disks: []

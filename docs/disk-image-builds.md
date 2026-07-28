@@ -25,10 +25,22 @@ classDiagram
       make TARGET=msdos disk
       make TARGET=atari disk
       make TARGET=bbc disk
-      make TARGET=<platform> boot-disk
+      test apps only
+      msdos/scripts/create_msdos_img.py
+    }
+
+    class nio_core_apps {
+      make TARGET=msdos boot-disk
+      make TARGET=atari boot-disk
       boot-disk/manifests/*.yaml
       msdos/scripts/create_msdos_img.py
       boot-disk/scripts/stage_manifest.py
+    }
+
+    class nio_config {
+      make TARGET=<platform> config-nio
+      config-nio-bbc-stage
+      config-nio-master-stage
     }
 
     class fujinet_qemu_msdos {
@@ -64,21 +76,27 @@ classDiagram
     }
 
     class fn_rom {
-      scripts/build_fn_utls.sh
+      scripts/build_fn_boot.sh
       scripts/build_release.sh
-      FN-UTLS.ssd
+      FN-BOOT.ssd
       scripts/create_ssd.py
     }
 
-    workspace --> nio_apps : builds apps and boot disks
+    workspace --> nio_apps : builds test apps
+    workspace --> nio_core_apps : builds core apps and MS-DOS/Atari boot disks
+    workspace --> nio_config : builds config apps and BBC config stages
     workspace --> fn_rom : builds BBC transient utility boot disk
     workspace --> fujinet_qemu_msdos : uses standalone qcow/raw FAT tools
     workspace --> fujinet_nio_msdos : builds FUJINET.SYS
     workspace --> fujinet_nio : installs boot disks into distfiles
     workspace --> bounce_world_client_nio : optional app and standalone disk
-    nio_apps --> fujinet_nio_lib : links app libraries, uses create_ssd.py
+    nio_apps --> fujinet_nio_lib : links test app libraries
+    nio_core_apps --> fujinet_nio_lib : links core utility libraries
+    nio_config --> fujinet_nio_lib : links config app libraries, uses create_ssd.py
     fujinet_qemu_msdos --> fujinet_nio_msdos : injects FUJINET.SYS into qcow2
-    fujinet_qemu_msdos --> nio_apps : manifest references app binaries
+    fujinet_qemu_msdos --> nio_apps : manifest references test app binaries
+    fujinet_qemu_msdos --> nio_core_apps : manifest references core binaries
+    fujinet_qemu_msdos --> nio_config : manifest references config binaries
     bounce_world_client_nio --> nio_apps : uses create_msdos_img.py by default
 ```
 
@@ -89,11 +107,11 @@ classDiagram
 | `make TARGET=msdos disk` in `repos/nio-apps` | `nio-apps` | `repos/nio-apps/build/msdos/disk/nio-apps-msdos.img` | all built `nio-apps` MS-DOS binaries | repo-local app disk |
 | `make TARGET=bbc disk` in `repos/nio-apps` | `nio-apps` | `repos/nio-apps/build/bbc/disk/nio-apps-bbc.ssd` | all built BBC `nio-apps` binaries | repo-local BBC app disk |
 | `make TARGET=atari disk` in `repos/nio-apps` | `nio-apps` | `repos/nio-apps/build/atari/disk/nio-apps-atari.atr` | all built Atari `.xex` apps | repo-local Atari app disk |
-| `make TARGET=<platform> boot-disk` in `repos/nio-apps` | `nio-apps` | `build/<target>/disk/boot/autorun.*` | files from `boot-disk/manifests/<platform>.yaml` | platform boot/config disks |
-| `scripts/build.sh boot-disks` | workspace | `repos/fujinet-nio/distfiles/boot/<platform>/autorun.*` and `distfiles/esp32-data/boot/<platform>/autorun.*` | MS-DOS/Atari `nio-apps` boot disks; BBC fn-rom `FN-UTLS.ssd` installed as `autorun.ssd` | firmware boot disk inputs |
-| `scripts/build.sh bbc-boot-disk` | workspace via `fn-rom` | `repos/fujinet-nio/distfiles/boot/bbc/autorun.ssd` and `distfiles/esp32-data/boot/bbc/autorun.ssd` | `FN-UTLS.ssd`, the BBC transient assembly utilities that call the resident ROM ABI, plus BBC diagnostics such as `KEYCODE` | BBC firmware boot utility disk |
-| `scripts/build.sh master-boot-disk` | workspace via `fn-rom` | `repos/fujinet-nio/distfiles/boot/bbc/autorun.ssd` and `distfiles/esp32-data/boot/bbc/autorun.ssd` | `FN-UTLS-M.ssd`, the Master transient assembly utilities plus `CONFNIO` and `KEYCODE` | BBC Master firmware boot utility disk |
-| `scripts/build.sh confnio-master-disk` | workspace via `nio-apps` | `build/images/confnio-master.ssd` | `CONFNIO`, built from `repos/nio-apps/build/bbc/bin/config-nio` with load/exec `$0E00`, plus `KEYCODE` at `$1900` | standalone Master config-nio and diagnostics disk for TNFS/manual testing |
+| `make TARGET=<platform> boot-disk` in `repos/nio-core-apps` | `nio-core-apps` | `build/<target>/disk/boot/autorun.*` | files from `boot-disk/manifests/<platform>.yaml` | MS-DOS/Atari core utility boot disks |
+| `scripts/build.sh boot-disks` | workspace | platform boot images under `repos/fujinet-nio/distfiles/boot/<platform>/` and `distfiles/esp32-data/boot/<platform>/` | MS-DOS/Atari `nio-core-apps` boot disks; BBC fn-rom `FN-BOOT.ssd` with `nio-config` assets | firmware boot disk inputs |
+| `scripts/build.sh bbc-boot-disk` | workspace via `fn-rom` and `nio-config` | `repos/fujinet-nio/distfiles/boot/bbc/FN-BOOT.ssd` and `distfiles/esp32-data/boot/bbc/FN-BOOT.ssd` | `FN-BOOT.ssd`, the BBC transient assembly utilities that call the resident ROM ABI, plus `CONFNIO` and `KEYCODE` from `nio-config` | BBC firmware boot utility disk |
+| `scripts/build.sh master-boot-disk` | workspace via `fn-rom` | `repos/fujinet-nio/distfiles/boot/bbc/FN-BOOT-M.ssd` and `distfiles/esp32-data/boot/bbc/FN-BOOT-M.ssd` | `FN-BOOT-M.ssd`, the Master transient assembly utilities plus `CONFNIO` and `KEYCODE` | BBC Master firmware boot utility disk |
+| `scripts/build.sh confnio-master-disk` | workspace via `nio-config` | `build/images/confnio-master.ssd` | `CONFNIO`, built from `repos/nio-config/build/bbc/bin/config-nio` with load/exec `$0E00`, plus `KEYCODE` at `$1900` | standalone Master config-nio and diagnostics disk for TNFS/manual testing |
 | `scripts/build.sh msdos-apps-image` | workspace via `fujinet-qemu-msdos` raw FAT tool | `build/images/msdos-apps.img` | files from `manifests/disks/msdos-apps.yaml` | mountable raw FAT app image |
 | `scripts/build.sh msdos-boot-config-image` | workspace via `fujinet-qemu-msdos` raw FAT tool | `build/images/msdos-boot-config.img` | `FUJINET.SYS` plus config/utilities from `manifests/disks/msdos-boot-config.yaml` | mountable raw FAT driver/config disk |
 | `scripts/build.sh qemu-msdos-image` | workspace via `fujinet-qemu-msdos` | `repos/fujinet-qemu-msdos/build/msdos-nio-apps.qcow2` | base MS-DOS hard disk plus `FUJINET.SYS`, `CONFIG.SYS`, `AUTOEXEC.BAT` PATH update, and apps from `manifests/disks/qemu-msdos-apps.yaml` under `C:\FNAPPS`; also refreshes installed `nio-apps` boot disks | bootable QEMU hard disk |
@@ -102,7 +120,7 @@ classDiagram
 | `scripts/build.sh qemu-image` | workspace compatibility alias | `repos/fujinet-qemu-msdos/build/msdos-nio-apps.qcow2` | same as `qemu-msdos-image` | old target name |
 | `scripts/build.sh bounce-world-disk` | workspace via `bounce-world-client-nio` | `build/images/bwcn-msdos.img` | `BWCN.EXE` only | standalone game disk |
 | `make disk-msdos` in `repos/bounce-world-client-nio` | `bounce-world-client-nio` | `disk-images/msdos/bwcn-msdos.img` | `BWCN.EXE` only | repo-local game disk |
-| `scripts/build_fn_utls.sh` in `repos/fn-rom` | `fn-rom` | `build/FN-UTLS.ssd` or caller-supplied `FN_UTLS_SSD` | BBC/Master transient ROM utilities linked against the matching machine ROM ABI | BBC ROM release utility disk |
+| `scripts/build_fn_boot.sh` in `repos/fn-rom` | `fn-rom` | `build/FN-BOOT.ssd` or caller-supplied `FN_BOOT_SSD` | BBC/Master transient ROM utilities linked against the matching machine ROM ABI | BBC ROM release utility disk |
 
 ## Coupling Observed
 
@@ -118,7 +136,7 @@ which layer owns a disk.
 - `repos/nio-apps/msdos/scripts/create_msdos_img.py` and
   `repos/fujinet-qemu-msdos/scripts/create_msdos_img.py` are duplicate copies
   of the same MS-DOS FAT image creator.
-- `repos/nio-apps/boot-disk/manifests/*.yaml` and
+- `repos/nio-core-apps/boot-disk/manifests/*.yaml` and
   `repos/fujinet-qemu-msdos/manifests/apps.yaml` are similar manifest concepts
   with different staging scripts.
 - `repos/fujinet-nio` does not build these disks. It consumes installed images
@@ -141,7 +159,7 @@ That gives these practical owners:
 | Disk kind | Recommended owner |
 |---|---|
 | `nio-apps` boot disks copied to firmware `distfiles` | `nio-apps`, orchestrated by workspace, except BBC |
-| BBC firmware boot utility disk | `fn-rom`, installed by workspace as `autorun.ssd` |
+| BBC firmware boot utility disk | `fn-rom`, installed by workspace as `FN-BOOT.ssd` / `FN-BOOT-M.ssd` |
 | raw MS-DOS app/config disk containing `FUJINET.SYS` plus utilities | workspace |
 | bootable QEMU hard disk image | `fujinet-qemu-msdos`, orchestrated by workspace |
 | BBC SSD utility disks for ROM release | `fn-rom` |
@@ -187,8 +205,8 @@ one.
 
 The BBC boot disk is intentionally different from the nio-apps BBC app disk.
 The DISK+NET ROM leaves commands such as `*FLS` and `*FDRIVE` out of ROM and
-expects to load transient assembly utilities from `FN-UTLS.ssd` or
-`FN-UTLS-M.ssd`. Those utilities are built in `repos/fn-rom` against the
+expects to load transient assembly utilities from `FN-BOOT.ssd` or
+`FN-BOOT-M.ssd`. Those utilities are built in `repos/fn-rom` against the
 target machine's resident ROM interface. Resident routine calls go through the
 fixed utility ABI jump table at `$8030`, so routine implementation movement
 inside the ROM does not require a matching utility disk rebuild as long as the
@@ -271,19 +289,19 @@ The manifest contains:
 apps:
   - src: ${FUJINET_NIO_MSDOS}/build/dos/fujinet.sys
     name: FUJINET.SYS
-  - src: ${NIO_APPS_MSDOS_BIN}/config-nio.exe
+  - src: ${NIO_CONFIG_MSDOS_BIN}/config-nio.exe
     name: CONFNIO.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fboot.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fboot.exe
     name: FBOOT.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fdrive.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fdrive.exe
     name: FDRIVE.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fhost.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fhost.exe
     name: FHOST.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fin.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fin.exe
     name: FIN.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fls.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fls.exe
     name: FLS.EXE
-  - src: ${NIO_APPS_MSDOS_BIN}/fmount.exe
+  - src: ${NIO_CORE_APPS_MSDOS_BIN}/fmount.exe
     name: FMOUNT.EXE
 ```
 
@@ -303,8 +321,8 @@ That target should be workspace-owned because it combines `FUJINET.SYS` from
 5. Later: harmonize the duplicated `create_msdos_img.py` scripts through a
    shared package or by making the workspace wrapper the cross-repo API.
 6. Keep `fujinet-qemu-msdos/build-nio-qcow` focused on bootable QEMU hard disks.
-7. Keep `nio-apps/boot-disk/*` as the owner for platform firmware boot disks
-   unless the manifests become cross-repo.
+7. Done: move core utility boot-disk ownership to `nio-core-apps`; `nio-apps`
+   remains test-only.
 8. Done: update `build/manifest.txt` to record every disk artifact path and the
    manifest used to produce it.
 

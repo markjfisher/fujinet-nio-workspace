@@ -34,12 +34,18 @@ Targets:
   msdos-niodump       Build fujinet-msdos NIODUMP.EXE diagnostics utility
   pdcurses-msdos      Fetch/build PDCurses for Open Watcom MS-DOS
   apps-all            Build all nio-apps targets
-  apps-clean          Clean all nio-apps targets
+  apps-clean          Clean nio-apps, nio-core-apps, and nio-config builds
   apps-msdos          Build nio-apps MS-DOS tools
   apps-atari          Build nio-apps Atari tools
+  core-apps-all       Build all nio-core-apps targets
+  core-apps-msdos     Build nio-core-apps MS-DOS utilities
+  core-apps-atari     Build nio-core-apps Atari utilities
+  config-all          Build all nio-config targets
+  config-msdos        Build nio-config MS-DOS app
+  config-atari        Build nio-config Atari app
   boot-disks          Build/install platform boot disks into fujinet-nio distfiles
-  bbc-boot-disk       Build/install BBC fn-rom FN-UTLS.ssd as autorun.ssd
-  master-boot-disk    Build/install Master fn-rom FN-UTLS-M.ssd as autorun.ssd
+  bbc-boot-disk       Build/install BBC fn-rom FN-BOOT.ssd
+  master-boot-disk    Build/install Master fn-rom FN-BOOT-M.ssd
   confnio-bbc-disk    Attempt standalone BBC CONFNIO SSD build at \$1900
   confnio-master-disk Build standalone Master CONFNIO SSD
   bbc-pty             Build/install BBC boot disk, create PTY config, run fujinet-nio
@@ -127,6 +133,8 @@ write_manifest() {
     git_ref_line fujinet-nio "$FUJINET_NIO"
     git_ref_line fujinet-nio-lib "$FUJINET_NIO_LIB"
     git_ref_line nio-apps "$NIO_APPS"
+    git_ref_line nio-core-apps "$NIO_CORE_APPS"
+    git_ref_line nio-config "$NIO_CONFIG"
     git_ref_line fujinet-qemu-msdos "$FUJINET_QEMU_MSDOS"
     git_ref_line fujinet-nio-msdos "$FUJINET_NIO_MSDOS"
     git_ref_line fujinet-msdos "$FUJINET_MSDOS"
@@ -141,6 +149,10 @@ write_manifest() {
     printf 'altirra_workspace_bin=%s\n' "$ALTIRRA_WORKSPACE_BIN"
     printf 'nio_apps_msdos_bin=%s\n' "$NIO_APPS_MSDOS_BIN"
     printf 'nio_apps_atari_bin=%s\n' "$NIO_APPS_ATARI_BIN"
+    printf 'nio_core_apps_msdos_bin=%s\n' "$NIO_CORE_APPS_MSDOS_BIN"
+    printf 'nio_core_apps_atari_bin=%s\n' "$NIO_CORE_APPS_ATARI_BIN"
+    printf 'nio_config_msdos_bin=%s\n' "$NIO_CONFIG_MSDOS_BIN"
+    printf 'nio_config_atari_bin=%s\n' "$NIO_CONFIG_ATARI_BIN"
     printf 'msdos_apps_manifest=%s\n' "$msdos_apps_manifest"
     printf 'qemu_msdos_apps_manifest=%s\n' "$qemu_msdos_apps_manifest"
     printf 'msdos_boot_config_manifest=%s\n' "$msdos_boot_config_manifest"
@@ -377,20 +389,63 @@ build_apps_all() {
     PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB"
 }
 
+build_core_apps_msdos() {
+  require_dir "$NIO_CORE_APPS"
+  build_pdcurses_msdos
+  run_in core-apps-msdos "$NIO_CORE_APPS" make \
+    TARGET=msdos \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_core_apps_atari() {
+  require_dir "$NIO_CORE_APPS"
+  build_lib_atari
+  run_in core-apps-atari "$NIO_CORE_APPS" make TARGET=atari FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_core_apps_all() {
+  require_dir "$NIO_CORE_APPS"
+  build_pdcurses_msdos
+  run_in core-apps-all "$NIO_CORE_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_config_msdos() {
+  require_dir "$NIO_CONFIG"
+  build_pdcurses_msdos
+  run_in config-msdos "$NIO_CONFIG" make \
+    TARGET=msdos \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    PDCURSES_DIR="$PDCURSES_DIR" \
+    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB"
+}
+
+build_config_atari() {
+  require_dir "$NIO_CONFIG"
+  build_lib_atari
+  run_in config-atari "$NIO_CONFIG" make TARGET=atari FUJINET_NIO_LIB="$FUJINET_NIO_LIB"
+}
+
+build_config_all() {
+  require_dir "$NIO_CONFIG"
+  build_pdcurses_msdos
+  run_in config-all "$NIO_CONFIG" make \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    PDCURSES_DIR="$PDCURSES_DIR" \
+    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB"
+}
+
 build_boot_disks() {
-  require_dir "$NIO_APPS"
+  require_dir "$NIO_CORE_APPS"
   require_dir "$FUJINET_NIO"
   require_dir "$FUJINET_NIO_LIB"
   build_pdcurses_msdos
 
-  run_in boot-disk-msdos "$NIO_APPS" make \
+  run_in boot-disk-msdos "$NIO_CORE_APPS" make \
     TARGET=msdos \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
-    PDCURSES_DIR="$PDCURSES_DIR" \
-    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB" \
     FUJINET_NIO="$FUJINET_NIO" \
     install-boot-disk
-  run_in boot-disk-atari "$NIO_APPS" make \
+  run_in boot-disk-atari "$NIO_CORE_APPS" make \
     TARGET=atari \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
     FUJINET_NIO="$FUJINET_NIO" \
@@ -399,24 +454,22 @@ build_boot_disks() {
 }
 
 build_boot_disk_msdos() {
-  require_dir "$NIO_APPS"
+  require_dir "$NIO_CORE_APPS"
   require_dir "$FUJINET_NIO"
   require_dir "$FUJINET_NIO_LIB"
   build_pdcurses_msdos
 
-  run_in boot-disk-msdos "$NIO_APPS" make \
+  run_in boot-disk-msdos "$NIO_CORE_APPS" make \
     TARGET=msdos \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
-    PDCURSES_DIR="$PDCURSES_DIR" \
-    PDCURSES_MSDOS_LIB="$PDCURSES_MSDOS_LIB" \
     FUJINET_NIO="$FUJINET_NIO" \
     install-boot-disk
 }
 
-confnio_load_addr_for_machine() {
+confnio_stage_target_for_machine() {
   case "$1" in
-    BBC) printf '0x1900' ;;
-    MASTER) printf '0x0E00' ;;
+    BBC) printf 'config-nio-bbc-stage' ;;
+    MASTER) printf 'config-nio-master-stage' ;;
     *)
       echo "Invalid config-nio machine: $1" >&2
       exit 1
@@ -424,47 +477,11 @@ confnio_load_addr_for_machine() {
   esac
 }
 
-confnio_inf_addr_for_machine() {
-  python3 - "$(confnio_load_addr_for_machine "$1")" <<'PY'
-import sys
-addr = int(sys.argv[1], 0)
-print(f"{addr:06X}")
-PY
-}
-
-build_confnio_bbc_binary_for_machine() {
-  local machine="$1"
-  local label="$2"
-  local load_addr
-  local himem
-  local shadow_mode
-  load_addr="$(confnio_load_addr_for_machine "$machine")"
-  if [ "$machine" = "MASTER" ]; then
-    himem="0x8000"
-    shadow_mode="1"
-  else
-    himem="0x7C00"
-    shadow_mode="0"
-  fi
-
-  require_dir "$NIO_APPS"
-  require_dir "$FUJINET_NIO_LIB"
-
-  run_in "confnio-$label-build" "$NIO_APPS" make \
-    -f makefiles/build.mk \
-    TARGET=bbc \
-    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
-    BBC_CONFIG_NIO_START_ADDRESS="$load_addr" \
-    BBC_CONFIG_NIO_HIMEM="$himem" \
-    BBC_CONFIG_NIO_SHADOW_MODE="$shadow_mode" \
-    config-nio
-}
-
 build_bbc_keycode_binary() {
-  require_dir "$NIO_APPS"
+  require_dir "$NIO_CONFIG"
   require_dir "$FUJINET_NIO_LIB"
 
-  run_in "bbc-keycode-build" "$NIO_APPS" make \
+  run_in "bbc-keycode-build" "$NIO_CONFIG" make \
     -f makefiles/build.mk \
     TARGET=bbc \
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
@@ -476,23 +493,29 @@ stage_bbc_keycode() {
 
   build_bbc_keycode_binary
   mkdir -p "$stage"
-  cp "$NIO_APPS/build/bbc/bin/keycode" "$stage/KEYCODE"
-  printf '$.KEYCODE 001900 001900\n' > "$stage/KEYCODE.inf"
+  cp "$NIO_CONFIG/build/bbc/bin/keycode" "$stage/KEYCODE"
+  cp "$NIO_CONFIG/bbc/assets/KEYCODE.inf" "$stage/KEYCODE.inf"
 }
 
 stage_confnio_bbc_for_machine() {
   local machine="$1"
   local label="$2"
   local stage="$3"
-  local inf_addr
-  inf_addr="$(confnio_inf_addr_for_machine "$machine")"
+  local target
+  local nio_stage="$NIO_CONFIG/build/bbc/disk/config-nio"
+  target="$(confnio_stage_target_for_machine "$machine")"
 
-  build_confnio_bbc_binary_for_machine "$machine" "$label"
+  require_dir "$NIO_CONFIG"
+  require_dir "$FUJINET_NIO_LIB"
+
+  run_in "confnio-$label-stage" "$NIO_CONFIG" make \
+    -f makefiles/build.mk \
+    TARGET=bbc \
+    FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
+    "$target"
   rm -rf "$stage"
   mkdir -p "$stage"
-  cp "$NIO_APPS/build/bbc/bin/config-nio" "$stage/CONFNIO"
-  printf '$.CONFNIO %s %s\n' "$inf_addr" "$inf_addr" > "$stage/CONFNIO.inf"
-  stage_bbc_keycode "$stage"
+  cp -R "$nio_stage"/. "$stage"/
 }
 
 build_confnio_bbc_disk_for_machine() {
@@ -523,43 +546,39 @@ build_boot_disk_for_machine() {
   local machine="$1"
   local label="$2"
   local ssd_name="$3"
-  local extra_stage="$NIO_BUILD_DIR/$label-fn-utls-extra"
+  local extra_stage="$NIO_BUILD_DIR/$label-fn-boot-extra"
 
   require_dir "$FN_ROM"
   require_dir "$FUJINET_NIO"
 
   rm -rf "$extra_stage"
   mkdir -p "$extra_stage"
-  if [ "$machine" = "MASTER" ]; then
-    stage_confnio_bbc_for_machine "$machine" "$label" "$extra_stage"
-  else
-    stage_bbc_keycode "$extra_stage"
-  fi
-  extra_stage_env=(FN_UTLS_EXTRA_STAGE="$extra_stage")
+  stage_confnio_bbc_for_machine "$machine" "$label" "$extra_stage"
+  extra_stage_env=(FN_BOOT_EXTRA_STAGE="$extra_stage")
 
-  run_in "$label-fn-utls" "$FN_ROM" env \
+  run_in "$label-fn-boot" "$FN_ROM" env \
     BUILD_MACHINE="$machine" \
-    FN_UTLS_SSD="$FN_ROM/build/$ssd_name" \
+    FN_BOOT_SSD="$FN_ROM/build/$ssd_name" \
     "${extra_stage_env[@]}" \
-    ./scripts/build_fn_utls.sh
+    ./scripts/build_fn_boot.sh
 
   local src="$FN_ROM/build/$ssd_name"
   local posix_dir="$FUJINET_NIO/distfiles/boot/bbc"
   local esp32_dir="$FUJINET_NIO/distfiles/esp32-data/boot/bbc"
   mkdir -p "$posix_dir" "$esp32_dir"
-  cp "$src" "$posix_dir/autorun.ssd"
-  cp "$src" "$esp32_dir/autorun.ssd"
+  cp "$src" "$posix_dir/$ssd_name"
+  cp "$src" "$esp32_dir/$ssd_name"
   echo "Installed $label boot utility disk from $src"
-  echo "  $posix_dir/autorun.ssd"
-  echo "  $esp32_dir/autorun.ssd"
+  echo "  $posix_dir/$ssd_name"
+  echo "  $esp32_dir/$ssd_name"
 }
 
 build_boot_disk_bbc() {
-  build_boot_disk_for_machine BBC bbc FN-UTLS.ssd
+  build_boot_disk_for_machine BBC bbc FN-BOOT.ssd
 }
 
 build_boot_disk_master() {
-  build_boot_disk_for_machine MASTER master FN-UTLS-M.ssd
+  build_boot_disk_for_machine MASTER master FN-BOOT-M.ssd
 }
 
 write_bbc_pty_config() {
@@ -569,10 +588,10 @@ write_bbc_pty_config() {
   local pty_path boot_uri
   if [ "$label" = "master" ]; then
     pty_path="${MASTER_PTY_PATH:-${BBC_PTY_PATH:-/tmp/fujinet-pty}}"
-    boot_uri="${MASTER_BOOT_URI:-${BBC_BOOT_URI:-persist:/boot/bbc/autorun.ssd}}"
+    boot_uri="${MASTER_BOOT_URI:-${BBC_BOOT_URI:-persist:/boot/bbc/FN-BOOT-M.ssd}}"
   else
     pty_path="${BBC_PTY_PATH:-/tmp/fujinet-pty}"
-    boot_uri="${BBC_BOOT_URI:-persist:/boot/bbc/autorun.ssd}"
+    boot_uri="${BBC_BOOT_URI:-persist:/boot/bbc/FN-BOOT.ssd}"
   fi
 
   mkdir -p "$data_dir"
@@ -628,6 +647,10 @@ run_master_pty() {
 clean_apps_all() {
   require_dir "$NIO_APPS"
   run_in apps-all "$NIO_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" clean
+  require_dir "$NIO_CORE_APPS"
+  run_in core-apps-clean "$NIO_CORE_APPS" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" clean
+  require_dir "$NIO_CONFIG"
+  run_in config-clean "$NIO_CONFIG" make FUJINET_NIO_LIB="$FUJINET_NIO_LIB" clean
 }
 
 build_bounce_world() {
@@ -669,6 +692,8 @@ build_manifest_msdos_image() {
   run "$name" env \
     NIO_APPS_MSDOS="$NIO_APPS_MSDOS_BIN" \
     NIO_APPS_MSDOS_BIN="$NIO_APPS_MSDOS_BIN" \
+    NIO_CORE_APPS_MSDOS_BIN="$NIO_CORE_APPS_MSDOS_BIN" \
+    NIO_CONFIG_MSDOS_BIN="$NIO_CONFIG_MSDOS_BIN" \
     FUJINET_NIO_MSDOS="$FUJINET_NIO_MSDOS" \
     FUJINET_MSDOS="$FUJINET_MSDOS" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
@@ -682,9 +707,13 @@ build_manifest_msdos_image() {
 
 build_msdos_apps_image() {
   require_dir "$NIO_APPS"
+  require_dir "$NIO_CORE_APPS"
+  require_dir "$NIO_CONFIG"
   local apps_manifest
   apps_manifest="$(default_msdos_apps_manifest)"
   build_apps_msdos
+  build_core_apps_msdos
+  build_config_msdos
   build_manifest_msdos_image msdos-apps-image \
     "$apps_manifest" \
     "$NIO_IMAGE_DIR/msdos-apps.img" \
@@ -692,12 +721,14 @@ build_msdos_apps_image() {
 }
 
 build_msdos_boot_config_image() {
-  require_dir "$NIO_APPS"
+  require_dir "$NIO_CORE_APPS"
+  require_dir "$NIO_CONFIG"
   require_dir "$FUJINET_NIO_MSDOS"
   local apps_manifest
   apps_manifest="$(default_msdos_boot_config_manifest)"
   build_msdos_driver
-  build_apps_msdos
+  build_core_apps_msdos
+  build_config_msdos
   build_manifest_msdos_image msdos-boot-config-image \
     "$apps_manifest" \
     "$NIO_IMAGE_DIR/msdos-boot-config.img" \
@@ -723,6 +754,8 @@ build_qemu_image() {
   require_dir "$FUJINET_NIO_MSDOS"
   build_msdos_driver
   build_apps_msdos
+  build_core_apps_msdos
+  build_config_msdos
   build_boot_disk_msdos
   local args=()
   args+=(--apps-manifest "$(default_qemu_msdos_apps_manifest)")
@@ -731,6 +764,8 @@ build_qemu_image() {
     FUJINET_NIO_LIB="$FUJINET_NIO_LIB" \
     NIO_APPS="$NIO_APPS" \
     NIO_APPS_MSDOS_BIN="$NIO_APPS_MSDOS_BIN" \
+    NIO_CORE_APPS_MSDOS_BIN="$NIO_CORE_APPS_MSDOS_BIN" \
+    NIO_CONFIG_MSDOS_BIN="$NIO_CONFIG_MSDOS_BIN" \
     BOUNCE_WORLD_CLIENT_NIO="$BOUNCE_WORLD_CLIENT_NIO" \
     BOUNCE_WORLD="$BOUNCE_WORLD_CLIENT_NIO" \
     DRIVER="${DRIVER:-$FUJINET_NIO_MSDOS/build/dos/fujinet.sys}" \
@@ -876,6 +911,8 @@ atari_profile_embeds_fujinet_nio() {
 
 run_atari() {
   require_dir "$NIO_APPS"
+  require_dir "$NIO_CORE_APPS"
+  require_dir "$NIO_CONFIG"
   if [ "${1:-}" = "--" ]; then
     shift
   fi
@@ -896,6 +933,9 @@ run_atari() {
 
   if [ ! -d "$NIO_APPS_ATARI_BIN" ]; then
     build_apps_atari
+  fi
+  if [ ! -d "$NIO_CORE_APPS_ATARI_BIN" ]; then
+    build_core_apps_atari
   fi
   if [ "$embedded_fujinet_nio" != true ] && [ ! -x "$FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN" ]; then
     build_fujinet_atari_fujibus_netsio
@@ -1080,6 +1120,8 @@ target_all() {
   build_lib_msdos
   clean_apps_all
   build_apps_all
+  build_core_apps_all
+  build_config_all
   build_msdos_apps_image
   build_qemu_msdos_image
   write_manifest
@@ -1121,6 +1163,12 @@ while [ $# -gt 0 ]; do
     apps-clean) clean_apps_all; write_manifest ;;
     apps-msdos) build_apps_msdos; write_manifest ;;
     apps-atari) build_apps_atari; write_manifest ;;
+    core-apps-all) build_core_apps_all; write_manifest ;;
+    core-apps-msdos) build_core_apps_msdos; write_manifest ;;
+    core-apps-atari) build_core_apps_atari; write_manifest ;;
+    config-all) build_config_all; write_manifest ;;
+    config-msdos) build_config_msdos; write_manifest ;;
+    config-atari) build_config_atari; write_manifest ;;
     boot-disks|boot-disk) build_boot_disks; write_manifest ;;
     bbc-boot-disk) build_boot_disk_bbc; write_manifest ;;
     master-boot-disk) build_boot_disk_master; write_manifest ;;

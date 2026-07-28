@@ -85,8 +85,12 @@ than another branch inside the Altirra or atari800 code.
   settings templates unless `altirra.rom_roots.os` is set in the profile.
 - `ATARI_BASIC_ROMS` supplies the `__BASIC_ROMS__` replacement for AltirraSDL
   settings templates unless `altirra.rom_roots.basic` is set in the profile.
-- `NIO_APPS_ATARI_BIN` points at Atari app outputs. Default:
+- `NIO_APPS_ATARI_BIN` points at Atari test-app outputs. Default:
   `repos/nio-apps/build/atari/bin`.
+- `NIO_CORE_APPS_ATARI_BIN` points at Atari core utility outputs. Default:
+  `repos/nio-core-apps/build/atari/bin`.
+- `NIO_CONFIG_ATARI_BIN` points at Atari config outputs. Default:
+  `repos/nio-config/build/atari/bin`.
 - `FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN` overrides the sidecar
   `fujinet-nio` binary. Default:
   `repos/fujinet-nio/build/atari-fujibus-netsio-debug/fujinet-nio`.
