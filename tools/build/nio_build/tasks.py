@@ -1,0 +1,588 @@
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+from .context import BuildContext
+from .manifest import (
+    default_msdos_apps_manifest,
+    default_msdos_boot_config_manifest,
+    default_qemu_msdos_apps_manifest,
+    write_manifest,
+)
+from .runner import Runner
+
+
+@dataclass(frozen=True)
+class Task:
+    name: str
+    description: str
+    action: Callable[["Build"], None]
+    workflow: bool = False
+    hidden: bool = False
+    consumes_args: bool = False
+
+
+class Build:
+    def __init__(self, ctx: BuildContext):
+        self.ctx = ctx
+        self.runner = Runner(ctx)
+
+    def p(self, name: str) -> Path:
+        return self.ctx.path(name)
+
+    def run_make(self, name: str, repo: str, *args: str, env: dict[str, str] | None = None) -> None:
+        path = self.p(repo)
+        self.runner.require_dir(path)
+        self.runner.run(name, ["make", *args], cwd=path, extra_env=env)
+
+    def altirra(self) -> None:
+        repo = self.ctx.root / "repos" / "AltirraSDL"
+        self.runner.require_dir(repo)
+        preset = self.ctx.env.get("ALTIRRA_CMAKE_PRESET", "linux-debug")
+        jobs = self.ctx.env.get("ALTIRRA_BUILD_JOBS", str(os.cpu_count() or 1))
+        self.runner.run("altirra-configure", ["cmake", "--preset", preset], cwd=repo)
+        self.runner.run("altirra-build", ["cmake", "--build", f"build/{preset}", "--target", "AltirraSDL", "-j", jobs], cwd=repo)
+
+    def fujinet_tcp_debug(self) -> None:
+        self.runner.require_dir(self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-tcp-debug-build", ["./build.sh", "-cp", "fujibus-tcp-debug"], cwd=self.p("FUJINET_NIO"))
+
+    def fujinet_tcp(self) -> None:
+        self.fujinet_tcp_debug()
+        self.runner.run("fujinet-tcp-debug-test", ["ctest", "--test-dir", "build/fujibus-tcp-debug", "--output-on-failure"], cwd=self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-tcp-release-build", ["./build.sh", "-cp", "fujibus-tcp-release"], cwd=self.p("FUJINET_NIO"))
+
+    def fujinet_pty_debug(self) -> None:
+        self.runner.require_dir(self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-pty-debug-build", ["./build.sh", "-cp", "fujibus-pty-debug"], cwd=self.p("FUJINET_NIO"))
+
+    def fujinet_pty(self) -> None:
+        self.fujinet_pty_debug()
+        self.runner.run("fujinet-pty-debug-test", ["ctest", "--test-dir", "build/fujibus-pty-debug", "--output-on-failure"], cwd=self.p("FUJINET_NIO"))
+
+    def fujinet_rs232(self) -> None:
+        self.runner.require_dir(self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-rs232-debug-build", ["./build.sh", "-cp", "fujibus-rs232-debug"], cwd=self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-rs232-debug-test", ["ctest", "--test-dir", "build/fujibus-rs232-debug", "--output-on-failure"], cwd=self.p("FUJINET_NIO"))
+
+    def fujinet_atari_netsio(self) -> None:
+        self.runner.require_dir(self.p("FUJINET_NIO"))
+        self.runner.run("fujinet-atari-fujibus-netsio-build", ["./build.sh", "-cp", "atari-fujibus-netsio-debug"], cwd=self.p("FUJINET_NIO"))
+
+    def lib_linux(self) -> None:
+        self.run_make("lib-linux", "FUJINET_NIO_LIB", "linux")
+
+    def lib_msdos(self) -> None:
+        self.run_make("lib-msdos", "FUJINET_NIO_LIB", "msdos")
+
+    def lib_atari(self) -> None:
+        self.run_make("lib-atari", "FUJINET_NIO_LIB", "atari")
+
+    def lib_bbc(self) -> None:
+        self.run_make("lib-bbc", "FUJINET_NIO_LIB", "bbc")
+
+    def cc65_tools(self) -> None:
+        self.runner.require_dir(self.p("CC65_HOME"))
+        self.runner.run("cc65-tools", ["make", "-C", "src"], cwd=self.p("CC65_HOME"))
+
+    def cc65_bbc(self) -> None:
+        self.runner.require_dir(self.p("CC65_HOME"))
+        self.runner.run("cc65-bbc-libs", ["make", "-C", "libsrc", "bbc", "bbc-clib"], cwd=self.p("CC65_HOME"))
+
+    def cc65(self) -> None:
+        self.cc65_tools()
+        self.cc65_bbc()
+
+    def cc65_clib(self) -> None:
+        self.runner.require_dir(self.p("CC65_CLIB"))
+        self.runner.require_dir(self.p("CC65_SRC"))
+        env = {
+            "CC65_ROOT": self.ctx.env["CC65_ROOT"],
+            "CC65_SRC": self.ctx.env["CC65_SRC"],
+            "CC65_HOME": self.ctx.env["CC65_HOME"],
+            "CLIB_ROOT": self.ctx.env["CC65_CLIB"],
+            "BEEBIUM_HOME": self.ctx.env.get("BEEBIUM_HOME", str(Path.home() / "dev/bbc/beebium")),
+            "PATH": f"{self.p('CC65_HOME') / 'bin'}:{self.ctx.env['PATH']}",
+        }
+        self.runner.run("cc65-clib", ["make", "-C", "build-rom", "all"], cwd=self.p("CC65_CLIB"), extra_env=env)
+
+    def cc65_clib_tests(self, full: bool) -> None:
+        self.runner.require_dir(self.p("CC65_CLIB"))
+        self.runner.require_dir(self.p("CC65_SRC"))
+        env = {
+            "CC65_ROOT": self.ctx.env["CC65_ROOT"],
+            "CC65_SRC": self.ctx.env["CC65_SRC"],
+            "CC65_HOME": self.ctx.env["CC65_HOME"],
+            "CLIB_ROOT": self.ctx.env["CC65_CLIB"],
+            "BEEBIUM_HOME": self.ctx.env.get("BEEBIUM_HOME", str(Path.home() / "dev/bbc/beebium")),
+            "PATH": f"{self.p('CC65_HOME') / 'bin'}:{self.ctx.env['PATH']}",
+        }
+        args = ["bash", "scripts/run_tests.sh"]
+        if not full:
+            args.append("--no-beebium")
+        self.runner.run("cc65-clib-full-tests" if full else "cc65-clib-tests", args, cwd=self.p("CC65_CLIB"), extra_env=env)
+
+    def pdcurses_msdos(self) -> None:
+        self.runner.run("pdcurses-msdos", [self.ctx.root / "scripts" / "build-pdcurses-msdos.sh"])
+
+    def msdos_driver(self) -> None:
+        self.run_make("msdos-driver-clean", "FUJINET_NIO_MSDOS", "clean")
+        self.run_make("msdos-driver-build", "FUJINET_NIO_MSDOS")
+
+    def msdos_tests(self) -> None:
+        self.run_make("msdos-tests", "FUJINET_NIO_MSDOS", "tests")
+
+    def msdos_driver_legacy(self) -> None:
+        repo = self.p("FUJINET_MSDOS") / "sys"
+        self.runner.require_dir(repo)
+        env = {"FUJINET_TRANSPORT": "NIO"}
+        self.runner.run("msdos-driver-legacy-clean", ["make", "clean"], cwd=repo, extra_env=env)
+        self.runner.run("msdos-driver-legacy-build", ["make"], cwd=repo, extra_env=env)
+        self.msdos_niodump()
+
+    def msdos_tests_legacy(self) -> None:
+        repo = self.p("FUJINET_MSDOS") / "tests"
+        self.runner.require_dir(repo)
+        self.runner.run("msdos-tests-legacy", ["make", "test"], cwd=repo)
+
+    def msdos_niodump(self) -> None:
+        repo = self.p("FUJINET_MSDOS") / "niodump"
+        if not (repo / "makefile").exists() and not (repo / "Makefile").exists():
+            print(f"Skipping msdos-niodump: {repo} not present on this branch")
+            return
+        self.runner.run("msdos-niodump", ["make"], cwd=repo)
+
+    def apps_msdos(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("apps-msdos", "NIO_APPS", "TARGET=msdos", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"PDCURSES_DIR={self.p('PDCURSES_DIR')}", f"PDCURSES_MSDOS_LIB={self.p('PDCURSES_MSDOS_LIB')}")
+
+    def apps_atari(self) -> None:
+        self.lib_atari()
+        self.run_make("apps-atari", "NIO_APPS", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def apps_bbc(self) -> None:
+        self.lib_bbc()
+        self.run_make("apps-bbc", "NIO_APPS", "TARGET=bbc", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def apps_all(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("apps-all", "NIO_APPS", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"PDCURSES_DIR={self.p('PDCURSES_DIR')}", f"PDCURSES_MSDOS_LIB={self.p('PDCURSES_MSDOS_LIB')}")
+
+    def core_apps_msdos(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("core-apps-msdos", "NIO_CORE_APPS", "TARGET=msdos", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def core_apps_atari(self) -> None:
+        self.lib_atari()
+        self.run_make("core-apps-atari", "NIO_CORE_APPS", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def core_apps_all(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("core-apps-all", "NIO_CORE_APPS", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def config_msdos(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("config-msdos", "NIO_CONFIG", "TARGET=msdos", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"PDCURSES_DIR={self.p('PDCURSES_DIR')}", f"PDCURSES_MSDOS_LIB={self.p('PDCURSES_MSDOS_LIB')}")
+
+    def config_atari(self) -> None:
+        self.lib_atari()
+        self.run_make("config-atari", "NIO_CONFIG", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def config_bbc(self) -> None:
+        self.lib_bbc()
+        self.run_make("config-bbc", "NIO_CONFIG", "TARGET=bbc", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def config_all(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("config-all", "NIO_CONFIG", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"PDCURSES_DIR={self.p('PDCURSES_DIR')}", f"PDCURSES_MSDOS_LIB={self.p('PDCURSES_MSDOS_LIB')}")
+
+    def boot_disk_msdos(self) -> None:
+        self.pdcurses_msdos()
+        self.run_make("boot-disk-msdos", "NIO_CORE_APPS", "TARGET=msdos", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"FUJINET_NIO={self.p('FUJINET_NIO')}", "install-boot-disk")
+
+    def boot_disk_atari(self) -> None:
+        self.lib_atari()
+        self.run_make("boot-disk-atari", "NIO_CORE_APPS", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"FUJINET_NIO={self.p('FUJINET_NIO')}", "install-boot-disk")
+
+    def boot_disks(self) -> None:
+        self.boot_disk_msdos()
+        self.boot_disk_atari()
+        self.boot_disk_bbc()
+
+    def confnio_stage_target(self, machine: str) -> str:
+        if machine == "BBC":
+            return "config-nio-bbc-stage"
+        if machine == "MASTER":
+            return "config-nio-master-stage"
+        raise SystemExit(f"Invalid config-nio machine: {machine}")
+
+    def bbc_keycode_binary(self) -> None:
+        self.runner.require_dir(self.p("NIO_CONFIG"))
+        self.runner.run(
+            "bbc-keycode-build",
+            ["make", "-f", "makefiles/build.mk", "TARGET=bbc", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", "keycode"],
+            cwd=self.p("NIO_CONFIG"),
+        )
+
+    def stage_confnio_bbc_for_machine(self, machine: str, label: str, stage: Path) -> None:
+        target = self.confnio_stage_target(machine)
+        nio_stage = self.p("NIO_CONFIG") / "build" / "bbc" / "disk" / "config-nio"
+        self.runner.run(
+            f"confnio-{label}-stage",
+            ["make", "-f", "makefiles/build.mk", "TARGET=bbc", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", target],
+            cwd=self.p("NIO_CONFIG"),
+        )
+        if stage.exists():
+            shutil.rmtree(stage)
+        stage.mkdir(parents=True)
+        for item in nio_stage.iterdir():
+            dest = stage / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+
+    def confnio_disk_for_machine(self, machine: str, label: str) -> None:
+        stage = self.ctx.build_dir / f"confnio-{label}-ssd"
+        out = self.ctx.image_dir / f"confnio-{label}.ssd"
+        self.stage_confnio_bbc_for_machine(machine, label, stage)
+        self.runner.run("confnio-" + label + "-ssd", ["python3", self.p("FUJINET_NIO_LIB") / "scripts" / "create_ssd.py", "-i", stage, "-o", out, "-t", "CONFNIO"])
+        print(f"Built config-nio {label} SSD: {out}")
+
+    def boot_disk_for_machine(self, machine: str, label: str, ssd_name: str) -> None:
+        extra_stage = self.ctx.build_dir / f"{label}-fn-boot-extra"
+        if extra_stage.exists():
+            shutil.rmtree(extra_stage)
+        extra_stage.mkdir(parents=True)
+        self.stage_confnio_bbc_for_machine(machine, label, extra_stage)
+        self.runner.run(
+            f"{label}-fn-boot",
+            ["./scripts/build_fn_boot.sh"],
+            cwd=self.p("FN_ROM"),
+            extra_env={"BUILD_MACHINE": machine, "FN_BOOT_SSD": str(self.p("FN_ROM") / "build" / ssd_name), "FN_BOOT_EXTRA_STAGE": str(extra_stage)},
+        )
+        src = self.p("FN_ROM") / "build" / ssd_name
+        for out_dir in [self.p("FUJINET_NIO") / "distfiles" / "boot" / "bbc", self.p("FUJINET_NIO") / "distfiles" / "esp32-data" / "boot" / "bbc"]:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, out_dir / ssd_name)
+            print(f"Installed {out_dir / ssd_name}")
+
+    def boot_disk_bbc(self) -> None:
+        self.boot_disk_for_machine("BBC", "bbc", "FN-BOOT.ssd")
+
+    def boot_disk_master(self) -> None:
+        self.boot_disk_for_machine("MASTER", "master", "FN-BOOT-M.ssd")
+
+    def write_bbc_pty_config(self, label: str) -> None:
+        run_dir = self.p("FUJINET_NIO") / "build" / "fujibus-pty-debug"
+        data_dir = run_dir / "fujinet-data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        if label == "master":
+            pty_path = self.ctx.env.get("MASTER_PTY_PATH", self.ctx.env.get("BBC_PTY_PATH", "/tmp/fujinet-pty"))
+            boot_uri = self.ctx.env.get("MASTER_BOOT_URI", self.ctx.env.get("BBC_BOOT_URI", "persist:/boot/bbc/FN-BOOT-M.ssd"))
+        else:
+            pty_path = self.ctx.env.get("BBC_PTY_PATH", "/tmp/fujinet-pty")
+            boot_uri = self.ctx.env.get("BBC_BOOT_URI", "persist:/boot/bbc/FN-BOOT.ssd")
+        (data_dir / "fujinet.yaml").write_text(
+            f"fujinet:\n  device_name: fuji-nio\nboot:\n  mode: config\n  config_uri: {boot_uri}\n  readonly: true\nchannel:\n  pty_path: {pty_path}\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote {label} PTY config: {data_dir / 'fujinet.yaml'}")
+        print(f"PTY symlink: {pty_path}")
+        print(f"Boot URI: {boot_uri}")
+
+    def run_bbc_pty_for_machine(self, label: str) -> None:
+        if label == "master":
+            self.boot_disk_master()
+        else:
+            self.boot_disk_bbc()
+        self.fujinet_pty_debug()
+        self.write_bbc_pty_config(label)
+        run_dir = self.p("FUJINET_NIO") / "build" / "fujibus-pty-debug"
+        runner = run_dir / "run-fujinet-nio"
+        if not runner.exists():
+            raise SystemExit(f"Missing runner: {runner}")
+        print(f"==> {label}-pty")
+        print(f"    cwd: {run_dir}")
+        os.chdir(run_dir)
+        os.execv(str(runner), [str(runner)])
+
+    def clean_apps_all(self) -> None:
+        self.run_make("apps-all", "NIO_APPS", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", "clean")
+        self.run_make("core-apps-clean", "NIO_CORE_APPS", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", "clean")
+        self.run_make("config-clean", "NIO_CONFIG", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", "clean")
+
+    def bounce_world(self, backend: str | None = None) -> None:
+        env = {"MSDOS_NIO_BACKEND": backend} if backend else None
+        self.run_make("bounce-world-clean", "BOUNCE_WORLD_CLIENT_NIO", "clean", env=env)
+        self.run_make("bounce-world-build", "BOUNCE_WORLD_CLIENT_NIO", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", env=env)
+
+    def bounce_world_disk(self) -> None:
+        self.runner.require_dir(self.p("BOUNCE_WORLD_CLIENT_NIO"))
+        self.runner.run(
+            "bounce-world-disk",
+            ["make", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}", f"CREATE_MSDOS_IMG={self.p('NIO_APPS') / 'msdos' / 'scripts' / 'create_msdos_img.py'}", f"MSDOS_IMAGE={self.ctx.image_dir / 'bwcn-msdos.img'}", "disk-msdos"],
+            cwd=self.p("BOUNCE_WORLD_CLIENT_NIO"),
+        )
+
+    def build_manifest_msdos_image(self, name: str, apps_manifest: str, output: Path, label: str) -> None:
+        self.runner.run(
+            name,
+            [
+                self.ctx.root / "scripts" / "build-msdos-manifest-img",
+                "--apps-manifest",
+                apps_manifest,
+                "--output",
+                output,
+                "--label",
+                label,
+            ],
+            extra_env={
+                "NIO_APPS_MSDOS": self.ctx.env["NIO_APPS_MSDOS_BIN"],
+                "NIO_APPS_MSDOS_BIN": self.ctx.env["NIO_APPS_MSDOS_BIN"],
+                "NIO_CORE_APPS_MSDOS_BIN": self.ctx.env["NIO_CORE_APPS_MSDOS_BIN"],
+                "NIO_CONFIG_MSDOS_BIN": self.ctx.env["NIO_CONFIG_MSDOS_BIN"],
+                "FUJINET_NIO_MSDOS": self.ctx.env["FUJINET_NIO_MSDOS"],
+                "FUJINET_MSDOS": self.ctx.env["FUJINET_MSDOS"],
+                "BOUNCE_WORLD_CLIENT_NIO": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
+                "BOUNCE_WORLD": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
+            },
+        )
+
+    def msdos_apps_image(self) -> None:
+        self.apps_msdos()
+        self.core_apps_msdos()
+        self.config_msdos()
+        self.build_manifest_msdos_image("msdos-apps-image", default_msdos_apps_manifest(self.ctx), self.ctx.image_dir / "msdos-apps.img", "NIOAPPS")
+
+    def msdos_boot_config_image(self) -> None:
+        self.msdos_driver()
+        self.core_apps_msdos()
+        self.config_msdos()
+        self.build_manifest_msdos_image("msdos-boot-config-image", default_msdos_boot_config_manifest(self.ctx), self.ctx.image_dir / "msdos-boot-config.img", "FNCONFIG")
+
+    def qemu_image(self) -> None:
+        self.msdos_driver()
+        self.apps_msdos()
+        self.core_apps_msdos()
+        self.config_msdos()
+        self.boot_disk_msdos()
+        self.runner.run(
+            "qemu-image",
+            [
+                self.p("FUJINET_QEMU_MSDOS") / "build-nio-qcow",
+                "--repo-root",
+                self.ctx.root,
+                "--apps-dir",
+                "FNAPPS",
+                "--apps-manifest",
+                default_qemu_msdos_apps_manifest(self.ctx),
+            ],
+            extra_env={
+                "FUJINET_MSDOS": self.ctx.env["FUJINET_MSDOS"],
+                "FUJINET_NIO_LIB": self.ctx.env["FUJINET_NIO_LIB"],
+                "NIO_APPS": self.ctx.env["NIO_APPS"],
+                "NIO_APPS_MSDOS_BIN": self.ctx.env["NIO_APPS_MSDOS_BIN"],
+                "NIO_CORE_APPS_MSDOS_BIN": self.ctx.env["NIO_CORE_APPS_MSDOS_BIN"],
+                "NIO_CONFIG_MSDOS_BIN": self.ctx.env["NIO_CONFIG_MSDOS_BIN"],
+                "BOUNCE_WORLD_CLIENT_NIO": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
+                "BOUNCE_WORLD": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
+                "DRIVER": self.ctx.env.get("DRIVER", str(self.p("FUJINET_NIO_MSDOS") / "build" / "dos" / "fujinet.sys")),
+            },
+        )
+
+    def qemu_run(self, args: list[str]) -> None:
+        if args[:1] == ["--"]:
+            args = args[1:]
+        display = self.ctx.env.get("QEMU_DISPLAY")
+        if display == "curses" or "--display=curses" in args or ("--display" in args and args[args.index("--display") + 1 : args.index("--display") + 2] == ["curses"]):
+            self.qemu_run_interactive(args)
+            return
+        hda = self.ctx.env.get("HDA") or self.ctx.env.get("OUTPUT_IMAGE") or str(self.p("FUJINET_QEMU_MSDOS") / "build" / "msdos-nio-apps.qcow2")
+        self.runner.run(
+            "qemu-run",
+            [self.p("FUJINET_QEMU_MSDOS") / "run-qemu-nio", *args],
+            extra_env={
+                "HDA": hda,
+                "FUJINET_NIO_PATH": self.ctx.env["FUJINET_NIO"],
+                "FUJINET_NIO_BIN": self.ctx.env.get("FUJINET_NIO_BIN", self.ctx.env["FUJINET_NIO_TCP_DEBUG_BIN"]),
+                "NIO_BOOT_DISK": self.ctx.env.get("NIO_BOOT_DISK", str(self.p("FUJINET_NIO") / "distfiles" / "boot" / "msdos" / "autorun.img")),
+            },
+        )
+
+    def qemu_run_interactive(self, args: list[str]) -> None:
+        hda = self.ctx.env.get("HDA") or self.ctx.env.get("OUTPUT_IMAGE") or str(self.p("FUJINET_QEMU_MSDOS") / "build" / "msdos-nio-apps.qcow2")
+        env = self.ctx.env.copy()
+        env.update({
+            "HDA": hda,
+            "FUJINET_NIO_PATH": self.ctx.env["FUJINET_NIO"],
+            "FUJINET_NIO_BIN": self.ctx.env.get("FUJINET_NIO_BIN", self.ctx.env["FUJINET_NIO_TCP_DEBUG_BIN"]),
+            "NIO_BOOT_DISK": self.ctx.env.get("NIO_BOOT_DISK", str(self.p("FUJINET_NIO") / "distfiles" / "boot" / "msdos" / "autorun.img")),
+        })
+        os.execve(str(self.p("FUJINET_QEMU_MSDOS") / "run-qemu-nio"), [str(self.p("FUJINET_QEMU_MSDOS") / "run-qemu-nio"), *args], env)
+
+    def qemu_monitor(self, args: list[str]) -> None:
+        if args[:1] == ["--"]:
+            args = args[1:]
+        os.execv(str(self.p("FUJINET_QEMU_MSDOS") / "qemu-nio-monitor"), [str(self.p("FUJINET_QEMU_MSDOS") / "qemu-nio-monitor"), *args])
+
+    def msdos_dev_curses(self) -> None:
+        if not Path(self.ctx.env["FUJINET_NIO_TCP_DEBUG_BIN"]).exists():
+            self.fujinet_tcp_debug()
+        self.qemu_image()
+        write_manifest(self.ctx)
+        self.qemu_run_interactive(["--display", "curses"])
+
+    def atari_run(self, args: list[str]) -> None:
+        if args[:1] == ["--"]:
+            args = args[1:]
+        if not args or args[0].startswith("-"):
+            args = ["altirra", *args]
+        if not self.p("NIO_APPS_ATARI_BIN").is_dir():
+            self.apps_atari()
+        if not self.p("NIO_CORE_APPS_ATARI_BIN").is_dir():
+            self.core_apps_atari()
+        if not Path(self.ctx.env["FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN"]).exists():
+            self.fujinet_atari_netsio()
+        self.runner.run("atari-run", [self.ctx.root / "scripts" / "atari-run", *args])
+
+    def atari_stop(self) -> None:
+        patterns = [
+            f"python3 -m netsiohub --port {self.ctx.env.get('ATARI_NETSIO_ATDEV_PORT', '9996')} --netsio-port {self.ctx.env.get('ATARI_NETSIO_PORT', '9997')}",
+            self.ctx.env["FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN"],
+        ]
+        for pattern in patterns:
+            subprocess.run(["pkill", "-TERM", "-f", pattern], check=False)
+        time.sleep(1)
+        for pattern in patterns:
+            subprocess.run(["pkill", "-KILL", "-f", pattern], check=False)
+
+    def workflow_bbc(self) -> None:
+        self.cc65_bbc()
+        self.cc65_clib()
+        self.lib_bbc()
+        self.apps_bbc()
+        self.config_bbc()
+        self.confnio_disk_for_machine("BBC", "bbc")
+        self.boot_disk_bbc()
+
+    def workflow_master(self) -> None:
+        self.cc65_bbc()
+        self.cc65_clib()
+        self.lib_bbc()
+        self.confnio_disk_for_machine("MASTER", "master")
+        self.boot_disk_master()
+
+    def workflow_msdos(self) -> None:
+        self.lib_msdos()
+        self.msdos_driver()
+        self.apps_msdos()
+        self.core_apps_msdos()
+        self.config_msdos()
+        self.boot_disk_msdos()
+        self.msdos_apps_image()
+        self.msdos_boot_config_image()
+        self.qemu_image()
+
+    def workflow_atari(self) -> None:
+        self.altirra()
+        self.fujinet_atari_netsio()
+        self.lib_atari()
+        self.apps_atari()
+        self.core_apps_atari()
+        self.config_atari()
+        self.boot_disk_atari()
+
+    def workflow_linux(self) -> None:
+        self.fujinet_tcp()
+        self.fujinet_pty()
+        self.fujinet_rs232()
+        self.lib_linux()
+
+    def workflow_all(self) -> None:
+        self.workflow_linux()
+        self.workflow_msdos()
+        self.workflow_atari()
+        self.workflow_bbc()
+
+
+def build_tasks(build: Build) -> dict[str, Task]:
+    def t(name: str, desc: str, action: Callable[[Build], None], *, workflow: bool = False, hidden: bool = False, consumes_args: bool = False) -> tuple[str, Task]:
+        return name, Task(name, desc, action, workflow, hidden, consumes_args)
+
+    items = [
+        t("all", "Build the usual integrated stack", Build.workflow_all, workflow=True),
+        t("bbc", "Build all BBC-facing prerequisites, config, apps, and boot disks", Build.workflow_bbc, workflow=True),
+        t("master", "Build all Master-facing prerequisites, config, and boot disks", Build.workflow_master, workflow=True),
+        t("msdos", "Build all MS-DOS-facing driver, apps, disks, and QEMU image", Build.workflow_msdos, workflow=True),
+        t("atari", "Build all Atari-facing libraries, apps, boot disk, and emulator-side FujiNet", Build.workflow_atari, workflow=True),
+        t("linux", "Build host/Linux FujiNet presets and library", Build.workflow_linux, workflow=True),
+        t("altirra", "Configure/build AltirraSDL with the workspace preset", Build.altirra),
+        t("fujinet", "Build/test fujinet-nio TCP, PTY, and RS-232 presets", lambda b: (b.fujinet_tcp(), b.fujinet_pty(), b.fujinet_rs232())),
+        t("fujinet-tcp", "Build/test fujinet-nio TCP debug and release", Build.fujinet_tcp),
+        t("fujinet-tcp-debug", "Build fujinet-nio TCP debug only", Build.fujinet_tcp_debug),
+        t("fujinet-pty", "Build/test fujinet-nio PTY debug", Build.fujinet_pty),
+        t("fujinet-rs232", "Build/test fujinet-nio RS-232 debug", Build.fujinet_rs232),
+        t("fujinet-atari-netsio", "Build fujinet-nio Atari FujiBus over NetSIO debug", Build.fujinet_atari_netsio),
+        t("lib", "Build fujinet-nio-lib Linux, MS-DOS, and Atari libraries", lambda b: (b.lib_linux(), b.lib_msdos(), b.lib_atari())),
+        t("lib-linux", "Build fujinet-nio-lib Linux library", Build.lib_linux),
+        t("lib-msdos", "Build fujinet-nio-lib MS-DOS library", Build.lib_msdos),
+        t("lib-atari", "Build fujinet-nio-lib Atari library", Build.lib_atari),
+        t("lib-bbc", "Build fujinet-nio-lib BBC library", Build.lib_bbc),
+        t("cc65", "Incrementally build cc65 tools and BBC libraries", Build.cc65),
+        t("cc65-bbc", "Incrementally build cc65 BBC and bbc-clib libraries", Build.cc65_bbc),
+        t("cc65-clib", "Build cc65-clib ROM and rebuild cc65 BBC libraries", Build.cc65_clib),
+        t("cc65-clib-tests", "Run cc65-clib tests without Beebium integration", lambda b: b.cc65_clib_tests(False)),
+        t("cc65-clib-full-tests", "Run cc65-clib full test matrix", lambda b: b.cc65_clib_tests(True)),
+        t("pdcurses-msdos", "Fetch/build PDCurses for Open Watcom MS-DOS", Build.pdcurses_msdos),
+        t("msdos-driver", "Build fujinet-nio-msdos FUJINET.SYS", Build.msdos_driver),
+        t("msdos-tests", "Run fujinet-nio-msdos host unit tests", Build.msdos_tests),
+        t("msdos-driver-legacy", "Build legacy fujinet-msdos FUJINET.SYS with NIO transport", Build.msdos_driver_legacy),
+        t("msdos-tests-legacy", "Run legacy fujinet-msdos host unit tests", Build.msdos_tests_legacy),
+        t("msdos-niodump", "Build legacy NIODUMP.EXE diagnostic utility", Build.msdos_niodump),
+        t("apps-all", "Build all nio-apps targets", Build.apps_all),
+        t("apps-clean", "Clean nio-apps, nio-core-apps, and nio-config builds", Build.clean_apps_all),
+        t("apps-msdos", "Build nio-apps MS-DOS test apps", Build.apps_msdos),
+        t("apps-atari", "Build nio-apps Atari test apps", Build.apps_atari),
+        t("apps-bbc", "Build nio-apps BBC test apps", Build.apps_bbc),
+        t("core-apps-all", "Build all nio-core-apps targets", Build.core_apps_all),
+        t("core-apps-msdos", "Build nio-core-apps MS-DOS utilities", Build.core_apps_msdos),
+        t("core-apps-atari", "Build nio-core-apps Atari utilities", Build.core_apps_atari),
+        t("config-all", "Build all nio-config targets", Build.config_all),
+        t("config-msdos", "Build nio-config MS-DOS app", Build.config_msdos),
+        t("config-atari", "Build nio-config Atari app", Build.config_atari),
+        t("config-bbc", "Build nio-config BBC app", Build.config_bbc),
+        t("boot-disks", "Build/install platform boot disks into fujinet-nio distfiles", Build.boot_disks),
+        t("boot-disk", "Alias for boot-disks", Build.boot_disks, hidden=True),
+        t("bbc-boot-disk", "Build/install BBC FN-BOOT.ssd", Build.boot_disk_bbc),
+        t("master-boot-disk", "Build/install Master FN-BOOT-M.ssd", Build.boot_disk_master),
+        t("msdos-boot-disk", "Build/install MS-DOS boot disk", Build.boot_disk_msdos),
+        t("atari-boot-disk", "Build/install Atari boot disk", Build.boot_disk_atari),
+        t("confnio-bbc-disk", "Build standalone BBC CONFNIO SSD", lambda b: b.confnio_disk_for_machine("BBC", "bbc")),
+        t("confnio-master-disk", "Build standalone Master CONFNIO SSD", lambda b: b.confnio_disk_for_machine("MASTER", "master")),
+        t("bbc-pty", "Build BBC boot disk and run fujinet-nio PTY", lambda b: b.run_bbc_pty_for_machine("bbc"), consumes_args=True),
+        t("master-pty", "Build Master boot disk and run fujinet-nio PTY", lambda b: b.run_bbc_pty_for_machine("master"), consumes_args=True),
+        t("bounce-world", "Build bounce-world-client-nio", lambda b: b.bounce_world()),
+        t("bounce-world-f5", "Build bounce-world-client-nio with F5 backend", lambda b: b.bounce_world("f5")),
+        t("bounce-world-ioctl", "Build bounce-world-client-nio with ioctl backend", lambda b: b.bounce_world("ioctl")),
+        t("bounce-world-disk", "Build Bounce World MS-DOS raw FAT disk image", Build.bounce_world_disk),
+        t("msdos-apps-image", "Build workspace raw FAT MS-DOS apps image", Build.msdos_apps_image),
+        t("msdos-boot-config-image", "Build workspace raw FAT MS-DOS FUJINET.SYS/config image", Build.msdos_boot_config_image),
+        t("qemu-msdos-image", "Build workspace QEMU MS-DOS qcow2 image", Build.qemu_image),
+        t("msdos-image", "Compatibility alias for msdos-apps-image", lambda b: (print("msdos-image is a compatibility alias; use msdos-apps-image."), b.msdos_apps_image(), shutil.copy2(b.ctx.image_dir / "msdos-apps.img", b.ctx.image_dir / "nio-apps.img")), hidden=True),
+        t("apps-image", "Compatibility alias for msdos-apps-image", lambda b: (print("apps-image is a compatibility alias; use msdos-apps-image."), b.msdos_apps_image(), shutil.copy2(b.ctx.image_dir / "msdos-apps.img", b.ctx.image_dir / "msdos-nio-apps.img")), hidden=True),
+        t("qemu-image", "Compatibility alias for qemu-msdos-image", Build.qemu_image, hidden=True),
+        t("qemu-run", "Run fujinet-qemu-msdos with workspace defaults", lambda b: b.qemu_run([]), consumes_args=True),
+        t("qemu-monitor", "Send a command/key to active qemu-run monitor socket", lambda b: b.qemu_monitor([]), consumes_args=True),
+        t("msdos-dev-curses", "Build and run MS-DOS NIO app image in QEMU curses mode", Build.msdos_dev_curses, consumes_args=True),
+        t("atari-run", "Run an Atari app under the configured emulator", lambda b: b.atari_run([]), consumes_args=True),
+        t("atari-stop", "Stop stale Atari emulator sidecars", Build.atari_stop, consumes_args=True),
+        t("manifest", "Write build/manifest.txt only", lambda b: write_manifest(b.ctx)),
+    ]
+    return dict(items)

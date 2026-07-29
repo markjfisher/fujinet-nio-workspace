@@ -97,40 +97,41 @@ Build the usual integrated stack:
 scripts/build.sh all
 ```
 
-Useful smaller targets:
+The main workspace targets are platform workflows:
 
 ```sh
-scripts/build.sh fujinet-tcp
-scripts/build.sh fujinet-pty
-scripts/build.sh fujinet-rs232
-scripts/build.sh lib
-scripts/build.sh msdos-driver
-scripts/build.sh apps-msdos
-scripts/build.sh bounce-world
-scripts/build.sh msdos-apps-image
-scripts/build.sh msdos-boot-config-image
-scripts/build.sh qemu-msdos-image
-scripts/build.sh msdos-dev-curses
+scripts/build.sh bbc
+scripts/build.sh master
+scripts/build.sh msdos
+scripts/build.sh atari
+scripts/build.sh linux
+```
+
+List the available targets with:
+
+```sh
+scripts/build.sh --list
+scripts/build.sh --list --all
+scripts/build.sh --explain bbc
 ```
 
 Disk and image build ownership is documented in
 [docs/disk-image-builds.md](docs/disk-image-builds.md). Start there when
 deciding whether a disk recipe belongs in a sub-repo or the workspace.
+The workflow-oriented build surface is documented in
+[docs/build-orchestration.md](docs/build-orchestration.md).
 
-`scripts/build.sh all` builds:
+`scripts/build.sh` is now a thin wrapper around the Python build front end in
+`tools/build/nio_build`.
 
-- fujinet-nio TCP debug and release presets
-- fujinet-nio PTY debug preset
-- fujinet-nio RS-232 debug preset
-- fujinet-nio-lib Linux and MS-DOS libraries
-- fujinet-nio-msdos `FUJINET.SYS`
-- nio-apps MS-DOS tools
-- bounce-world-client-nio
-- nio-apps boot disks installed into `fujinet-nio/distfiles`
-- raw FAT image from `manifests/disks/msdos-apps.yaml`
-- QEMU qcow image from `manifests/disks/qemu-msdos-apps.yaml`
+`scripts/build.sh all` runs the platform workflows. That covers:
 
-Legacy aliases remain for existing muscle memory:
+- host/Linux fujinet-nio TCP, PTY, and RS-232 presets
+- BBC and Master cc65/cc65-clib prerequisites, config disks, and boot disks
+- MS-DOS driver, core apps, config app, boot/config disks, and QEMU image
+- Atari libraries, apps, boot disk, and emulator-side FujiNet build
+
+Legacy aliases remain available under `--list --all` during migration:
 
 ```sh
 scripts/build.sh msdos-image
@@ -149,7 +150,7 @@ The QEMU image builder defaults to `repos/fujinet-qemu-msdos/msdos.qcow2`.
 Set `BASE_IMAGE` only when you want to use a different base image:
 
 ```sh
-BASE_IMAGE=/path/to/base-dos.qcow2 scripts/build.sh qemu-image
+BASE_IMAGE=/path/to/base-dos.qcow2 scripts/build.sh qemu-msdos-image
 ```
 
 ## QEMU

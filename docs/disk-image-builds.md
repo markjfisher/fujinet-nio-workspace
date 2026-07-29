@@ -4,6 +4,9 @@ This document maps the current disk-image builders in the workspace and the
 repo boundaries they cross. It is intended to answer: "which target builds
 which disk, and where should a new disk recipe live?"
 
+For the proposed smaller workspace build interface, see
+[build-orchestration.md](build-orchestration.md).
+
 ## Current Ownership
 
 ```mermaid
@@ -111,7 +114,8 @@ classDiagram
 | `scripts/build.sh boot-disks` | workspace | platform boot images under `repos/fujinet-nio/distfiles/boot/<platform>/` and `distfiles/esp32-data/boot/<platform>/` | MS-DOS/Atari `nio-core-apps` boot disks; BBC fn-rom `FN-BOOT.ssd` with `nio-config` assets | firmware boot disk inputs |
 | `scripts/build.sh bbc-boot-disk` | workspace via `fn-rom` and `nio-config` | `repos/fujinet-nio/distfiles/boot/bbc/FN-BOOT.ssd` and `distfiles/esp32-data/boot/bbc/FN-BOOT.ssd` | `FN-BOOT.ssd`, the BBC transient assembly utilities that call the resident ROM ABI, plus `CONFNIO` and `KEYCODE` from `nio-config` | BBC firmware boot utility disk |
 | `scripts/build.sh master-boot-disk` | workspace via `fn-rom` | `repos/fujinet-nio/distfiles/boot/bbc/FN-BOOT-M.ssd` and `distfiles/esp32-data/boot/bbc/FN-BOOT-M.ssd` | `FN-BOOT-M.ssd`, the Master transient assembly utilities plus `CONFNIO` and `KEYCODE` | BBC Master firmware boot utility disk |
-| `scripts/build.sh confnio-master-disk` | workspace via `nio-config` | `build/images/confnio-master.ssd` | `CONFNIO`, built from `repos/nio-config/build/bbc/bin/config-nio` with load/exec `$0E00`, plus `KEYCODE` at `$1900` | standalone Master config-nio and diagnostics disk for TNFS/manual testing |
+| `scripts/build.sh confnio-bbc-disk` | workspace via `nio-config` | `build/images/confnio-bbc.ssd` | `CONFNIO`, built from `repos/nio-config/build/config-nio-bbc/bbc/bin/config-nio` with load/exec `$1900`, plus `KEYCODE` at `$1900` | standalone BBC config-nio and diagnostics disk for Beebium/manual testing |
+| `scripts/build.sh confnio-master-disk` | workspace via `nio-config` | `build/images/confnio-master.ssd` | `CONFNIO`, built from `repos/nio-config/build/config-nio-master/bbc/bin/config-nio` with load/exec `$0E00`, plus `KEYCODE` at `$1900` | standalone Master config-nio and diagnostics disk for B2/manual testing |
 | `scripts/build.sh msdos-apps-image` | workspace via `fujinet-qemu-msdos` raw FAT tool | `build/images/msdos-apps.img` | files from `manifests/disks/msdos-apps.yaml` | mountable raw FAT app image |
 | `scripts/build.sh msdos-boot-config-image` | workspace via `fujinet-qemu-msdos` raw FAT tool | `build/images/msdos-boot-config.img` | `FUJINET.SYS` plus config/utilities from `manifests/disks/msdos-boot-config.yaml` | mountable raw FAT driver/config disk |
 | `scripts/build.sh qemu-msdos-image` | workspace via `fujinet-qemu-msdos` | `repos/fujinet-qemu-msdos/build/msdos-nio-apps.qcow2` | base MS-DOS hard disk plus `FUJINET.SYS`, `CONFIG.SYS`, `AUTOEXEC.BAT` PATH update, and apps from `manifests/disks/qemu-msdos-apps.yaml` under `C:\FNAPPS`; also refreshes installed `nio-apps` boot disks | bootable QEMU hard disk |
@@ -216,11 +220,13 @@ symbols, those addresses differ between machines, and the load/exec address is
 machine-specific: BBC utilities load at `$1900`, while Master utilities load at
 `$0E00`.
 
-The workspace injects `nio-apps` `config-nio` into the Master utility disk as
-`$.CONFNIO`, and can also build it as a standalone SSD with
-`scripts/build.sh confnio-master-disk`. The same app currently does not fit the
-BBC `$1900` load address; `confnio-bbc-disk` is intentionally left as a build
-target that exposes that overflow until the BBC UI is reduced further.
+The workspace injects `nio-config` `config-nio` into the BBC and Master utility
+disks as `$.CONFNIO`, and can also build either machine variant as a standalone
+SSD with `scripts/build.sh confnio-bbc-disk` or
+`scripts/build.sh confnio-master-disk`. The BBC build is the plain BBC variant
+used by Beebium integration tests. The Master build keeps the lower `$0E00`
+load address and can still use Master-specific facilities such as shadow/XRAM
+template storage.
 
 For example `*FLS` requests FileDevice formatted directory lines
 (`sort | formatted`, flag `$06`) and uses a BBC-safe page size. If
