@@ -530,7 +530,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("fujinet-pty", "Build/test fujinet-nio PTY debug", Build.fujinet_pty),
         t("fujinet-rs232", "Build/test fujinet-nio RS-232 debug", Build.fujinet_rs232),
         t("fujinet-atari-netsio", "Build fujinet-nio Atari FujiBus over NetSIO debug", Build.fujinet_atari_netsio),
-        t("lib", "Build fujinet-nio-lib Linux, MS-DOS, and Atari libraries", lambda b: (b.lib_linux(), b.lib_msdos(), b.lib_atari())),
+        t("lib", "Build fujinet-nio-lib Linux, MS-DOS, BBC, and Atari libraries", lambda b: (b.lib_linux(), b.lib_msdos(), b.lib_atari(), b.lib_bbc())),
         t("lib-linux", "Build fujinet-nio-lib Linux library", Build.lib_linux),
         t("lib-msdos", "Build fujinet-nio-lib MS-DOS library", Build.lib_msdos),
         t("lib-atari", "Build fujinet-nio-lib Atari library", Build.lib_atari),
