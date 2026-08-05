@@ -470,11 +470,11 @@ class Build:
         self.boot_disk_atari()
         self.boot_disk_bbc()
 
-    def confnio_stage_target(self, machine: str) -> str:
+    def confnio_stage_target(self, machine: str, boot: bool = False) -> str:
         if machine == "BBC":
-            return "config-nio-bbc-stage"
+            return "config-nio-bbc-boot-stage" if boot else "config-nio-bbc-stage"
         if machine == "MASTER":
-            return "config-nio-master-stage"
+            return "config-nio-master-boot-stage" if boot else "config-nio-master-stage"
         raise SystemExit(f"Invalid config-nio machine: {machine}")
 
     def bbc_keycode_binary(self) -> None:
@@ -485,8 +485,10 @@ class Build:
             cwd=self.p("NIO_CONFIG"),
         )
 
-    def stage_confnio_bbc_for_machine(self, machine: str, label: str, stage: Path) -> None:
-        target = self.confnio_stage_target(machine)
+    def stage_confnio_bbc_for_machine(
+        self, machine: str, label: str, stage: Path, boot: bool = False
+    ) -> None:
+        target = self.confnio_stage_target(machine, boot=boot)
         nio_stage = self.p("NIO_CONFIG") / "build" / "bbc" / "disk" / "config-nio"
         self.runner.run(
             f"confnio-{label}-stage",
@@ -515,7 +517,7 @@ class Build:
         if extra_stage.exists():
             shutil.rmtree(extra_stage)
         extra_stage.mkdir(parents=True)
-        self.stage_confnio_bbc_for_machine(machine, label, extra_stage)
+        self.stage_confnio_bbc_for_machine(machine, label, extra_stage, boot=True)
         self.runner.run(
             f"{label}-fn-boot",
             ["./scripts/build_fn_boot.sh"],
