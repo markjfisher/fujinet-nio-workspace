@@ -82,6 +82,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.0,
         help="ordered-dither perturbation strength; default: 1.0",
     )
+    colour_group.add_argument(
+        "--map-source-levels",
+        action="store_true",
+        help=(
+            "map distinct source colours to logical indices by luminance rank "
+            "instead of using nearest-colour matching"
+        ),
+    )
 
     image_group = parser.add_argument_group("image preparation")
     image_group.add_argument(
@@ -150,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
                 contrast=args.contrast,
                 brightness=args.brightness,
                 invert=args.invert,
+                map_source_levels=args.map_source_levels,
             ),
         )
     except FileNotFoundError:

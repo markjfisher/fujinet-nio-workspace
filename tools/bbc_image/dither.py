@@ -39,6 +39,10 @@ DITHER_CHOICES = (
 )
 
 
+def luminance(colour: RGB) -> int:
+    return 30 * colour[0] + 59 * colour[1] + 11 * colour[2]
+
+
 def colour_distance(left: RGB, right: RGB) -> int:
     """Weighted squared RGB distance, biased towards human luminance."""
     red = left[0] - right[0]
@@ -60,6 +64,31 @@ def nearest_quantise(image: Image.Image, palette: Palette) -> list[int]:
         nearest_palette_index(pixel, palette.colours)
         for pixel in rgb.getdata()
     ]
+
+def map_source_levels(image: Image.Image, target_colour_count: int) -> list[int]:
+    """Map distinct source colours to logical indices by luminance rank.
+
+    This is intended for already-reduced source artwork, such as:
+    - 2-colour black/white images
+    - 4-level grayscale images
+    - small indexed images where the source levels should map directly onto
+      BBC logical colours.
+
+    Darkest source colour becomes logical 0, lightest becomes the highest
+    logical colour actually used.
+    """
+    rgb = image.convert("RGB")
+    pixels = list(rgb.getdata())
+    distinct = sorted(set(pixels), key=luminance)
+
+    if len(distinct) > target_colour_count:
+        raise ValueError(
+            f"--map-source-levels found {len(distinct)} distinct source colours, "
+            f"but the target format supports only {target_colour_count}"
+        )
+
+    mapping = {colour: index for index, colour in enumerate(distinct)}
+    return [mapping[pixel] for pixel in pixels]
 
 
 def ordered_quantise(

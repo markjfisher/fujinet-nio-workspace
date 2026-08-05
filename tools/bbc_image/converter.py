@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageOps
 
-from .dither import quantise
+from .dither import quantise, map_source_levels
 from .encoder import encode_screen
 from .geometry import OutputGeometry, resolve_geometry
 from .palettes import Palette
@@ -32,6 +32,7 @@ class ConversionOptions:
     contrast: float = 1.0
     brightness: float = 1.0
     invert: bool = False
+    map_source_levels: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,12 +96,15 @@ def convert_image(
     if options.invert:
         working = ImageOps.invert(working)
 
-    indices = quantise(
-        working,
-        options.palette,
-        options.dither,
-        ordered_strength=options.ordered_strength,
-    )
+    if options.map_source_levels:
+        indices = map_source_levels(working, len(options.palette.colours))
+    else:
+        indices = quantise(
+            working,
+            options.palette,
+            options.dither,
+            ordered_strength=options.ordered_strength,
+        )
     raw_data = encode_screen(indices, geometry)
     preview = make_indexed_preview(
         geometry.width,

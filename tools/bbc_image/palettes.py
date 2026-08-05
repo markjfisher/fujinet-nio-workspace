@@ -18,6 +18,16 @@ BBC_PHYSICAL_RGB: tuple[RGB, ...] = (
     (255, 255, 255),  # 7 white
 )
 
+BBC_COLOUR_NAMES: dict[str, int] = {
+    "black": 0,
+    "red": 1,
+    "green": 2,
+    "yellow": 3,
+    "blue": 4,
+    "magenta": 5,
+    "cyan": 6,
+    "white": 7,
+}
 
 @dataclass(frozen=True)
 class Palette:
@@ -89,11 +99,39 @@ def parse_rgb(value: str) -> RGB:
 
 
 def parse_custom_palette(specification: str) -> Palette:
-    colours = tuple(parse_rgb(item) for item in specification.split(","))
-    if not colours:
-        raise ValueError("custom palette is empty")
-    return Palette("custom", colours)
+    rgb_colours: list[RGB] = []
+    physical_colours: list[int] = []
+    all_bbc_physical = True
 
+    for token in specification.split(","):
+        item = token.strip().lower()
+        if not item:
+            continue
+
+        if item in BBC_COLOUR_NAMES:
+            physical = BBC_COLOUR_NAMES[item]
+            rgb_colours.append(BBC_PHYSICAL_RGB[physical])
+            physical_colours.append(physical)
+            continue
+
+        colour = parse_rgb(item)
+        rgb_colours.append(colour)
+
+        try:
+            physical = BBC_PHYSICAL_RGB.index(colour)
+        except ValueError:
+            all_bbc_physical = False
+        else:
+            physical_colours.append(physical)
+
+    if not rgb_colours:
+        raise ValueError("custom palette is empty")
+
+    return Palette(
+        "custom",
+        tuple(rgb_colours),
+        tuple(physical_colours) if all_bbc_physical else None,
+    )
 
 def get_palette(name_or_specification: str, bits_per_pixel: int) -> Palette:
     if "," in name_or_specification or name_or_specification.startswith("#"):
