@@ -48,14 +48,36 @@ if [ -f "$NIO_WORKSPACE/local/config.env" ]; then
   source "$NIO_WORKSPACE/local/config.env"
 fi
 
+# amiga-gcc is commonly installed by the official cross-toolchain bundle.
+# Keep the location configurable for developers using a different install.
+export AMIGA_TOOLCHAIN_BIN="${AMIGA_TOOLCHAIN_BIN:-/opt/amiga/bin}"
+if [ -d "$AMIGA_TOOLCHAIN_BIN" ]; then
+  export PATH="$AMIGA_TOOLCHAIN_BIN:$PATH"
+fi
+
 export NIO_BUILD_DIR="${NIO_BUILD_DIR:-$NIO_WORKSPACE/build}"
 export NIO_LOG_DIR="${NIO_LOG_DIR:-$NIO_BUILD_DIR/logs}"
 export NIO_IMAGE_DIR="${NIO_IMAGE_DIR:-$NIO_BUILD_DIR/images}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$NIO_BUILD_DIR/uv-cache}"
+export UV_TOOL_DIR="${UV_TOOL_DIR:-$NIO_BUILD_DIR/uv-tools}"
 
 export FUJINET_NIO_TCP_DEBUG_BIN="${FUJINET_NIO_TCP_DEBUG_BIN:-$FUJINET_NIO/build/fujibus-tcp-debug/fujinet-nio}"
 export FUJINET_NIO_TCP_RELEASE_BIN="${FUJINET_NIO_TCP_RELEASE_BIN:-$FUJINET_NIO/build/fujibus-tcp-release/fujinet-nio}"
 export FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN="${FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN:-$FUJINET_NIO/build/atari-fujibus-netsio-debug/fujinet-nio}"
+export AMIBERRY_BIN="${AMIBERRY_BIN:-amiberry}"
+export AMIBERRY_ASSET_ROOT="${AMIBERRY_ASSET_ROOT:-${HOME}/dev/amiga/amigaOS3.2}"
+export AMIBERRY_KICKSTART="${AMIBERRY_KICKSTART:-$AMIBERRY_ASSET_ROOT/ROM/kickCDTVa1000a500a2000a600.rom}"
+export AMIBERRY_WORKBENCH_ADF="${AMIBERRY_WORKBENCH_ADF:-$AMIBERRY_ASSET_ROOT/ADF/Workbench3.2.adf}"
+export AMIBERRY_OS_ROOT="${AMIBERRY_OS_ROOT:-$AMIBERRY_ASSET_ROOT}"
+export AMIBERRY_FAST_FILE_SYSTEM="${AMIBERRY_FAST_FILE_SYSTEM:-$AMIBERRY_OS_ROOT/L/FastFileSystem}"
+export AMIBERRY_CPU_TYPE="${AMIBERRY_CPU_TYPE:-68000}"
+export AMIBERRY_HOST="${AMIBERRY_HOST:-127.0.0.1}"
+export AMIBERRY_PORT="${AMIBERRY_PORT:-23462}"
+export FUJINET_NIO_AMIGA_BIN="${FUJINET_NIO_AMIGA_BIN:-$FUJINET_NIO_TCP_DEBUG_BIN}"
+export AMIGA_TEST_APP="${AMIGA_TEST_APP:-wifitest}"
+export AMIGA_TEST_PROJECT="${AMIGA_TEST_PROJECT:-apps}"
+export AMIGA_TEST_COMMAND="${AMIGA_TEST_COMMAND:-$AMIGA_TEST_APP}"
+export AMIGA_TEST_DISK="${AMIGA_TEST_DISK:-$NIO_BUILD_DIR/images/amiga-$AMIGA_TEST_APP.hdf}"
 export ALTIRRA_WORKSPACE_BIN="${ALTIRRA_WORKSPACE_BIN:-$NIO_WORKSPACE/repos/AltirraSDL/build/linux-debug/src/AltirraSDL/AltirraSDL}"
 export FUJINET_EMULATOR_BRIDGE="${FUJINET_EMULATOR_BRIDGE:-$NIO_WORKSPACE/repos/fujinet-emulator-bridge}"
 export ATARI_DOS_BOOT_DISK="${ATARI_DOS_BOOT_DISK:-$HOME/dev/atari/fujinet-apps/netcat/atari/ados20d.atr}"

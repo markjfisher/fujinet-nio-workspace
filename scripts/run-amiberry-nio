@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
+
+AMIBERRY_BIN=${AMIBERRY_BIN:-amiberry}
+AMIBERRY_KICKSTART=${AMIBERRY_KICKSTART:-${HOME}/dev/amiga/amigaOS3.2/ROM/kickCDTVa1000a500a2000a600.rom}
+AMIBERRY_FAST_FILE_SYSTEM=${AMIBERRY_FAST_FILE_SYSTEM:-${AMIBERRY_OS_ROOT:-${HOME}/dev/amiga/amigaOS3.2}/L/FastFileSystem}
+AMIBERRY_CPU_TYPE=${AMIBERRY_CPU_TYPE:-68000}
+AMIBERRY_DISK=${AMIBERRY_DISK:-${AMIGA_TEST_DISK:-}}
+AMIBERRY_HOST=${AMIBERRY_HOST:-127.0.0.1}
+AMIBERRY_PORT=${AMIBERRY_PORT:-23462}
+FUJINET_NIO_BIN=${FUJINET_NIO_BIN:-$ROOT/repos/fujinet-nio/build/fujibus-tcp-debug/fujinet-nio}
+FUJINET_HOST=${FUJINET_HOST:-127.0.0.1}
+FUJINET_PORT=${FUJINET_PORT:-65504}
+AMIGA_RUN_DIR=${AMIGA_RUN_DIR:-$ROOT/build/amiga-e2e}
+AMIGA_TIMEOUT=${AMIGA_TIMEOUT:-0}
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Run an AmigaOS 3.2 application in Amiberry against FujiNet NIO.
+
+Options:
+  --disk PATH      Bootable Amiga test HDF or ADF
+  --timeout SEC    Stop after SEC seconds; 0 means run interactively
+  --nio-port PORT  FujiNet NIO TCP server port
+  --amiga-port PORT Amiberry TCP serial listener port
+  --help           Show this help
+
+Environment: AMIBERRY_BIN AMIBERRY_KICKSTART FUJINET_NIO_BIN AMIGA_RUN_DIR
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --adf|--disk) AMIBERRY_DISK=$2; shift 2 ;;
+        --timeout) AMIGA_TIMEOUT=$2; shift 2 ;;
+        --nio-port) FUJINET_PORT=$2; shift 2 ;;
+        --amiga-port) AMIBERRY_PORT=$2; shift 2 ;;
+        --help|-h) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+require_file() {
+    if [[ ! -f "$1" ]]; then
+        echo "Required file not found: $1" >&2
+        exit 1
+    fi
+}
+
+command -v "$AMIBERRY_BIN" >/dev/null 2>&1 || { echo "Amiberry not found: $AMIBERRY_BIN" >&2; exit 1; }
+command -v socat >/dev/null 2>&1 || { echo "socat is required for the two TCP listeners" >&2; exit 1; }
+require_file "$AMIBERRY_KICKSTART"
+require_file "$AMIBERRY_FAST_FILE_SYSTEM"
+require_file "$FUJINET_NIO_BIN"
+[[ -n "$AMIBERRY_DISK" ]] || { echo "An Amiga disk is required; use --disk PATH" >&2; exit 1; }
+require_file "$AMIBERRY_DISK"
+
+mkdir -p "$AMIGA_RUN_DIR"
+ROM_DIR="$AMIGA_RUN_DIR/rom"
+mkdir -p "$ROM_DIR"
+cp "$AMIBERRY_KICKSTART" "$ROM_DIR/kickstart.rom"
+cp "$AMIBERRY_FAST_FILE_SYSTEM" "$ROM_DIR/FastFileSystem"
+NIO_LOG=${NIO_LOG:-$AMIGA_RUN_DIR/fujinet-nio.log}
+AMIBERRY_LOG=${AMIBERRY_LOG:-$AMIGA_RUN_DIR/amiberry.log}
+BRIDGE_LOG=${BRIDGE_LOG:-$AMIGA_RUN_DIR/bridge.log}
+CONFIG_DIR="$AMIGA_RUN_DIR/fujinet-data"
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_DIR/fujinet.yaml" <<EOF
+fujinet:
+  device_name: amiga-test
+wifi:
+  enabled: false
+  ssid: ""
+  passphrase: ""
+channel:
+  tcp_host: "$FUJINET_HOST"
+  tcp_port: $FUJINET_PORT
+EOF
+
+NIO_PID=
+AMIBERRY_PID=
+BRIDGE_PID=
+cleanup() {
+    set +e
+    for pid in "$BRIDGE_PID" "$AMIBERRY_PID" "$NIO_PID"; do
+        [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+    done
+    wait "$BRIDGE_PID" "$AMIBERRY_PID" "$NIO_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+echo "Starting FujiNet NIO on $FUJINET_HOST:$FUJINET_PORT"
+(cd "$CONFIG_DIR" && "$FUJINET_NIO_BIN") >"$NIO_LOG" 2>&1 &
+NIO_PID=$!
+
+for _ in $(seq 1 100); do
+    if nc -z "$FUJINET_HOST" "$FUJINET_PORT" 2>/dev/null; then break; fi
+    sleep 0.1
+done
+nc -z "$FUJINET_HOST" "$FUJINET_PORT" 2>/dev/null || { echo "FujiNet NIO did not open its TCP port" >&2; exit 1; }
+
+echo "Starting Amiberry with $AMIBERRY_DISK"
+DISK_ARGS=(-0 "$AMIBERRY_DISK")
+if [[ "$AMIBERRY_DISK" == *.hdf ]]; then
+    DISK_ARGS=(-W "DH0:$AMIBERRY_DISK")
+fi
+"$AMIBERRY_BIN" --log -G \
+    -r "$ROM_DIR/kickstart.rom" \
+    "${DISK_ARGS[@]}" \
+    -s "serial_port=tcp://$AMIBERRY_HOST:$AMIBERRY_PORT" \
+    -s "cpu_type=$AMIBERRY_CPU_TYPE" \
+    -s cpu_compatible=true \
+    -s cachesize=0 >"$AMIBERRY_LOG" 2>&1 &
+AMIBERRY_PID=$!
+
+for _ in $(seq 1 100); do
+    if nc -z "$AMIBERRY_HOST" "$AMIBERRY_PORT" 2>/dev/null; then break; fi
+    sleep 0.1
+done
+nc -z "$AMIBERRY_HOST" "$AMIBERRY_PORT" 2>/dev/null || { echo "Amiberry did not open its TCP serial port" >&2; exit 1; }
+
+echo "Bridging Amiberry $AMIBERRY_HOST:$AMIBERRY_PORT to FujiNet NIO $FUJINET_HOST:$FUJINET_PORT"
+socat -d -d "TCP:$AMIBERRY_HOST:$AMIBERRY_PORT" "TCP:$FUJINET_HOST:$FUJINET_PORT" >"$BRIDGE_LOG" 2>&1 &
+BRIDGE_PID=$!
+
+if [[ "$AMIGA_TIMEOUT" != 0 ]]; then
+    timeout --signal=TERM "$AMIGA_TIMEOUT" tail --pid="$AMIBERRY_PID" -f /dev/null || true
+else
+    wait "$AMIBERRY_PID"
+fi
+
+echo "Amiberry logs: $AMIBERRY_LOG"
+echo "FujiNet NIO logs: $NIO_LOG"
+echo "Bridge logs: $BRIDGE_LOG"

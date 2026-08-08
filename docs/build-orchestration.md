@@ -26,6 +26,7 @@ names:
 ./scripts/build.sh msdos
 ./scripts/build.sh atari
 ./scripts/build.sh linux
+./scripts/build.sh amiga
 ./scripts/build.sh all
 ```
 
@@ -34,6 +35,10 @@ example, `bbc` builds the BBC cc65 prerequisites, BBC `fujinet-nio-lib`, the
 BBC test apps, the BBC `nio-config` binary, the standalone BBC config disk, and
 the BBC `FN-BOOT.ssd`, then installs that boot disk into `fujinet-nio`
 distfiles. Use `bbc-pty` when the next step is to start the PTY FujiNet runner.
+The `amiga` workflow builds `fujinet-nio-lib`, `nio-apps` test/example
+applications, and `nio-core-apps` utilities. It remains a platform workflow so
+additional Amiga components can be added without changing the public build
+interface.
 
 Artifact-specific names such as `confnio-bbc-disk`, `config-bbc`,
 `bbc-boot-disk`, and `cc65-bbc` remain available as artifact/debug tasks, but
@@ -45,7 +50,7 @@ Workspace targets should be split into three layers:
 
 | Layer | Examples | Intended audience |
 |---|---|---|
-| workflow | `bbc`, `master`, `msdos`, `atari`, `linux`, `all` | normal daily use |
+| workflow | `bbc`, `master`, `msdos`, `atari`, `linux`, `amiga`, `all` | normal daily use |
 | artifact | `bbc-boot-disk`, `confnio-bbc-disk`, `qemu-msdos-image` | debugging a specific output |
 | repo task | repo-local `make` invocations wrapped by Python methods | build tool internals and CI |
 
@@ -110,7 +115,7 @@ The Python tool provides:
 ## Migration Plan
 
 1. Done: add workflow aliases:
-   `bbc`, `master`, `msdos`, `atari`, `linux`.
+   `bbc`, `master`, `msdos`, `atari`, `linux`, `amiga`.
 2. Done: hide compatibility aliases from help and document them only as temporary
    migration names.
 3. Done: introduce the Python front end with parity for the workflow targets

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Create a bootable Amiga test ADF from a licensed Workbench image."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def xdf_tool() -> list[str]:
+    tool = shutil.which("xdftool")
+    if tool:
+        return [tool]
+    uvx = shutil.which("uvx")
+    if uvx:
+        return [uvx, "--from", "amitools", "xdftool"]
+    raise SystemExit("xdftool is required, or install uv/uvx to fetch amitools")
+
+
+def run_xdf(image: Path, *commands: str) -> None:
+    subprocess.run([*xdf_tool(), str(image), *commands], check=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-adf", required=True, type=Path)
+    parser.add_argument("--app", required=True, type=Path)
+    parser.add_argument("--app-name", default="wifitest")
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+
+    for path, label in ((args.base_adf, "base ADF"), (args.app, "application")):
+        if not path.is_file():
+            raise SystemExit(f"{label} not found: {path}")
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(args.base_adf, args.output)
+
+    with tempfile.TemporaryDirectory(prefix="amiga-test-adf-") as temp:
+        startup = Path(temp) / "Startup-Sequence"
+        startup.write_text(
+            "C:Assign T: RAM:\n"
+            f"C:{args.app_name} >T:{args.app_name}.result\n"
+            "C:EndCLI\n",
+            encoding="ascii",
+        )
+
+        run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
+        run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
+
+    print(f"Built Amiga test ADF: {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

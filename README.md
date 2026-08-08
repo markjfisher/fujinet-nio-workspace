@@ -89,6 +89,9 @@ export FUJINET_MSDOS=/home/markf/dev/msdos/fujinet-msdos
 `env.sh` also sources `~/.local/bin/add_watcom.sh` when present, so Open Watcom
 builds work from the workspace scripts.
 
+Amiga builds use `m68k-amigaos-gcc` from `/opt/amiga/bin` by default. Override
+that location with `AMIGA_TOOLCHAIN_BIN` in `local/config.env` if needed.
+
 ## Build
 
 Build the usual integrated stack:
@@ -105,6 +108,13 @@ scripts/build.sh master
 scripts/build.sh msdos
 scripts/build.sh atari
 scripts/build.sh linux
+scripts/build.sh amiga
+```
+
+Run the host-side `fujinet-nio-lib` wire tests with:
+
+```sh
+scripts/build.sh lib-tests
 ```
 
 List the available targets with:
@@ -130,6 +140,7 @@ The workflow-oriented build surface is documented in
 - BBC and Master cc65/cc65-clib prerequisites, config disks, and boot disks
 - MS-DOS driver, core apps, config app, boot/config disks, and QEMU image
 - Atari libraries, apps, boot disk, and emulator-side FujiNet build
+- Amiga `fujinet-nio-lib`, `nio-apps`, and `nio-core-apps` applications
 
 Legacy aliases remain available under `--list --all` during migration:
 

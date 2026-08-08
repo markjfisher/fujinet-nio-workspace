@@ -88,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
                 build.msdos_dev_curses()
             elif target == "atari-stop":
                 build.atari_stop()
+            elif target == "amiga-run":
+                build.amiga_run(targets, build_adf=False)
+            elif target == "amiga-e2e":
+                build.amiga_run(targets, build_adf=True)
             return 0
         task.action(build)
         if target != "manifest":

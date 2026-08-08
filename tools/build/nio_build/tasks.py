@@ -87,6 +87,12 @@ class Build:
     def lib_bbc(self) -> None:
         self.run_make("lib-bbc", "FUJINET_NIO_LIB", "bbc")
 
+    def lib_amiga(self) -> None:
+        self.run_make("lib-amiga", "FUJINET_NIO_LIB", "amiga")
+
+    def lib_tests(self) -> None:
+        self.run_make("lib-tests", "FUJINET_NIO_LIB", "test")
+
     def cc65_tools(self) -> None:
         self.runner.require_dir(self.p("CC65_HOME"))
         self.runner.run("cc65-tools", ["make", "-C", "src"], cwd=self.p("CC65_HOME"))
@@ -166,6 +172,85 @@ class Build:
         self.lib_atari()
         self.run_make("apps-atari", "NIO_APPS", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
 
+    def apps_amiga(self) -> None:
+        self.lib_amiga()
+        self.run_make("apps-amiga", "NIO_APPS", "TARGET=amiga", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def amiga_test_app(self) -> tuple[str, Path]:
+        app_name = self.ctx.env.get("AMIGA_TEST_APP", "wifitest")
+        project = self.ctx.env.get("AMIGA_TEST_PROJECT", "apps").lower()
+        if project == "core":
+            self.core_apps_amiga()
+            app = self.p("NIO_CORE_APPS") / "build" / "amiga" / "bin" / app_name
+        elif project == "apps":
+            self.apps_amiga()
+            app = self.p("NIO_APPS") / "build" / "amiga" / "bin" / app_name
+        else:
+            raise SystemExit("AMIGA_TEST_PROJECT must be 'apps' or 'core'")
+        if not app.is_file():
+            raise SystemExit(f"Amiga test application not found: {app}")
+        return app_name, app
+
+    def amiga_test_adf(self) -> None:
+        app_name, app = self.amiga_test_app()
+        base_adf = Path(self.ctx.env.get("AMIBERRY_WORKBENCH_ADF", ""))
+        if not base_adf.is_file():
+            raise SystemExit(
+                f"Amiga Workbench ADF not found: {base_adf}\n"
+                "Set AMIBERRY_WORKBENCH_ADF to a licensed Workbench 3.2 ADF."
+            )
+        output = self.ctx.image_dir / f"amiga-{app_name}.adf"
+        self.runner.run(
+            "amiga-test-adf",
+            [
+                self.ctx.root / "scripts" / "build-amiga-test-adf",
+                "--base-adf", base_adf,
+                "--app", app,
+                "--app-name", app_name,
+                "--output", output,
+            ],
+        )
+        self.ctx.env["AMIBERRY_ADF"] = str(output)
+
+    def amiga_test_disk(self) -> None:
+        app_name, app = self.amiga_test_app()
+        os_root = Path(self.ctx.env.get("AMIBERRY_OS_ROOT", ""))
+        boot_adf = Path(self.ctx.env.get("AMIBERRY_WORKBENCH_ADF", ""))
+        if not os_root.is_dir():
+            raise SystemExit(
+                f"expanded AmigaOS tree not found: {os_root}\n"
+                "Set AMIBERRY_OS_ROOT to the licensed expanded AmigaOS tree."
+            )
+        if not boot_adf.is_file():
+            raise SystemExit(f"boot-block source ADF not found: {boot_adf}")
+        output = self.ctx.image_dir / f"amiga-{app_name}.hdf"
+        self.runner.run(
+            "amiga-test-disk",
+            [
+                self.ctx.root / "scripts" / "build-amiga-test-disk",
+                "--os-root", os_root,
+                "--boot-adf", boot_adf,
+                "--app", app,
+                "--app-name", app_name,
+                "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
+                "--output", output,
+            ],
+        )
+        self.ctx.env["AMIBERRY_DISK"] = str(output)
+
+    def amiga_run(self, args: list[str], *, build_adf: bool) -> None:
+        if build_adf:
+            self.amiga_test_disk()
+        if args[:1] == ["--"]:
+            args = args[1:]
+        env = self.ctx.env.copy()
+        env["AMIBERRY_DISK"] = env.get("AMIBERRY_DISK", env.get("AMIGA_TEST_DISK", ""))
+        self.runner.run(
+            "amiga-run",
+            [self.ctx.root / "scripts" / "run-amiberry-nio", *args],
+            extra_env=env,
+        )
+
     def apps_bbc(self) -> None:
         self.lib_bbc()
         self.run_make("apps-bbc", "NIO_APPS", "TARGET=bbc", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
@@ -181,6 +266,10 @@ class Build:
     def core_apps_atari(self) -> None:
         self.lib_atari()
         self.run_make("core-apps-atari", "NIO_CORE_APPS", "TARGET=atari", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
+
+    def core_apps_amiga(self) -> None:
+        self.lib_amiga()
+        self.run_make("core-apps-amiga", "NIO_CORE_APPS", "TARGET=amiga", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
 
     def core_apps_all(self) -> None:
         self.pdcurses_msdos()
@@ -505,11 +594,17 @@ class Build:
         self.fujinet_rs232()
         self.lib_linux()
 
+    def workflow_amiga(self) -> None:
+        self.lib_amiga()
+        self.apps_amiga()
+        self.core_apps_amiga()
+
     def workflow_all(self) -> None:
         self.workflow_linux()
         self.workflow_msdos()
         self.workflow_atari()
         self.workflow_bbc()
+        self.workflow_amiga()
 
 
 def build_tasks(build: Build) -> dict[str, Task]:
@@ -523,6 +618,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("msdos", "Build all MS-DOS-facing driver, apps, disks, and QEMU image", Build.workflow_msdos, workflow=True),
         t("atari", "Build all Atari-facing libraries, apps, boot disk, and emulator-side FujiNet", Build.workflow_atari, workflow=True),
         t("linux", "Build host/Linux FujiNet presets and library", Build.workflow_linux, workflow=True),
+        t("amiga", "Build Amiga-facing library and nio-apps test apps", Build.workflow_amiga, workflow=True),
         t("altirra", "Configure/build AltirraSDL with the workspace preset", Build.altirra),
         t("fujinet", "Build/test fujinet-nio TCP, PTY, and RS-232 presets", lambda b: (b.fujinet_tcp(), b.fujinet_pty(), b.fujinet_rs232())),
         t("fujinet-tcp", "Build/test fujinet-nio TCP debug and release", Build.fujinet_tcp),
@@ -530,11 +626,13 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("fujinet-pty", "Build/test fujinet-nio PTY debug", Build.fujinet_pty),
         t("fujinet-rs232", "Build/test fujinet-nio RS-232 debug", Build.fujinet_rs232),
         t("fujinet-atari-netsio", "Build fujinet-nio Atari FujiBus over NetSIO debug", Build.fujinet_atari_netsio),
-        t("lib", "Build fujinet-nio-lib Linux, MS-DOS, BBC, and Atari libraries", lambda b: (b.lib_linux(), b.lib_msdos(), b.lib_atari(), b.lib_bbc())),
+        t("lib", "Build fujinet-nio-lib Linux, MS-DOS, BBC, Atari, and Amiga libraries", lambda b: (b.lib_linux(), b.lib_msdos(), b.lib_atari(), b.lib_bbc(), b.lib_amiga())),
         t("lib-linux", "Build fujinet-nio-lib Linux library", Build.lib_linux),
         t("lib-msdos", "Build fujinet-nio-lib MS-DOS library", Build.lib_msdos),
         t("lib-atari", "Build fujinet-nio-lib Atari library", Build.lib_atari),
         t("lib-bbc", "Build fujinet-nio-lib BBC library", Build.lib_bbc),
+        t("lib-amiga", "Build fujinet-nio-lib Amiga library", Build.lib_amiga),
+        t("lib-tests", "Run fujinet-nio-lib host-side wire tests", Build.lib_tests),
         t("cc65", "Incrementally build cc65 tools and BBC libraries", Build.cc65),
         t("cc65-bbc", "Incrementally build cc65 BBC and bbc-clib libraries", Build.cc65_bbc),
         t("cc65-clib", "Build cc65-clib ROM and rebuild cc65 BBC libraries", Build.cc65_clib),
@@ -550,10 +648,14 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("apps-clean", "Clean nio-apps, nio-core-apps, and nio-config builds", Build.clean_apps_all),
         t("apps-msdos", "Build nio-apps MS-DOS test apps", Build.apps_msdos),
         t("apps-atari", "Build nio-apps Atari test apps", Build.apps_atari),
+        t("apps-amiga", "Build nio-apps Amiga test apps", Build.apps_amiga),
+        t("amiga-test-adf", "Build an AmigaOS test ADF containing the selected nio-apps test app", Build.amiga_test_adf),
+        t("amiga-test-disk", "Build an AmigaOS HDF containing the selected nio-apps test app", Build.amiga_test_disk),
         t("apps-bbc", "Build nio-apps BBC test apps", Build.apps_bbc),
         t("core-apps-all", "Build all nio-core-apps targets", Build.core_apps_all),
         t("core-apps-msdos", "Build nio-core-apps MS-DOS utilities", Build.core_apps_msdos),
         t("core-apps-atari", "Build nio-core-apps Atari utilities", Build.core_apps_atari),
+        t("core-apps-amiga", "Build nio-core-apps Amiga utilities", Build.core_apps_amiga),
         t("config-all", "Build all nio-config targets", Build.config_all),
         t("config-msdos", "Build nio-config MS-DOS app", Build.config_msdos),
         t("config-atari", "Build nio-config Atari app", Build.config_atari),
@@ -583,6 +685,8 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("msdos-dev-curses", "Build and run MS-DOS NIO app image in QEMU curses mode", Build.msdos_dev_curses, consumes_args=True),
         t("atari-run", "Run an Atari app under the configured emulator", lambda b: b.atari_run([]), consumes_args=True),
         t("atari-stop", "Stop stale Atari emulator sidecars", Build.atari_stop, consumes_args=True),
+        t("amiga-run", "Run the selected Amiga test app in Amiberry", lambda b: b.amiga_run([], build_adf=False), consumes_args=True),
+        t("amiga-e2e", "Build and run the selected Amiga test app in Amiberry against FujiNet NIO", lambda b: b.amiga_run([], build_adf=True), consumes_args=True),
         t("manifest", "Write build/manifest.txt only", lambda b: write_manifest(b.ctx)),
     ]
     return dict(items)

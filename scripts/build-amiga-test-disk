@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Create a bootable Amiga HDF from a licensed expanded AmigaOS tree."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def xdf_tool() -> list[str]:
+    tool = shutil.which("xdftool")
+    if tool:
+        return [tool]
+    uvx = shutil.which("uvx")
+    if uvx:
+        return [uvx, "--from", "amitools", "xdftool"]
+    raise SystemExit("xdftool is required, or install uv/uvx to fetch amitools")
+
+
+def run_xdf(image: Path, *commands: str) -> None:
+    subprocess.run([*xdf_tool(), str(image), *commands], check=True)
+
+
+def ignored_cd_content(_directory: str, names: list[str]) -> set[str]:
+    ignored = {"ADF", "GlowIconsCollection", "Labels", "ROM"}
+    for name in names:
+        if name in ignored:
+            ignored.add(name)
+            continue
+        try:
+            name.encode("latin-1")
+        except UnicodeEncodeError:
+            ignored.add(name)
+    return ignored
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--os-root", required=True, type=Path)
+    parser.add_argument("--boot-adf", required=True, type=Path)
+    parser.add_argument("--app", required=True, type=Path)
+    parser.add_argument("--app-name", default="wifitest")
+    parser.add_argument("--command", default=None,
+                        help="startup command; defaults to the installed app name")
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--size", default="128M")
+    args = parser.parse_args()
+
+    if not args.os_root.is_dir():
+        raise SystemExit(f"expanded AmigaOS tree not found: {args.os_root}")
+    if not args.boot_adf.is_file():
+        raise SystemExit(f"boot-block source ADF not found: {args.boot_adf}")
+    if not args.app.is_file():
+        raise SystemExit(f"application not found: {args.app}")
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.unlink(missing_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix="amiga-test-disk-") as temp:
+        staged_os = Path(temp) / "AmigaOS3.2"
+        shutil.copytree(args.os_root, staged_os, ignore=ignored_cd_content)
+        run_xdf(args.output, "pack", str(staged_os), "ffs", f"size={args.size}")
+        boot_code = Path(temp) / "boot.bin"
+        run_xdf(args.boot_adf, "boot", "read", str(boot_code))
+        run_xdf(args.output, "boot", "write", str(boot_code))
+        serial_device = Path(temp) / "serial.device"
+        run_xdf(args.boot_adf, "read", "Devs/serial.device", str(serial_device))
+        run_xdf(args.output, "write", str(serial_device), "Devs/serial.device")
+        startup = Path(temp) / "Startup-Sequence"
+        command = args.command or args.app_name
+        startup.write_text(
+            "C:Assign T: RAM:\n"
+            f"C:{command} >DH0:{args.app_name}.result\n"
+            "C:EndCLI\n",
+            encoding="ascii",
+        )
+        run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
+        run_xdf(args.output, "delete", "S/Startup-Sequence")
+        run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
+
+    print(f"Built Amiga test HDF: {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
