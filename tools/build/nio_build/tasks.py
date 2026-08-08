@@ -214,6 +214,11 @@ class Build:
 
     def amiga_test_disk(self) -> None:
         app_name, app = self.amiga_test_app()
+        # Keep one useful interactive image containing both the selected test
+        # app and the complete core utility set.  The selected app still
+        # controls the non-interactive e2e startup command.
+        self.core_apps_amiga()
+        core_app_dir = self.p("NIO_CORE_APPS") / "build" / "amiga" / "bin"
         os_root = Path(self.ctx.env.get("AMIBERRY_OS_ROOT", ""))
         boot_adf = Path(self.ctx.env.get("AMIBERRY_WORKBENCH_ADF", ""))
         if not os_root.is_dir():
@@ -224,17 +229,21 @@ class Build:
         if not boot_adf.is_file():
             raise SystemExit(f"boot-block source ADF not found: {boot_adf}")
         output = self.ctx.image_dir / f"amiga-{app_name}.hdf"
+        disk_args = [
+            self.ctx.root / "scripts" / "build-amiga-test-disk",
+            "--os-root", os_root,
+            "--boot-adf", boot_adf,
+            "--app", app,
+            "--app-name", app_name,
+            "--extra-app-dir", core_app_dir,
+            "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
+            "--output", output,
+        ]
+        if self.ctx.env.get("AMIGA_TEST_INTERACTIVE", "0") == "1":
+            disk_args.append("--interactive")
         self.runner.run(
             "amiga-test-disk",
-            [
-                self.ctx.root / "scripts" / "build-amiga-test-disk",
-                "--os-root", os_root,
-                "--boot-adf", boot_adf,
-                "--app", app,
-                "--app-name", app_name,
-                "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
-                "--output", output,
-            ],
+            disk_args,
         )
         self.ctx.env["AMIBERRY_DISK"] = str(output)
 
@@ -250,6 +259,12 @@ class Build:
             [self.ctx.root / "scripts" / "run-amiberry-nio", *args],
             extra_env=env,
         )
+
+    def amiga_workbench(self, args: list[str]) -> None:
+        """Build an interactive Amiga HDF, then run it in Amiberry."""
+        self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
+        self.amiga_test_disk()
+        self.amiga_run(args, build_adf=False)
 
     def apps_bbc(self) -> None:
         self.lib_bbc()
@@ -687,6 +702,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("atari-stop", "Stop stale Atari emulator sidecars", Build.atari_stop, consumes_args=True),
         t("amiga-run", "Run the selected Amiga test app in Amiberry", lambda b: b.amiga_run([], build_adf=False), consumes_args=True),
         t("amiga-e2e", "Build and run the selected Amiga test app in Amiberry against FujiNet NIO", lambda b: b.amiga_run([], build_adf=True), consumes_args=True),
+        t("amiga-workbench", "Build an interactive Amiga HDF and run Workbench in Amiberry", lambda b: b.amiga_workbench([]), consumes_args=True),
         t("manifest", "Write build/manifest.txt only", lambda b: write_manifest(b.ctx)),
     ]
     return dict(items)

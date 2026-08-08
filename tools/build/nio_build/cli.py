@@ -92,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
                 build.amiga_run(targets, build_adf=False)
             elif target == "amiga-e2e":
                 build.amiga_run(targets, build_adf=True)
+            elif target == "amiga-workbench":
+                build.amiga_workbench(targets)
             return 0
         task.action(build)
         if target != "manifest":

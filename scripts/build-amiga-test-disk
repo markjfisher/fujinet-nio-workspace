@@ -43,8 +43,12 @@ def main() -> int:
     parser.add_argument("--boot-adf", required=True, type=Path)
     parser.add_argument("--app", required=True, type=Path)
     parser.add_argument("--app-name", default="wifitest")
+    parser.add_argument("--extra-app-dir", action="append", type=Path, default=[],
+                        help="directory of additional executables to install in C:")
     parser.add_argument("--command", default=None,
                         help="startup command; defaults to the installed app name")
+    parser.add_argument("--interactive", action="store_true",
+                        help="preserve the OS startup sequence for interactive use")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--size", default="128M")
     args = parser.parse_args()
@@ -55,6 +59,9 @@ def main() -> int:
         raise SystemExit(f"boot-block source ADF not found: {args.boot_adf}")
     if not args.app.is_file():
         raise SystemExit(f"application not found: {args.app}")
+    for app_dir in args.extra_app_dir:
+        if not app_dir.is_dir():
+            raise SystemExit(f"additional Amiga application directory not found: {app_dir}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.unlink(missing_ok=True)
@@ -63,23 +70,38 @@ def main() -> int:
         staged_os = Path(temp) / "AmigaOS3.2"
         shutil.copytree(args.os_root, staged_os, ignore=ignored_cd_content)
         run_xdf(args.output, "pack", str(staged_os), "ffs", f"size={args.size}")
+        # The licensed Workbench tree includes a first-run WBStartup program
+        # which opens a "Welcome to the Amiga Preinstallation Environment"
+        # requester.  Test images should boot directly to an usable
+        # Workbench; remove only this optional welcome program, not the rest
+        # of WBStartup.
+        run_xdf(args.output, "delete", "WBStartup/Welcome")
+        run_xdf(args.output, "delete", "WBStartup/Welcome.info")
         boot_code = Path(temp) / "boot.bin"
         run_xdf(args.boot_adf, "boot", "read", str(boot_code))
         run_xdf(args.output, "boot", "write", str(boot_code))
         serial_device = Path(temp) / "serial.device"
         run_xdf(args.boot_adf, "read", "Devs/serial.device", str(serial_device))
         run_xdf(args.output, "write", str(serial_device), "Devs/serial.device")
-        startup = Path(temp) / "Startup-Sequence"
-        command = args.command or args.app_name
-        startup.write_text(
-            "C:Assign T: RAM:\n"
-            f"C:{command} >DH0:{args.app_name}.result\n"
-            "C:EndCLI\n",
-            encoding="ascii",
-        )
         run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
-        run_xdf(args.output, "delete", "S/Startup-Sequence")
-        run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
+        installed_names = {args.app_name}
+        for app_dir in args.extra_app_dir:
+            for app in sorted(app_dir.iterdir()):
+                if not app.is_file() or app.name in installed_names:
+                    continue
+                run_xdf(args.output, "write", str(app), f"C/{app.name}")
+                installed_names.add(app.name)
+        if not args.interactive:
+            startup = Path(temp) / "Startup-Sequence"
+            command = args.command or args.app_name
+            startup.write_text(
+                "C:Assign T: RAM:\n"
+                f"C:{command} >DH0:{args.app_name}.result\n"
+                "C:EndCLI\n",
+                encoding="ascii",
+            )
+            run_xdf(args.output, "delete", "S/Startup-Sequence")
+            run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
 
     print(f"Built Amiga test HDF: {args.output}")
     return 0
