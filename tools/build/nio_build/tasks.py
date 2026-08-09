@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import time
+import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,7 @@ class Task:
     workflow: bool = False
     hidden: bool = False
     consumes_args: bool = False
+    help_text: Callable[["Build"], str] | None = None
 
 
 class Build:
@@ -35,6 +37,32 @@ class Build:
 
     def p(self, name: str) -> Path:
         return self.ctx.path(name)
+
+    def external_help(self, command: list[str], *, cwd: Path | None = None) -> str:
+        """Return help from the actual delegated command without starting it."""
+        result = subprocess.run(
+            [*map(str, command), "--help"],
+            cwd=cwd,
+            env=self.ctx.env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return (result.stdout or result.stderr).rstrip()
+
+    def amiga_run_help(self, *, build_adf: bool) -> str:
+        parser_help = self.amiga_target_parser(build_adf=build_adf).format_help()
+        runner_help = self.external_help([self.ctx.root / "scripts" / "run-amiberry-nio"])
+        return parser_help + "\nAmiberry runner options:\n\n" + runner_help
+
+    def qemu_run_help(self) -> str:
+        return self.external_help([self.p("FUJINET_QEMU_MSDOS") / "run-qemu-nio"])
+
+    def qemu_monitor_help(self) -> str:
+        return self.external_help([self.p("FUJINET_QEMU_MSDOS") / "qemu-nio-monitor"])
+
+    def atari_run_help(self) -> str:
+        return self.external_help([self.ctx.root / "scripts" / "atari-run"])
 
     def run_make(self, name: str, repo: str, *args: str, env: dict[str, str] | None = None) -> None:
         path = self.p(repo)
@@ -239,6 +267,12 @@ class Build:
             "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
             "--output", output,
         ]
+        startup_script = self.ctx.env.get("AMIGA_TEST_STARTUP_SCRIPT", "")
+        if startup_script:
+            startup_path = Path(startup_script).expanduser()
+            if not startup_path.is_absolute():
+                startup_path = self.ctx.root / startup_path
+            disk_args.extend(["--startup-script", startup_path])
         if self.ctx.env.get("AMIGA_TEST_INTERACTIVE", "0") == "1":
             disk_args.append("--interactive")
         self.runner.run(
@@ -247,11 +281,63 @@ class Build:
         )
         self.ctx.env["AMIBERRY_DISK"] = str(output)
 
+    @staticmethod
+    def amiga_target_parser(*, build_adf: bool) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog="amiga-e2e" if build_adf else "amiga-run",
+            description="Build/select an Amiga test application and run it in Amiberry.",
+            add_help=True,
+        )
+        parser.add_argument(
+            "--app",
+            metavar="NAME",
+            help="nio-apps or nio-core-apps application to install/run "
+            "(default: AMIGA_TEST_APP, normally wifitest)",
+        )
+        parser.add_argument(
+            "--project",
+            choices=("apps", "core"),
+            help="application project containing NAME (default: AMIGA_TEST_PROJECT)",
+        )
+        parser.add_argument(
+            "--command",
+            metavar="COMMAND",
+            help="Amiga startup command (default: selected application name)",
+        )
+        parser.add_argument(
+            "--interactive",
+            action="store_true",
+            help="keep the Workbench shell instead of running the app at boot",
+        )
+        parser.epilog = (
+            "Amiberry options go after '--', for example:\n"
+            "  scripts/build.sh amiga-e2e --app wifitest -- --external-nio\n"
+            "Environment equivalents: AMIGA_TEST_APP, AMIGA_TEST_PROJECT, "
+            "AMIGA_TEST_COMMAND, AMIGA_TEST_INTERACTIVE"
+        )
+        return parser
+
+    def _parse_amiga_target_args(self, args: list[str], *, build_adf: bool) -> list[str]:
+        if "--" in args:
+            separator = args.index("--")
+            target_args, runner_args = args[:separator], args[separator + 1:]
+        else:
+            target_args, runner_args = args, []
+        parsed = self.amiga_target_parser(build_adf=build_adf).parse_args(target_args)
+        if parsed.app:
+            self.ctx.env["AMIGA_TEST_APP"] = parsed.app
+        if parsed.project:
+            self.ctx.env["AMIGA_TEST_PROJECT"] = parsed.project
+        if parsed.command:
+            self.ctx.env["AMIGA_TEST_COMMAND"] = parsed.command
+        if parsed.interactive:
+            self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
+        return runner_args
+
     def amiga_run(self, args: list[str], *, build_adf: bool) -> None:
+        args = self._parse_amiga_target_args(args, build_adf=build_adf)
         if build_adf:
             self.amiga_test_disk()
-        if args[:1] == ["--"]:
-            args = args[1:]
         env = self.ctx.env.copy()
         env["AMIBERRY_DISK"] = env.get("AMIBERRY_DISK", env.get("AMIGA_TEST_DISK", ""))
         self.runner.run(
@@ -260,6 +346,24 @@ class Build:
             extra_env=env,
         )
 
+    @staticmethod
+    def amiga_workbench_parser() -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog="amiga-workbench",
+            description="Run a named Amiga Workbench profile in Amiberry.",
+        )
+        parser.add_argument("--profile", metavar="NAME", help="profile name")
+        parser.add_argument(
+            "--config", "--profile-file", dest="profile_file", metavar="PATH",
+            help="alternate workbenches YAML file",
+        )
+        parser.epilog = "Amiberry options go after '--', for example --external-nio."
+        return parser
+
+    @classmethod
+    def amiga_workbench_help(cls, _build: "Build") -> str:
+        return cls.amiga_workbench_parser().format_help()
+
     def amiga_workbench(self, args: list[str]) -> None:
         """Build an interactive Amiga HDF, then run it in Amiberry."""
         self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
@@ -267,29 +371,15 @@ class Build:
 
         profile_name = self.ctx.env.get("AMIGA_WORKBENCH_CONFIG", "")
         config_file = Path(self.ctx.env["AMIGA_WORKBENCH_CONFIG_FILE"])
-        runner_args: list[str] = []
-        index = 0
-        while index < len(args):
-            argument = args[index]
-            if argument == "--":
-                runner_args.extend(args[index + 1:])
-                break
-            if argument == "--profile":
-                if index + 1 >= len(args):
-                    raise SystemExit("amiga-workbench --profile requires a name")
-                profile_name = args[index + 1]
-                index += 2
-                continue
-            if argument in ("--config", "--profile-file"):
-                if index + 1 >= len(args):
-                    raise SystemExit(f"amiga-workbench {argument} requires a YAML path")
-                config_file = Path(args[index + 1]).expanduser()
-                if not config_file.is_absolute():
-                    config_file = self.ctx.root / config_file
-                index += 2
-                continue
-            runner_args.extend(args[index:])
-            break
+        separator = args.index("--") if "--" in args else len(args)
+        parsed = self.amiga_workbench_parser().parse_args(args[:separator])
+        runner_args = args[separator + 1:] if separator < len(args) else []
+        if parsed.profile:
+            profile_name = parsed.profile
+        if parsed.profile_file:
+            config_file = Path(parsed.profile_file).expanduser()
+            if not config_file.is_absolute():
+                config_file = self.ctx.root / config_file
 
         profile = load_profile(
             config_file,
@@ -318,6 +408,14 @@ class Build:
                 raise SystemExit(f"Amiga Workbench disk not found for profile {profile['name']}: {disk}")
             self.ctx.env["AMIBERRY_DISK"] = str(disk)
         self.amiga_run(runner_args, build_adf=False)
+
+    def amiga_tests(self, args: list[str]) -> None:
+        if args[:1] == ["--"]:
+            args = args[1:]
+        self.runner.run(
+            "amiga-e2e-tests",
+            [self.ctx.root / "scripts" / "run-amiga-e2e-tests", *args],
+        )
 
     def apps_bbc(self) -> None:
         self.lib_bbc()
@@ -676,8 +774,8 @@ class Build:
 
 
 def build_tasks(build: Build) -> dict[str, Task]:
-    def t(name: str, desc: str, action: Callable[[Build], None], *, workflow: bool = False, hidden: bool = False, consumes_args: bool = False) -> tuple[str, Task]:
-        return name, Task(name, desc, action, workflow, hidden, consumes_args)
+    def t(name: str, desc: str, action: Callable[[Build], None], *, workflow: bool = False, hidden: bool = False, consumes_args: bool = False, help_text: Callable[[Build], str] | None = None) -> tuple[str, Task]:
+        return name, Task(name, desc, action, workflow, hidden, consumes_args, help_text)
 
     items = [
         t("all", "Build the usual integrated stack", Build.workflow_all, workflow=True),
@@ -748,14 +846,15 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("msdos-image", "Compatibility alias for msdos-apps-image", lambda b: (print("msdos-image is a compatibility alias; use msdos-apps-image."), b.msdos_apps_image(), shutil.copy2(b.ctx.image_dir / "msdos-apps.img", b.ctx.image_dir / "nio-apps.img")), hidden=True),
         t("apps-image", "Compatibility alias for msdos-apps-image", lambda b: (print("apps-image is a compatibility alias; use msdos-apps-image."), b.msdos_apps_image(), shutil.copy2(b.ctx.image_dir / "msdos-apps.img", b.ctx.image_dir / "msdos-nio-apps.img")), hidden=True),
         t("qemu-image", "Compatibility alias for qemu-msdos-image", Build.qemu_image, hidden=True),
-        t("qemu-run", "Run fujinet-qemu-msdos with workspace defaults", lambda b: b.qemu_run([]), consumes_args=True),
-        t("qemu-monitor", "Send a command/key to active qemu-run monitor socket", lambda b: b.qemu_monitor([]), consumes_args=True),
+        t("qemu-run", "Run fujinet-qemu-msdos with workspace defaults", lambda b: b.qemu_run([]), consumes_args=True, help_text=lambda b: b.qemu_run_help()),
+        t("qemu-monitor", "Send a command/key to active qemu-run monitor socket", lambda b: b.qemu_monitor([]), consumes_args=True, help_text=lambda b: b.qemu_monitor_help()),
         t("msdos-dev-curses", "Build and run MS-DOS NIO app image in QEMU curses mode", Build.msdos_dev_curses, consumes_args=True),
-        t("atari-run", "Run an Atari app under the configured emulator", lambda b: b.atari_run([]), consumes_args=True),
+        t("atari-run", "Run an Atari app under the configured emulator", lambda b: b.atari_run([]), consumes_args=True, help_text=lambda b: b.atari_run_help()),
         t("atari-stop", "Stop stale Atari emulator sidecars", Build.atari_stop, consumes_args=True),
-        t("amiga-run", "Run the selected Amiga test app in Amiberry", lambda b: b.amiga_run([], build_adf=False), consumes_args=True),
-        t("amiga-e2e", "Build and run the selected Amiga test app in Amiberry against FujiNet NIO", lambda b: b.amiga_run([], build_adf=True), consumes_args=True),
-        t("amiga-workbench", "Run a named Amiga Workbench profile in Amiberry", lambda b: b.amiga_workbench([]), consumes_args=True),
+        t("amiga-run", "Run the selected Amiga test app in Amiberry", lambda b: b.amiga_run([], build_adf=False), consumes_args=True, help_text=lambda b: b.amiga_run_help(build_adf=False)),
+        t("amiga-e2e", "Build and run the selected Amiga test app in Amiberry against FujiNet NIO", lambda b: b.amiga_run([], build_adf=True), consumes_args=True, help_text=lambda b: b.amiga_run_help(build_adf=True)),
+        t("amiga-workbench", "Run a named Amiga Workbench profile in Amiberry", lambda b: b.amiga_workbench([]), consumes_args=True, help_text=Build.amiga_workbench_help),
+        t("amiga-tests", "Run the Amiberry guest integration-test suite", lambda b: b.amiga_tests([]), consumes_args=True),
         t("manifest", "Write build/manifest.txt only", lambda b: write_manifest(b.ctx)),
     ]
     return dict(items)

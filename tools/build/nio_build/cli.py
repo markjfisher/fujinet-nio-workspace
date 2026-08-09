@@ -63,6 +63,12 @@ def main(argv: list[str] | None = None) -> int:
             kind = "hidden compatibility task"
         print(f"{task.name}: {kind}")
         print(task.description)
+        if task.help_text is not None:
+            print()
+            print(task.help_text(build))
+        elif task.consumes_args:
+            print()
+            print("This target accepts arguments after '--'. Run the delegated command with '--help' for details.")
         return 0
 
     targets = args
@@ -94,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
                 build.amiga_run(targets, build_adf=True)
             elif target == "amiga-workbench":
                 build.amiga_workbench(targets)
+            elif target == "amiga-tests":
+                build.amiga_tests(targets)
             return 0
         task.action(build)
         if target != "manifest":

@@ -1,0 +1,9 @@
+[project]
+name = "fujinet-nio-amiberry-tests"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-ra"

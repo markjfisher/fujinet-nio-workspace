@@ -152,23 +152,58 @@ class AmigaRunner:
         self.log_handles.append(handle)
         return handle
 
-    def start_process(self, command: list[str], log: Path) -> subprocess.Popen[object]:
+    def start_process(
+        self,
+        command: list[str],
+        log: Path,
+        *,
+        cwd: Path | None = None,
+    ) -> subprocess.Popen[object]:
         handle = self.open_log(log)
-        return subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT)
+        return subprocess.Popen(command, cwd=cwd, stdout=handle, stderr=subprocess.STDOUT)
 
     def write_nio_config(self) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         config = self.config_dir / "fujinet.yaml"
         config.write_text(
             "fujinet:\n"
-            "  device_name: amiga-test\n"
+            "  device_name: \"amiga-test\"\n"
+            "boot:\n"
+            "  mode: config\n"
+            "  config_uri: \"persist:/boot/autorun.img\"\n"
+            "  readonly: true\n"
             "wifi:\n"
             "  enabled: false\n"
             "  ssid: \"\"\n"
             "  passphrase: \"\"\n"
+            "devices:\n"
+            "  modem:\n"
+            "    enabled: false\n"
+            "    sniffer_enabled: false\n"
+            "  cpm:\n"
+            "    enabled: false\n"
+            "    ccp_image: \"\"\n"
+            "  printer:\n"
+            "    enabled: false\n"
+            "netsio:\n"
+            "  enabled: false\n"
+            "  host: \"localhost\"\n"
+            "  port: 9997\n"
+            "clock:\n"
+            "  timezone: \"UTC\"\n"
+            "  enabled: true\n"
             "channel:\n"
+            "  pty_path: \"\"\n"
             f"  tcp_host: \"{self.nio_host}\"\n"
-            f"  tcp_port: {self.nio_port}\n",
+            f"  tcp_port: {self.nio_port}\n"
+            "  serial_port: \"/dev/ttyUSB0\"\n"
+            "  uart:\n"
+            "    baud_rate: 115200\n"
+            "    data_bits: 8\n"
+            "    parity: none\n"
+            "    stop_bits: 1\n"
+            "    flow_control: none\n"
+            "    tx_gap_us: 0\n",
             encoding="utf-8",
         )
 
@@ -198,14 +233,16 @@ class AmigaRunner:
             env["FN_SERIAL_BAUD"] = "19200"
             log = self.open_log(self.nio_log)
             self.nio = subprocess.Popen(
-                [str(self.nio_rs232_bin)], cwd=self.config_dir, env=env,
+                [str(self.nio_rs232_bin)], cwd=self.run_dir, env=env,
                 stdout=log, stderr=subprocess.STDOUT,
             )
             return serial_device
 
         if not self.external_nio:
             self.write_nio_config()
-            self.nio = self.start_process([str(self.nio_bin)], self.nio_log)
+            self.nio = self.start_process(
+                [str(self.nio_bin)], self.nio_log, cwd=self.run_dir
+            )
         else:
             print(f"Using existing FujiNet NIO on {self.nio_host}:{self.nio_port}")
         wait_for_tcp(self.nio_host, self.nio_port)
@@ -224,7 +261,7 @@ class AmigaRunner:
         if uae_config:
             config_args = ["--config", uae_config]
         serial_port = serial_device or f"tcp://{self.host}:{self.amiga_port}"
-        command = [self.amiberry_bin, "--log", *config_args, "-G",
+        command = [self.amiberry_bin, "--log", *config_args, "-G", "-w", "-1",
                    "-r", str(self.rom_dir / "kickstart.rom"), *disk_args,
                    "-s", f"serial_port={serial_port}",
                    "-s", "serial_hardware_ctsrts=false",

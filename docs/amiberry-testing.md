@@ -137,6 +137,46 @@ and `fdrive`. The selected app still controls the startup command for
 non-interactive e2e images. To make a core utility the e2e command, use
 `AMIGA_TEST_PROJECT=core AMIGA_TEST_APP=fhost`.
 
+## Automated Amiberry integration tests
+
+The workspace has a reusable guest integration suite under
+`integration-tests/amiberry/`. It starts a fresh POSIX FujiNet-NIO and
+Amiberry for each case, builds a test HDF with a generated Startup-Sequence,
+extracts guest result files, and asserts their contents:
+
+```sh
+./scripts/build.sh amiga-tests
+```
+
+Run a focused case or see verbose output with:
+
+```sh
+./scripts/run-amiga-e2e-tests -k wifi -v
+./scripts/run-amiga-e2e-tests -k cli -v
+```
+
+The first tests cover Wi-Fi SET/GET/status/scan using the public
+`fujinet-nio-lib` API and stateful CLI behavior across separate processes:
+`FHOST` set/get, `FLS` with an argument, and `FAPP` PUT/GET/LIST/DEL. This
+exercises the application argument paths and persistence mechanism rather
+than only launching an executable.
+
+Every case leaves a guest-only IPC screenshot at
+`build/amiga-e2e-tests/<case>/amiberry-screen.png`, alongside the HDF and
+component logs. Protocol cases run in the Amiga boot CLI and do not load
+Workbench: their result files are displayed with `Type`, then the CLI
+framebuffer is captured through IPC. Amiberry is launched visibly (with
+`-G`, which skips its configuration GUI but does not hide the emulated
+display), at maximum emulation speed (`-w -1`). The screenshot does not
+capture the host desktop. Adjust the short capture delay with
+`AMIGA_E2E_SCREENSHOT_DELAY` when a test's guest display changes later in
+boot.
+
+See `integration-tests/amiberry/README.md` for the four-step process for
+adding another test. The test registry is
+`integration-tests/amiberry/tests.toml`, and guest startup sequences live in
+`integration-tests/amiberry/startup/`.
+
 Amiberry builds with IPC socket support expose a Unix socket in
 `$XDG_RUNTIME_DIR/amiberry.sock` (or `/tmp/amiberry.sock`). The workspace has
 a small client for the text protocol. It discovers the active instance and

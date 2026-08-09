@@ -1,0 +1,23 @@
+# Add a [[test]] entry and a Startup-Sequence under startup/ to add coverage.
+
+[[test]]
+name = "wifi-config"
+project = "apps"
+app = "wificonfigtest"
+startup = "startup/wifi-config.sequence"
+results = ["wificonfigtest.result"]
+
+[[test]]
+name = "cli-stateful"
+project = "apps"
+app = "wifitest"
+startup = "startup/cli-stateful.sequence"
+results = [
+  "cli-fhost-set.result",
+  "cli-fhost-get.result",
+  "cli-fls.result",
+  "cli-fapp-put.result",
+  "cli-fapp-get.result",
+  "cli-fapp-list.result",
+  "cli-fapp-delete.result",
+]

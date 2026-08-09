@@ -47,8 +47,12 @@ def main() -> int:
                         help="directory of additional executables to install in C:")
     parser.add_argument("--command", default=None,
                         help="startup command; defaults to the installed app name")
+    parser.add_argument("--startup-script", type=Path,
+                        help="complete Startup-Sequence to install instead of generating one")
     parser.add_argument("--interactive", action="store_true",
                         help="preserve the OS startup sequence for interactive use")
+    parser.add_argument("--no-workbench", action="store_true",
+                        help="run the startup test in the CLI and stop before LoadWB")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--size", default="128M")
     args = parser.parse_args()
@@ -91,15 +95,40 @@ def main() -> int:
                     continue
                 run_xdf(args.output, "write", str(app), f"C/{app.name}")
                 installed_names.add(app.name)
-        if not args.interactive:
+        if args.startup_script or not args.interactive:
+            if args.startup_script:
+                if not args.startup_script.is_file():
+                    raise SystemExit(f"startup script not found: {args.startup_script}")
+                test_commands = args.startup_script.read_text(encoding="ascii")
+            else:
+                command = args.command or args.app_name
+                test_commands = (
+                    "C:Assign T: RAM:\n"
+                    f"C:{command} >DH0:{args.app_name}.result\n"
+                )
+
+            # Keep the licensed Workbench startup preamble.  It creates and
+            # assigns ENV: and T:, installs the normal command path, and only
+            # then should our test commands run.  Replacing it makes AmigaOS
+            # request the missing ENV volume during boot.
+            startup_source = staged_os / "S" / "Startup-sequence"
+            if not startup_source.is_file():
+                startup_source = staged_os / "S" / "Startup-Sequence"
+            original = startup_source.read_text(encoding="latin-1")
+            marker = "LoadWB"
+            marker_at = original.find(marker)
+            if marker_at < 0:
+                raise SystemExit("licensed Startup-Sequence has no LoadWB marker")
+            startup_text = original[:marker_at] + test_commands.rstrip() + "\n"
+            if args.no_workbench:
+                # Protocol tests do not need Workbench.  End the boot CLI
+                # after the test so the guest remains a small, fast console
+                # environment and does not spend time loading the desktop.
+                startup_text += "C:Wait 1\nC:EndCLI\n"
+            else:
+                startup_text += original[marker_at:]
             startup = Path(temp) / "Startup-Sequence"
-            command = args.command or args.app_name
-            startup.write_text(
-                "C:Assign T: RAM:\n"
-                f"C:{command} >DH0:{args.app_name}.result\n"
-                "C:EndCLI\n",
-                encoding="ascii",
-            )
+            startup.write_text(startup_text, encoding="latin-1")
             run_xdf(args.output, "delete", "S/Startup-Sequence")
             run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
 

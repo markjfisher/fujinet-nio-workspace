@@ -1,0 +1,17 @@
+C:Assign T: RAM:
+C:FHOST host:/ >DH0:cli-fhost-set.result
+C:FHOST >DH0:cli-fhost-get.result
+C:FLS host:/ >DH0:cli-fls.result
+C:FAPP DEL nio.e2e value >DH0:cli-fapp-delete-old.result
+C:FAPP PUT nio.e2e value hello >DH0:cli-fapp-put.result
+C:FAPP GET nio.e2e value >DH0:cli-fapp-get.result
+C:FAPP LIST nio.e2e >DH0:cli-fapp-list.result
+C:FAPP DEL nio.e2e value >DH0:cli-fapp-delete.result
+C:Type DH0:cli-fhost-set.result
+C:Type DH0:cli-fhost-get.result
+C:Type DH0:cli-fls.result
+C:Type DH0:cli-fapp-delete-old.result
+C:Type DH0:cli-fapp-put.result
+C:Type DH0:cli-fapp-get.result
+C:Type DH0:cli-fapp-list.result
+C:Type DH0:cli-fapp-delete.result

@@ -1,0 +1,3 @@
+C:Assign T: RAM:
+C:wificonfigtest >DH0:wificonfigtest.result
+C:Type DH0:wificonfigtest.result
