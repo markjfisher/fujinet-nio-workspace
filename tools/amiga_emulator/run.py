@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import signal
 import socket
@@ -16,6 +17,8 @@ import sys
 import time
 from pathlib import Path
 from typing import TextIO
+
+from .ipc import find_socket
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +57,21 @@ def wait_for_links(*paths: Path, timeout: float = 10.0) -> None:
         time.sleep(0.1)
     names = ", ".join(str(path) for path in paths)
     raise SystemExit(f"Serial PTY links were not created: {names}")
+
+
+def wait_for_logged_ipc_socket(log: Path, timeout: float = 5.0) -> Path | None:
+    """Return this Amiberry process's socket, as reported in its log."""
+    pattern = re.compile(r"IPC: Listening on (.+?)\s*$", re.MULTILINE)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            match = pattern.search(log.read_text(encoding="utf-8", errors="replace"))
+        except FileNotFoundError:
+            match = None
+        if match:
+            return Path(match.group(1))
+        time.sleep(0.05)
+    return None
 
 
 def terminate_process(process: subprocess.Popen[object] | None) -> None:
@@ -107,6 +125,7 @@ class AmigaRunner:
         self.config_dir = self.run_dir / "fujinet-data"
         self.amiga_pty = self.run_dir / "amiga-serial"
         self.nio_pty = self.run_dir / "nio-serial"
+        self.ipc_socket: Path | None = None
 
     def validate(self) -> None:
         require_command(self.amiberry_bin)
@@ -224,6 +243,18 @@ class AmigaRunner:
             shutil.copy2(self.fast_file_system, self.rom_dir / "FastFileSystem")
         print(f"Starting Amiberry with {self.disk}")
         self.amiberry = self.start_process(self.amiberry_command(serial_device), self.amiberry_log)
+        try:
+            logged_socket = wait_for_logged_ipc_socket(self.amiberry_log)
+            if logged_socket is None:
+                raise FileNotFoundError("Amiberry IPC was not reported in its log")
+            self.ipc_socket = find_socket(str(logged_socket), timeout=1)
+            (self.run_dir / "amiberry.sock.path").write_text(
+                str(self.ipc_socket) + "\n", encoding="utf-8"
+            )
+            print(f"Amiberry IPC socket: {self.ipc_socket}")
+        except (FileNotFoundError, OSError):
+            # IPC is optional in Amiberry builds; serial testing must still work.
+            pass
         if self.serial_mode == "tcp":
             wait_for_tcp(self.host, self.amiga_port)
             print("Bridging Amiberry TCP to FujiNet NIO TCP")

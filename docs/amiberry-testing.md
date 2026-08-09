@@ -137,9 +137,27 @@ and `fdrive`. The selected app still controls the startup command for
 non-interactive e2e images. To make a core utility the e2e command, use
 `AMIGA_TEST_PROJECT=core AMIGA_TEST_APP=fhost`.
 
-On a native Wayland desktop such as Hyprland, install `wtype` for keyboard
-injection and use `hyprctl` to focus Amiberry first. `grim` can capture the
-whole desktop for test evidence:
+Amiberry builds with IPC socket support expose a Unix socket in
+`$XDG_RUNTIME_DIR/amiberry.sock` (or `/tmp/amiberry.sock`). The workspace has
+a small client for the text protocol. It discovers the active instance and
+can capture only the Amiberry framebuffer, avoiding desktop-wide screenshots:
+
+```sh
+./scripts/amiberry-ipc GET_STATUS
+./scripts/amiberry-ipc SCREENSHOT build/amiga-e2e/amiberry-screen.png
+./scripts/amiberry-ipc SEND_KEY 65 1   # press key code 65
+./scripts/amiberry-ipc SEND_KEY 65 0   # release it
+```
+
+`run-amiberry-nio` prints the socket path and writes it to
+`build/amiga-e2e/amiberry.sock.path` when it detects one. The protocol also
+provides commands such as `READ_MEM`, `GET_CPU_REGS`, and `GET_CONFIG` for
+future diagnostics. See the [Amiberry IPC socket documentation](https://github.com/BlitterStudio/amiberry/wiki/IPC-Socket-support)
+for command and key-code details.
+
+On a native Wayland desktop such as Hyprland, `wtype` and `grim` remain useful
+fallbacks when IPC is unavailable. `grim` captures the whole desktop for test
+evidence:
 
 ```sh
 AMIBERRY_WINDOW=$(hyprctl clients -j | jq -r '.[] | select(.class == "amiberry") | .address' | head -1)
