@@ -263,8 +263,61 @@ class Build:
     def amiga_workbench(self, args: list[str]) -> None:
         """Build an interactive Amiga HDF, then run it in Amiberry."""
         self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
-        self.amiga_test_disk()
-        self.amiga_run(args, build_adf=False)
+        from .amiga_config import load_profile
+
+        profile_name = self.ctx.env.get("AMIGA_WORKBENCH_CONFIG", "")
+        config_file = Path(self.ctx.env["AMIGA_WORKBENCH_CONFIG_FILE"])
+        runner_args: list[str] = []
+        index = 0
+        while index < len(args):
+            argument = args[index]
+            if argument == "--":
+                runner_args.extend(args[index + 1:])
+                break
+            if argument == "--profile":
+                if index + 1 >= len(args):
+                    raise SystemExit("amiga-workbench --profile requires a name")
+                profile_name = args[index + 1]
+                index += 2
+                continue
+            if argument in ("--config", "--profile-file"):
+                if index + 1 >= len(args):
+                    raise SystemExit(f"amiga-workbench {argument} requires a YAML path")
+                config_file = Path(args[index + 1]).expanduser()
+                if not config_file.is_absolute():
+                    config_file = self.ctx.root / config_file
+                index += 2
+                continue
+            runner_args.extend(args[index:])
+            break
+
+        profile = load_profile(
+            config_file,
+            profile_name,
+            self.ctx.root,
+            self.ctx.env,
+        )
+        self.ctx.env["AMIGA_WORKBENCH_CONFIG"] = profile["name"]
+        for key in ("kickstart", "fast_file_system"):
+            if key in profile:
+                self.ctx.env[
+                    {"kickstart": "AMIBERRY_KICKSTART", "fast_file_system": "AMIBERRY_FAST_FILE_SYSTEM"}[key]
+                ] = profile[key]
+        settings = profile.get("settings", {})
+        self.ctx.env["AMIBERRY_EXTRA_SETTINGS"] = ";".join(
+            f"{key}={value}" for key, value in settings.items()
+        )
+        if profile.get("uae_config"):
+            self.ctx.env["AMIBERRY_UAE_CONFIG"] = profile["uae_config"]
+
+        if profile.get("build_test_disk", False):
+            self.amiga_test_disk()
+        else:
+            disk = Path(profile.get("disk", ""))
+            if not disk.is_file():
+                raise SystemExit(f"Amiga Workbench disk not found for profile {profile['name']}: {disk}")
+            self.ctx.env["AMIBERRY_DISK"] = str(disk)
+        self.amiga_run(runner_args, build_adf=False)
 
     def apps_bbc(self) -> None:
         self.lib_bbc()
@@ -702,7 +755,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("atari-stop", "Stop stale Atari emulator sidecars", Build.atari_stop, consumes_args=True),
         t("amiga-run", "Run the selected Amiga test app in Amiberry", lambda b: b.amiga_run([], build_adf=False), consumes_args=True),
         t("amiga-e2e", "Build and run the selected Amiga test app in Amiberry against FujiNet NIO", lambda b: b.amiga_run([], build_adf=True), consumes_args=True),
-        t("amiga-workbench", "Build an interactive Amiga HDF and run Workbench in Amiberry", lambda b: b.amiga_workbench([]), consumes_args=True),
+        t("amiga-workbench", "Run a named Amiga Workbench profile in Amiberry", lambda b: b.amiga_workbench([]), consumes_args=True),
         t("manifest", "Write build/manifest.txt only", lambda b: write_manifest(b.ctx)),
     ]
     return dict(items)

@@ -1,0 +1,22 @@
+default: wb3.2
+
+profiles:
+  wb3.2:
+    build_test_disk: true
+    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
+    settings:
+      cpu_type: 68000
+      chipmem_size: 512
+      fastmem_size: 8
+      cpu_compatible: true
+      cachesize: 0
+
+  wb1.3:
+    disk: ${HOME}/dev/amiga/AmigaForever/Amiga_Files/Shared/adf/amiga-os-134-workbench.adf
+    kickstart: ${HOME}/dev/amiga/AmigaForever/Amiga_Files/Shared/rom/amiga-os-130.rom
+    settings:
+      cpu_type: 68000
+      chipmem_size: 512
+      fastmem_size: 0
+      cpu_compatible: true
+      cachesize: 0

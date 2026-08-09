@@ -76,6 +76,42 @@ The test-image builder removes Workbench's optional `WBStartup/Welcome`
 program, so the first-run "Welcome to the Amiga Preinstallation Environment"
 requester does not interrupt automated or interactive tests.
 
+Named Amiberry environments are defined in
+`configs/amiga/workbenches.yaml`. The default profile is `wb3.2`; select an
+older or custom environment with `AMIGA_WORKBENCH_CONFIG`. Direct-image
+profiles skip test-disk construction and are useful for trying older ROMs and
+operating systems:
+
+```sh
+AMIGA_WORKBENCH_CONFIG=wb1.3 \
+./scripts/build.sh amiga-workbench -- --external-nio
+```
+
+For interactive use, the profile can be selected directly on the build
+target; the environment variable remains useful for scripts and defaults:
+
+```sh
+./scripts/build.sh amiga-workbench --profile wb1.3 -- --external-nio
+```
+
+To use another profile file:
+
+```sh
+AMIGA_WORKBENCH_CONFIG_FILE="$HOME/path/to/workbenches.yaml" \
+AMIGA_WORKBENCH_CONFIG=my-profile \
+./scripts/build.sh amiga-workbench -- --external-nio
+```
+
+Each profile can specify `disk`, `kickstart`, `build_test_disk`, and an
+Amiberry `settings` mapping such as `cpu_type`, `chipmem_size`, and
+`fastmem_size`. An optional `uae_config` entry loads an existing Amiberry
+configuration before applying the profile settings.
+
+The runner defaults SDL3 to `SDL_VIDEO_DRIVER=kmsdrm,wayland,x11`, while
+respecting either SDL video-driver variable if already set. SDL3 documents
+`SDL_VIDEO_DRIVER` as the canonical spelling; `SDL_VIDEODRIVER` is retained as
+the compatibility spelling.
+
 Alternatively, build and run in two steps:
 
 ```sh

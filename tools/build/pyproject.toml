@@ -2,6 +2,9 @@
 name = "nio-workspace-build"
 version = "0.1.0"
 requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6",
+]
 
 [project.scripts]
 nio-build = "nio_build.cli:main"
