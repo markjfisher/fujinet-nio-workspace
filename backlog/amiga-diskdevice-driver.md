@@ -15,6 +15,19 @@ Deliver a read-only Amiga DiskDevice driver over the documented FujiBus
 channel, then make an explicit raw-state architecture decision before adding
 write or hot-swap behavior.
 
+## Library change gate
+
+Any change under `repos/fujinet-nio-lib` must run:
+
+```text
+make check
+```
+
+This builds every configured library target and then runs the host-side wire,
+session, and public archive-link tests. If a required cross-toolchain is not
+available, record the exact unavailable target/toolchain in the change review;
+do not silently treat a partial build as an all-target pass.
+
 ## Ordered work
 
 ### 1. Documentation and contracts — `DONE`
