@@ -155,6 +155,32 @@ Exit criteria: the resident driver does not rely on large caller-stack codec
 buffers or mutable process-global DiskDevice request state, and tests
 demonstrate isolation between at least two independent client contexts.
 
+### 7a. Standalone Jeff handoff — `IN REVIEW / REQUIRED BEFORE STAGE 8`
+
+The driver and library must be consumable as sibling git submodules without
+the FujiNet NIO workspace scripts or environment setup.
+
+- [x] Expose and document the `fujinet-nio-lib` Amiga application and resident
+      driver build targets, prerequisites, and artifacts.
+- [x] Document the sibling-submodule layout and `LIB_ROOT` override supported
+      by `fujinet-nio-driver`.
+- [x] Document independent Amiga driver build, host tests, installation,
+      MountList configuration, and the initial mount sequence.
+- [x] Record the compatible driver/library revisions and current limitations.
+- [x] Validate the default sibling build using only an explicit Amiga
+      toolchain `PATH`, without sourcing workspace scripts.
+- [x] Validate a non-sibling library location through `LIB_ROOT`.
+
+Validation (2026-08-10): both the default sibling layout and an explicit
+absolute `LIB_ROOT` completed `make -B amiga` with a minimal system plus Amiga
+toolchain `PATH`. The builds ran the portable driver contract and library-link
+tests, rebuilt the resident Amiga library, and linked `fujinet-disk.device`
+and `fujinet-mount` without workspace scripts.
+
+Exit criteria: a consumer can add both repositories as git submodules, build
+the resident device and mount utility, install the documented files, and mount
+the read-only standard ADF profile without relying on workspace tooling.
+
 ### 8. Write, cache, flush, and media-change policy — `TODO`
 
 - [ ] Define cache ownership and dirty-state behavior.
