@@ -5,12 +5,17 @@ C:fujinet-mount host:/standard.adf >DH0:disk-mount.result
 C:Echo "MOUNT TOOL RC=$RC" >DH0:disk-mount-rc.result
 C:Mount DN0: FROM DEVS:DN0
 C:Echo "DOS MOUNT RC=$RC" >DH0:disk-dos-mount.result
+C:Run >NIL: C:fujinet-mount --read 0 DH0:disk-read-a.result
+C:Run >NIL: C:fujinet-mount --read 880 DH0:disk-read-b.result
+C:Wait 2 SECS
 C:Dir DN0: >DH0:disk-dir.result
 C:Echo "DIR RC=$RC" >DH0:disk-dir-rc.result
 C:Type DN0:KNOWN.TXT >DH0:disk-type.result
 C:Type DH0:disk-load.result
 C:Type DH0:disk-mount.result
 C:Type DH0:disk-dos-mount.result
+C:Type DH0:disk-read-a.result
+C:Type DH0:disk-read-b.result
 C:Type DH0:disk-dir.result
 C:Type DH0:disk-dir-rc.result
 C:Type DH0:disk-type.result

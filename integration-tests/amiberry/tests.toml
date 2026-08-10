@@ -36,6 +36,8 @@ results = [
   "disk-mount.result",
   "disk-mount-rc.result",
   "disk-dos-mount.result",
+  "disk-read-a.result",
+  "disk-read-b.result",
   "disk-dir.result",
   "disk-dir-rc.result",
   "disk-type.result",

@@ -120,7 +120,7 @@ Amiga application and MS-DOS builds keep their local-buffer policy.
 Exit criteria: all read-only operations pass against the agreed ADF profile,
 with documented behavior for malformed responses and media errors.
 
-### 7. Reentrant resident-driver client state — `TODO / REQUIRED BEFORE STAGE 8`
+### 7. Reentrant resident-driver client state — `IN REVIEW / REQUIRED BEFORE STAGE 8`
 
 Stage 6 exposed a concrete conflict rather than a theoretical architecture
 choice. Function-local 1 KiB DiskDevice codec buffers overflow caller-owned
@@ -128,26 +128,27 @@ AmigaDOS filesystem task stacks. Moving those buffers to static storage avoids
 the stack failure but makes the resident driver non-reentrant, while the
 common raw transport and parser contexts are already singleton state.
 
-The current `FN_DISK_STATIC_BUFFERS` Amiga-driver build policy is therefore a
-temporary Stage 6 safety measure, not the final driver architecture.
+The temporary `FN_DISK_STATIC_BUFFERS` policy has now been replaced by an
+explicit driver-owned context. The full native concurrent-caller and
+regression runs pass.
 
-- [ ] Define an explicit client/context object for the non-cc65 DiskDevice raw,
+- [x] Define an explicit client/context object for the non-cc65 DiskDevice raw,
       transport, parser, request, response, and codec scratch state.
-- [ ] Make each resident driver unit own its context and scratch storage, so
+- [x] Make each resident driver unit own its context and scratch storage, so
       filesystem callers do not supply the stack space and separate units or
       requests do not share mutable codec state.
-- [ ] Route the Amiga driver adapter through the context-based API without
+- [x] Route the Amiga driver adapter through the context-based API without
       changing the existing public API used by 8-bit clients.
-- [ ] Define and document request serialization and ownership at the Exec
+- [x] Define and document request serialization and ownership at the Exec
       device boundary, including whether one unit may queue or overlap I/O.
-- [ ] Add a named host test that interleaves two independent client contexts
+- [x] Add a named host test that interleaves two independent client contexts
       and proves request, response, parser, and codec state cannot cross-talk.
-- [ ] Add an Amiga driver test exercising requests from distinct caller tasks
+- [x] Add an Amiga driver test exercising requests from distinct caller tasks
       or an equivalent native harness that demonstrates the ownership rule.
-- [ ] Remove `FN_DISK_STATIC_BUFFERS` from the Amiga-driver build after the
+- [x] Remove `FN_DISK_STATIC_BUFFERS` from the Amiga-driver build after the
       driver-owned context replaces both large stack locals and shared static
       buffers.
-- [ ] Retain all-target `make check`, native driver builds, and the standard
+- [x] Retain all-target `make check`, native driver builds, and the standard
       ADF Amiberry acceptance test as regression gates.
 
 Exit criteria: the resident driver does not rely on large caller-stack codec
