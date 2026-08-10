@@ -31,6 +31,19 @@ class PaletteTests(unittest.TestCase):
             physical = (command & 7) ^ 7
             self.assertEqual(physical, expected_physical[logical])
 
+    def test_map_source_levels_four_greys(self) -> None:
+        from PIL import Image
+        from tools.bbc_image.dither import map_source_levels
+
+        image = Image.new("RGB", (4, 1))
+        image.putdata([
+            (0, 0, 0),
+            (85, 85, 85),
+            (170, 170, 170),
+            (255, 255, 255),
+        ])
+
+        self.assertEqual(map_source_levels(image, 4), [0, 1, 2, 3])
 
 if __name__ == "__main__":
     unittest.main()
