@@ -166,31 +166,11 @@ class Build:
         self.runner.run("pdcurses-msdos", [self.ctx.root / "scripts" / "build-pdcurses-msdos.sh"])
 
     def msdos_driver(self) -> None:
-        self.run_make("msdos-driver-clean", "FUJINET_NIO_MSDOS", "clean")
-        self.run_make("msdos-driver-build", "FUJINET_NIO_MSDOS")
+        self.run_make("msdos-driver-clean", "FUJINET_NIO_DRIVER", "clean")
+        self.run_make("msdos-driver-build", "FUJINET_NIO_DRIVER")
 
     def msdos_tests(self) -> None:
-        self.run_make("msdos-tests", "FUJINET_NIO_MSDOS", "tests")
-
-    def msdos_driver_legacy(self) -> None:
-        repo = self.p("FUJINET_MSDOS") / "sys"
-        self.runner.require_dir(repo)
-        env = {"FUJINET_TRANSPORT": "NIO"}
-        self.runner.run("msdos-driver-legacy-clean", ["make", "clean"], cwd=repo, extra_env=env)
-        self.runner.run("msdos-driver-legacy-build", ["make"], cwd=repo, extra_env=env)
-        self.msdos_niodump()
-
-    def msdos_tests_legacy(self) -> None:
-        repo = self.p("FUJINET_MSDOS") / "tests"
-        self.runner.require_dir(repo)
-        self.runner.run("msdos-tests-legacy", ["make", "test"], cwd=repo)
-
-    def msdos_niodump(self) -> None:
-        repo = self.p("FUJINET_MSDOS") / "niodump"
-        if not (repo / "makefile").exists() and not (repo / "Makefile").exists():
-            print(f"Skipping msdos-niodump: {repo} not present on this branch")
-            return
-        self.runner.run("msdos-niodump", ["make"], cwd=repo)
+        self.run_make("msdos-tests", "FUJINET_NIO_DRIVER", "tests")
 
     def apps_msdos(self) -> None:
         self.pdcurses_msdos()
@@ -605,8 +585,10 @@ class Build:
                 "NIO_APPS_MSDOS_BIN": self.ctx.env["NIO_APPS_MSDOS_BIN"],
                 "NIO_CORE_APPS_MSDOS_BIN": self.ctx.env["NIO_CORE_APPS_MSDOS_BIN"],
                 "NIO_CONFIG_MSDOS_BIN": self.ctx.env["NIO_CONFIG_MSDOS_BIN"],
-                "FUJINET_NIO_MSDOS": self.ctx.env["FUJINET_NIO_MSDOS"],
-                "FUJINET_MSDOS": self.ctx.env["FUJINET_MSDOS"],
+                "FUJINET_NIO_DRIVER": self.ctx.env["FUJINET_NIO_DRIVER"],
+                # build-nio-qcow uses this directory to locate the generated
+                # driver.
+                "FUJINET_NIO_DRIVER": self.ctx.env["FUJINET_NIO_DRIVER"],
                 "BOUNCE_WORLD_CLIENT_NIO": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
                 "BOUNCE_WORLD": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
             },
@@ -642,7 +624,7 @@ class Build:
                 default_qemu_msdos_apps_manifest(self.ctx),
             ],
             extra_env={
-                "FUJINET_MSDOS": self.ctx.env["FUJINET_MSDOS"],
+                "FUJINET_NIO_DRIVER": self.ctx.env["FUJINET_NIO_DRIVER"],
                 "FUJINET_NIO_LIB": self.ctx.env["FUJINET_NIO_LIB"],
                 "NIO_APPS": self.ctx.env["NIO_APPS"],
                 "NIO_APPS_MSDOS_BIN": self.ctx.env["NIO_APPS_MSDOS_BIN"],
@@ -650,7 +632,7 @@ class Build:
                 "NIO_CONFIG_MSDOS_BIN": self.ctx.env["NIO_CONFIG_MSDOS_BIN"],
                 "BOUNCE_WORLD_CLIENT_NIO": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
                 "BOUNCE_WORLD": self.ctx.env["BOUNCE_WORLD_CLIENT_NIO"],
-                "DRIVER": self.ctx.env.get("DRIVER", str(self.p("FUJINET_NIO_MSDOS") / "build" / "dos" / "fujinet.sys")),
+                "DRIVER": self.ctx.env.get("DRIVER", str(self.p("FUJINET_NIO_DRIVER") / "build" / "dos" / "fujinet.sys")),
             },
         )
 
@@ -809,9 +791,6 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("pdcurses-msdos", "Fetch/build PDCurses for Open Watcom MS-DOS", Build.pdcurses_msdos),
         t("msdos-driver", "Build fujinet-nio-driver FUJINET.SYS", Build.msdos_driver),
         t("msdos-tests", "Run fujinet-nio-driver host unit tests", Build.msdos_tests),
-        t("msdos-driver-legacy", "Build legacy fujinet-msdos FUJINET.SYS with NIO transport", Build.msdos_driver_legacy),
-        t("msdos-tests-legacy", "Run legacy fujinet-msdos host unit tests", Build.msdos_tests_legacy),
-        t("msdos-niodump", "Build legacy NIODUMP.EXE diagnostic utility", Build.msdos_niodump),
         t("apps-all", "Build all nio-apps targets", Build.apps_all),
         t("apps-clean", "Clean nio-apps, nio-core-apps, and nio-config builds", Build.clean_apps_all),
         t("apps-msdos", "Build nio-apps MS-DOS test apps", Build.apps_msdos),

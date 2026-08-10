@@ -13,10 +13,6 @@
 [submodule "repos/fn-rom"]
 	path = repos/fn-rom
 	url = git@github.com:markjfisher/fn-rom.git
-[submodule "repos/fujinet-msdos"]
-	path = repos/fujinet-msdos
-	url = git@github.com:markjfisher/fujinet-msdos.git
-	branch = feature/nio-sys
 [submodule "repos/bounce-world-client-nio"]
 	path = repos/bounce-world-client-nio
 	url = git@github.com:markjfisher/bounce-world-client-nio.git

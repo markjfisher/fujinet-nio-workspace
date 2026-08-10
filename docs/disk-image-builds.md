@@ -293,7 +293,7 @@ The manifest contains:
 
 ```yaml
 apps:
-  - src: ${FUJINET_NIO_MSDOS}/build/dos/fujinet.sys
+  - src: ${FUJINET_NIO_DRIVER}/build/dos/fujinet.sys
     name: FUJINET.SYS
   - src: ${NIO_CONFIG_MSDOS_BIN}/config-nio.exe
     name: CONFNIO.EXE

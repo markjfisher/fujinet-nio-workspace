@@ -21,7 +21,6 @@ for repo in \
   "$NIO_CORE_APPS" \
   "$NIO_CONFIG" \
   "$FUJINET_QEMU_MSDOS" \
-  "$FUJINET_MSDOS" \
   "$FN_ROM" \
   "$BOUNCE_WORLD" \
   "$FUJINET_EMULATOR_BRIDGE" \

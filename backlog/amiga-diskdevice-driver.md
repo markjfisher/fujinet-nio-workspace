@@ -53,17 +53,42 @@ do not silently treat a partial build as an all-target pass.
 - [x] Add a public API library-link test.
 - [x] Validate Atari, Linux, and the host test suite where toolchains are available.
 
-### 4. Amiga driver skeleton — `TODO`
+### 4. MS-DOS driver repository relocation — `IN REVIEW`
 
-- [ ] Create the Amiga driver skeleton.
+- [x] Move the existing MS-DOS implementation, headers, and tests under
+      `repos/fujinet-nio-driver/msdos/`.
+- [x] Retain root `make`, `make tests`, and `make clean` entry points.
+- [x] Preserve the generated artifact at `build/dos/fujinet.sys`.
+- [x] Update workspace build, QEMU image, 86Box, and workflow documentation
+      consumers to use the renamed driver repository.
+- [x] Remove the obsolete `fujinet-msdos` workspace submodule and its legacy
+      build/FTP targets.
+- [x] Validate `msdos-driver`, `msdos-tests`, `qemu-msdos-image`, and the full
+      `msdos` workflow.
+
+Exit criteria: the relocation is reviewed and committed with the documented
+MS-DOS driver artifact and integrated workflow intact.
+
+### 5. Amiga driver skeleton — `TODO`
+
+Library-side prerequisite:
+
+- [x] Replace the duplicate Amiga SLIP path with the shared channel/session interface.
+
+Driver-side work:
+
+- [ ] Create the Amiga driver/channel skeleton under
+      `repos/fujinet-nio-driver/amiga/` after the MS-DOS relocation is reviewed.
 - [ ] Map one read-only DiskDevice unit to slot 1.
-- [ ] Connect Amiga serial transport to the shared session contract.
+- [ ] Connect the driver to the shared session contract.
 - [ ] Preserve the Amiga-specific toolchain and memory model where required.
+
+The native device implementation and Amiga toolchain build are still pending.
 
 Exit criteria: the driver builds with the Amiga toolchain and can issue a
 well-formed read-only Mount request for slot 1.
 
-### 5. Read-only standard ADF validation — `TODO`
+### 6. Read-only standard ADF validation — `TODO`
 
 - [ ] Validate Mount using the standard ADF profile.
 - [ ] Validate Info and geometry.
@@ -75,7 +100,7 @@ well-formed read-only Mount request for slot 1.
 Exit criteria: all read-only operations pass against the agreed ADF profile,
 with documented behavior for malformed responses and media errors.
 
-### 6. Raw-state architecture gate — `TODO / REQUIRED BEFORE STAGE 7`
+### 7. Raw-state architecture gate — `TODO / REQUIRED BEFORE STAGE 8`
 
 The current common client uses singleton raw request/response buffers and
 transport/parse contexts. Before writes or hot swap are implemented, choose
@@ -88,7 +113,7 @@ one of these outcomes and document it:
 This gate is not optional housekeeping. Stage 7 cannot begin until the choice
 has been reviewed.
 
-### 7. Write, cache, flush, and media-change policy — `TODO`
+### 8. Write, cache, flush, and media-change policy — `TODO`
 
 - [ ] Define cache ownership and dirty-state behavior.
 - [ ] Define flush ordering and failure semantics.
@@ -99,7 +124,7 @@ has been reviewed.
 Exit criteria: write and media-change behavior is contract-defined, tested,
 and does not rely on undocumented singleton state.
 
-### 8. Faster backends — `TODO`
+### 9. Faster backends — `TODO`
 
 - [ ] Develop the Pico/native packet backend.
 - [ ] Develop faster-channel backends behind the same packet/session contract.

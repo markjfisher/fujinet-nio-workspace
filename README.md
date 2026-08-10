@@ -15,7 +15,7 @@ fujinet-nio-workspace/
     fujinet-nio-lib/
     nio-apps/
     fujinet-qemu-msdos/
-    fujinet-msdos/
+    fujinet-nio-driver/
     fn-rom/
     bounce-world-client-nio/
   scripts/
@@ -72,7 +72,7 @@ FUJINET_NIO=repos/fujinet-nio
 FUJINET_NIO_LIB=repos/fujinet-nio-lib
 NIO_APPS=repos/nio-apps
 FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
-FUJINET_MSDOS=repos/fujinet-msdos
+FUJINET_NIO_DRIVER=repos/fujinet-nio-driver
 FN_ROM=repos/fn-rom
 BOUNCE_WORLD_CLIENT_NIO=repos/bounce-world-client-nio
 ```
@@ -83,7 +83,7 @@ Override any of them in `local/config.env`:
 export FUJINET_NIO=/home/markf/dev/nio/repos/fujinet-nio
 export FUJINET_NIO_LIB=/home/markf/dev/nio/repos/fujinet-nio-lib
 export NIO_APPS=/home/markf/dev/nio/repos/nio-apps
-export FUJINET_MSDOS=/home/markf/dev/msdos/fujinet-msdos
+export FUJINET_NIO_DRIVER=/home/markf/dev/nio/repos/fujinet-nio-driver
 ```
 
 `env.sh` also sources `~/.local/bin/add_watcom.sh` when present, so Open Watcom

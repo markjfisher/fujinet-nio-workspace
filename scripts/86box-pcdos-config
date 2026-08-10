@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 DEFAULT_IMAGE="/home/markf/vm/dosjr/pcdos210-test/floppies/pcdos210-fujinet-test.img"
 IMAGE="${DOSJR_BOOT_IMG:-$DEFAULT_IMAGE}"
-DEFAULT_SYS="$WORKSPACE_DIR/repos/fujinet-msdos/sys/fujinet.sys"
+DEFAULT_SYS="$WORKSPACE_DIR/repos/fujinet-nio-driver/build/dos/fujinet.sys"
 
 usage() {
   cat <<EOF
@@ -162,7 +162,7 @@ cmd_push_sys() {
 
   if [ "$build" -eq 1 ]; then
     # Build the legacy firmware transport. Do not pass FUJINET_TRANSPORT=NIO here.
-    (cd "$WORKSPACE_DIR/repos/fujinet-msdos/sys" && make clean && make)
+    (cd "$WORKSPACE_DIR/repos/fujinet-nio-driver" && make clean && make)
   fi
 
   if [ ! -f "$sys" ]; then
