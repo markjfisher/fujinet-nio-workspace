@@ -69,7 +69,7 @@ do not silently treat a partial build as an all-target pass.
 Exit criteria: the relocation is reviewed and committed with the documented
 MS-DOS driver artifact and integrated workflow intact.
 
-### 5. Amiga driver skeleton — `TODO`
+### 5. Amiga driver skeleton — `IN REVIEW`
 
 Library-side prerequisite:
 
@@ -77,13 +77,21 @@ Library-side prerequisite:
 
 Driver-side work:
 
-- [ ] Create the Amiga driver/channel skeleton under
+- [x] Create the Amiga driver/channel skeleton under
       `repos/fujinet-nio-driver/amiga/` after the MS-DOS relocation is reviewed.
-- [ ] Map one read-only DiskDevice unit to slot 1.
-- [ ] Connect the driver to the shared session contract.
-- [ ] Preserve the Amiga-specific toolchain and memory model where required.
+- [x] Map one read-only DiskDevice unit to slot 1.
+- [x] Connect the driver to the shared session contract through the typed
+      `fujinet-nio-lib` DiskDevice API and its Amiga RS-232 transport.
+- [x] Add named host contract tests and link the production adapter against a
+      built `fujinet-nio-lib` archive.
+- [x] Complete the native build verification with the Amiga-specific toolchain
+      and memory model.
 
-The native device implementation and Amiga toolchain build are still pending.
+The native Exec device entry points and build target are implemented. The
+resident device links against a dedicated `fujinet-nio-amiga-driver.a` variant
+that uses explicit device lifecycle instead of application `atexit()` cleanup.
+The native 68000 build, portable policy tests, production-adapter archive-link
+test, existing MS-DOS tests, and complete library `make check` pass.
 
 Exit criteria: the driver builds with the Amiga toolchain and can issue a
 well-formed read-only Mount request for slot 1.
