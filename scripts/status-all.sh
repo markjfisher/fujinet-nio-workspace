@@ -16,6 +16,7 @@ echo
 for repo in \
   "$FUJINET_NIO" \
   "$FUJINET_NIO_LIB" \
+  "$FUJINET_NIO_DRIVER" \
   "$NIO_APPS" \
   "$NIO_CORE_APPS" \
   "$NIO_CONFIG" \
