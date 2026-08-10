@@ -21,3 +21,22 @@ results = [
   "cli-fapp-list.result",
   "cli-fapp-delete.result",
 ]
+
+[[test]]
+name = "diskdevice-adf"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 75
+activity_timeout = 60
+screenshot_quiet = 10
+startup = "startup/diskdevice-adf.sequence"
+results = [
+  "disk-load.result",
+  "disk-mount.result",
+  "disk-mount-rc.result",
+  "disk-dos-mount.result",
+  "disk-dir.result",
+  "disk-dir-rc.result",
+  "disk-type.result",
+]

@@ -64,6 +64,19 @@ def build_nio_binary(environment: dict[str, str]) -> None:
         env=environment,
         check=True,
     )
+def create_standard_adf(environment: dict[str, str], image: Path) -> None:
+    image.unlink(missing_ok=True)
+    marker = image.parent / "KNOWN.TXT"
+    marker.write_text("FUJINET ADF READ PASSED\n", encoding="ascii")
+    subprocess.run(
+        [*xdf_command(environment), str(image), "create", "+", "format", "NIOADF",
+         "+", "boot", "install", "+", "write", str(marker), "KNOWN.TXT"],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+    )
+    if image.stat().st_size != 1760 * 512:
+        raise AssertionError("deterministic ADF is not standard 880 KiB geometry")
 
 
 def pytest_addoption(parser):
@@ -118,6 +131,16 @@ def run_amiga_case(amiga_environment, amiga_cases):
 
         run_dir = BUILD_DIR / name
         run_dir.mkdir(parents=True, exist_ok=True)
+        if case.get("driver"):
+            subprocess.run(
+                ["make", "amiga"],
+                cwd=ROOT / "repos/fujinet-nio-driver",
+                env=amiga_environment,
+                check=True,
+            )
+            host_root = run_dir / "fujinet-data"
+            host_root.mkdir(parents=True, exist_ok=True)
+            create_standard_adf(amiga_environment, host_root / "standard.adf")
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
         command = [
@@ -131,6 +154,13 @@ def run_amiga_case(amiga_environment, amiga_cases):
             "--no-workbench",
             "--output", image,
         ]
+        if case.get("driver"):
+            driver_root = ROOT / "repos/fujinet-nio-driver"
+            command.extend([
+                "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
+                "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
+                "--disk-mountlist", driver_root / "amiga/config/DN0",
+            ])
         subprocess.run(command, cwd=ROOT, env=amiga_environment, check=True)
 
         test_env = amiga_environment.copy()
@@ -140,9 +170,14 @@ def run_amiga_case(amiga_environment, amiga_cases):
         case_index = list(amiga_cases).index(name)
         test_env["FUJINET_NIO_PORT"] = str(65510 + case_index)
         test_env["AMIBERRY_PORT"] = str(23470 + case_index)
+        if "screenshot_quiet" in case:
+            test_env["AMIGA_E2E_SCREENSHOT_QUIET"] = str(case["screenshot_quiet"])
+        if "activity_timeout" in case:
+            test_env["AMIGA_E2E_ACTIVITY_TIMEOUT"] = str(case["activity_timeout"])
+        runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
         runner = subprocess.Popen(
             [str(ROOT / "scripts/run-amiberry-nio"), "--tcp", "--disk", str(image),
-             "--timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")],
+             "--timeout", runner_timeout],
             cwd=ROOT,
             env=test_env,
         )
@@ -160,7 +195,9 @@ def run_amiga_case(amiga_environment, amiga_cases):
                 # framebuffer now contains useful evidence without loading
                 # Workbench or imposing a long fixed delay.
                 nio_log = run_dir / "fujinet-nio.log"
-                activity_deadline = time.monotonic() + 15
+                activity_deadline = time.monotonic() + float(
+                    test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "15")
+                )
                 saw_activity = False
                 previous = ""
                 quiet_since = None
@@ -170,7 +207,9 @@ def run_amiga_case(amiga_environment, amiga_cases):
                         saw_activity = True
                         if current == previous:
                             quiet_since = quiet_since or time.monotonic()
-                            if time.monotonic() - quiet_since >= float(os.environ.get("AMIGA_E2E_SCREENSHOT_QUIET", "0.5")):
+                            if time.monotonic() - quiet_since >= float(
+                                test_env.get("AMIGA_E2E_SCREENSHOT_QUIET", "0.5")
+                            ):
                                 break
                         else:
                             quiet_since = None

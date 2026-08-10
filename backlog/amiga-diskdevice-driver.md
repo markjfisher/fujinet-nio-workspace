@@ -96,30 +96,63 @@ test, existing MS-DOS tests, and complete library `make check` pass.
 Exit criteria: the driver builds with the Amiga toolchain and can issue a
 well-formed read-only Mount request for slot 1.
 
-### 6. Read-only standard ADF validation — `TODO`
+### 6. Read-only standard ADF validation — `IN REVIEW`
 
-- [ ] Validate Mount using the standard ADF profile.
-- [ ] Validate Info and geometry.
-- [ ] Validate block/sector reads.
-- [ ] Validate Dir.
-- [ ] Validate Type.
-- [ ] Add or retain deterministic protocol vectors and driver-side tests.
+- [x] Validate Mount using the standard ADF profile.
+- [x] Validate Info and geometry.
+- [x] Validate block/sector reads.
+- [x] Validate Dir.
+- [x] Validate Type.
+- [x] Add or retain deterministic protocol vectors and driver-side tests.
+- [ ] Make the native Amiga serial receive path honor the session timeout when
+      a peer remains silent; its current fallback performs a blocking one-byte
+      `serial.device` read. Shared session malformed/timeout vectors are
+      covered, but this hardware-channel deadline still needs implementation
+      and native validation.
+
+The Amiberry acceptance test creates a deterministic 880 KiB ADF containing
+`KNOWN.TXT`, mounts it through the native device, and checks both `Dir` and
+`Type` output. During integration, filesystem task stacks exposed the 1 KiB
+stack-local DiskDevice codec reply buffer. The dedicated resident-driver
+library variant now explicitly uses synchronous static codec storage; normal
+Amiga application and MS-DOS builds keep their local-buffer policy.
 
 Exit criteria: all read-only operations pass against the agreed ADF profile,
 with documented behavior for malformed responses and media errors.
 
-### 7. Raw-state architecture gate — `TODO / REQUIRED BEFORE STAGE 8`
+### 7. Reentrant resident-driver client state — `TODO / REQUIRED BEFORE STAGE 8`
 
-The current common client uses singleton raw request/response buffers and
-transport/parse contexts. Before writes or hot swap are implemented, choose
-one of these outcomes and document it:
+Stage 6 exposed a concrete conflict rather than a theoretical architecture
+choice. Function-local 1 KiB DiskDevice codec buffers overflow caller-owned
+AmigaDOS filesystem task stacks. Moving those buffers to static storage avoids
+the stack failure but makes the resident driver non-reentrant, while the
+common raw transport and parser contexts are already singleton state.
 
-- [ ] Refactor the non-cc65 path to an explicit client/context model; or
-- [ ] Explicitly accept and document a single-client/single-request invariant,
-      including its implications for Amiga units and future concurrency.
+The current `FN_DISK_STATIC_BUFFERS` Amiga-driver build policy is therefore a
+temporary Stage 6 safety measure, not the final driver architecture.
 
-This gate is not optional housekeeping. Stage 7 cannot begin until the choice
-has been reviewed.
+- [ ] Define an explicit client/context object for the non-cc65 DiskDevice raw,
+      transport, parser, request, response, and codec scratch state.
+- [ ] Make each resident driver unit own its context and scratch storage, so
+      filesystem callers do not supply the stack space and separate units or
+      requests do not share mutable codec state.
+- [ ] Route the Amiga driver adapter through the context-based API without
+      changing the existing public API used by 8-bit clients.
+- [ ] Define and document request serialization and ownership at the Exec
+      device boundary, including whether one unit may queue or overlap I/O.
+- [ ] Add a named host test that interleaves two independent client contexts
+      and proves request, response, parser, and codec state cannot cross-talk.
+- [ ] Add an Amiga driver test exercising requests from distinct caller tasks
+      or an equivalent native harness that demonstrates the ownership rule.
+- [ ] Remove `FN_DISK_STATIC_BUFFERS` from the Amiga-driver build after the
+      driver-owned context replaces both large stack locals and shared static
+      buffers.
+- [ ] Retain all-target `make check`, native driver builds, and the standard
+      ADF Amiberry acceptance test as regression gates.
+
+Exit criteria: the resident driver does not rely on large caller-stack codec
+buffers or mutable process-global DiskDevice request state, and tests
+demonstrate isolation between at least two independent client contexts.
 
 ### 8. Write, cache, flush, and media-change policy — `TODO`
 
