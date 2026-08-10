@@ -282,7 +282,7 @@ Expected output:
 build/images/msdos-boot-config.img
 ```
 
-The target builds `fujinet-nio-msdos` and `nio-apps` first, then stages this
+The target builds `fujinet-nio-driver` and `nio-apps` first, then stages this
 workspace manifest:
 
 ```text
@@ -312,7 +312,7 @@ apps:
 ```
 
 That target should be workspace-owned because it combines `FUJINET.SYS` from
-`fujinet-nio-msdos` with utilities from `nio-apps`.
+`fujinet-nio-driver` with utilities from `nio-apps`.
 
 ## Cleanup Plan
 

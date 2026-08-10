@@ -35,7 +35,7 @@ From the workspace root:
 This target:
 
 - ensures `fujinet-nio` `fujibus-tcp-debug` exists
-- builds `fujinet-nio-msdos/build/dos/fujinet.sys`
+- builds `fujinet-nio-driver/build/dos/fujinet.sys`
 - builds PDCurses for Open Watcom/MS-DOS
 - builds `nio-apps` MS-DOS applications, including `config-nio`
 - builds and installs the `nio-apps` boot disks into `fujinet-nio/distfiles`

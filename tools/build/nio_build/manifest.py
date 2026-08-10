@@ -82,7 +82,7 @@ def write_manifest(ctx: BuildContext) -> None:
         ("nio-core-apps", ctx.path("NIO_CORE_APPS")),
         ("nio-config", ctx.path("NIO_CONFIG")),
         ("fujinet-qemu-msdos", ctx.path("FUJINET_QEMU_MSDOS")),
-        ("fujinet-nio-msdos", ctx.path("FUJINET_NIO_MSDOS")),
+        ("fujinet-nio-driver", ctx.path("FUJINET_NIO_DRIVER")),
         ("fujinet-msdos", ctx.path("FUJINET_MSDOS")),
         ("fn-rom", ctx.path("FN_ROM")),
         ("cc65-clib", ctx.path("CC65_CLIB")),
@@ -120,4 +120,3 @@ def write_manifest(ctx: BuildContext) -> None:
     out = ctx.build_dir / "manifest.txt"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {out}")
-
