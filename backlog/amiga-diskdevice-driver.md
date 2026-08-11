@@ -253,6 +253,141 @@ General inferred geometry and consolidation onto the standard
 `fujinet-mount` program is transitional and must not become the permanent
 parallel user interface.
 
+### 9. Stage 8 hardening and Phase 2 foundation — `IN PROGRESS / HIGH PRIORITY`
+
+The Stage 8 happy path is working, but the clean review of the last five
+`fujinet-nio-driver` commits found failure-path, lifecycle, and test-boundary
+gaps that must be closed before Phase 2 builds on this device. The recent
+intermittent Guru (`Error 8000 0004`) was reproduced as a caller-stack-risk
+area and fixed by moving the 768-byte catalog URI scratch buffer from
+`BeginIO()` to the resident device base. That fix passed four focused
+Amiberry runs and the complete `amiga-tests` gate, but it does not by itself
+prove the rest of the Stage 8 contract.
+
+#### Evidence and tickets
+
+- [ ] **Replacement state consistency:**
+      `amiga/common/fujinet_disk_driver.c:109-147` retains local media state
+      when NIO has already removed the old image and the replacement then
+      fails to open, probe, or validate. `fujinet-nio/src/lib/disk/disk_service.cpp:78-181`
+      confirms that replacement removes the old image after a successful flush
+      before attempting the new image. Add an explicit state transition and
+      tests for failed replacement after remote removal, invalid geometry, and
+      failed follow-up Info.
+- [ ] **Eject change acknowledgement:** `fujinet_disk_eject()` increments the
+      local change count but never calls `clear_changed()` or sets
+      `change_ack_pending`, unlike Mount. NIO can therefore remain marked
+      changed indefinitely after eject. Add success, failure, and retry tests.
+- [ ] **Mapping persistence failure semantics:**
+      `amiga/disk.device/fujinet_disk_device.c:369-389` mounts before writing
+      `config-nio/mappings`, while `:489-496` ejects before clearing it. A
+      failed AppStore write can report an error while media and persistent
+      mapping disagree. Define rollback or authoritative-state semantics,
+      implement them, and inject read/write failures in host/native tests.
+- [ ] **Change-registration ownership and cleanup:** `TD_ADDCHANGEINT`
+      retains a raw caller `IORequest *` in resident memory. `device_close()`
+      and expunge do not clean registrations, so a later transition can call
+      `Cause()` through a freed request. Define caller/device ownership,
+      cleanup on close/abort/expunge, and test task/request lifetime changes,
+      repeated notifications, multiple registrations, and removal.
+- [ ] **Bound direct URI requests:** private Mount commands consume
+      `io_Data` as an unchecked NUL-terminated string and ignore `io_Length`.
+      `fujinet-nio-lib/src/common/fn_disk.c` subsequently calls `strlen()`.
+      Validate request length and termination, copy queued URI data into
+      device-owned storage, and test malformed and queued requests.
+- [ ] **Test the production queue:** the resident device duplicates the
+      portable `fujinet_io_queue_t` behavior with Exec `List` operations.
+      Existing queue tests therefore do not exercise production code. Use the
+      tested abstraction or add an integrated device harness covering
+      concurrent BeginIO, STOP/START, FIFO barriers, CMD_FLUSH, AbortIO, and
+      multi-unit draining.
+- [ ] **Test media notifications at the Exec boundary:** add tests for
+      `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
+      multiple registrations, per-unit registrations, and TD_REMOVE. Current
+      Amiberry tests only inspect status and successful workflow output.
+- [ ] **Expand Amiberry failure coverage:** add acceptance cases for failed
+      flush, failed replacement after removal, invalid replacement geometry,
+      failed mapping persistence, notification lifecycle, STOP/START,
+      CMD_FLUSH, AbortIO, malformed URI requests, and transport reopen while
+      requests are queued. Assert the currently unasserted `--uri` unit-7
+      operation instead of merely waiting after it.
+- [ ] **Native serial deadline:**
+      `repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c:70-145`
+      ignores the shared session `timeout_ms` and blocks in a one-byte
+      `serial.device` read after an empty query. Implement a deadline-aware
+      native receive path and validate silent-peer timeout behavior on the
+      native Amiga build/harness.
+- [ ] **CLI contract:** usage advertises `--eject [DRIVE]`, while
+      `fujinet-mount.c` accepts only `--eject DRIVE`. Align documentation and
+      parser behavior and add a parser test.
+
+#### Stage 9 acceptance gates
+
+- [ ] No failed replacement leaves local and NIO media state divergent.
+- [ ] Mount, replacement, and eject media-change flags are acknowledged or
+      explicitly retained for retry with deterministic tests.
+- [ ] Persistent mappings have defined failure semantics and cannot silently
+      disagree with active media.
+- [ ] No resident notification registration can outlive its request safely;
+      close, abort, removal, and expunge ownership is documented and tested.
+- [ ] All asynchronous/queued device requests have bounded input lifetimes
+      and no large caller-stack scratch allocation.
+- [ ] Production queue and Exec device boundary have integrated host/native
+      coverage, not only standalone policy tests.
+- [ ] Native serial receive honors the shared timeout contract.
+- [ ] Focused Amiberry stability passes repeatedly, the complete `amiga-tests`
+      gate passes, `fujinet-nio` tests pass, and library changes pass sourced
+      `make check` with all configured targets.
+
+Exit criteria: Stage 8 behavior is failure-safe at the NIO, library, Exec
+device, and native transport boundaries; the tests demonstrate state,
+ownership, notification, queue, mapping, and timeout behavior; and Phase 2 can
+reuse the device without inheriting an undocumented lifecycle or rollback
+assumption.
+
+#### Stage 9 implementation log
+
+- [x] Make NIO replacement transactional through image preparation and
+      validation before committing removal of the old image. Added a host test
+      proving a missing replacement preserves the active image and flushed
+      state.
+- [x] Clear Amiga local media state after a post-mount validation/Info/flush
+      failure and acknowledge eject media changes, including retry coverage in
+      `test_fujinet_disk_driver`.
+- [x] Move direct URI input into resident device-owned storage and validate
+      `io_Length` plus NUL termination before queue processing.
+- [x] Remove change registrations when their request closes and discard all
+      retained registrations during expunge; integrated lifecycle tests remain
+      outstanding.
+- [x] Implement a timer-backed native Amiga serial one-byte receive deadline
+      that honors the shared session timeout. Native compilation and the
+      focused Amiberry workflow pass; a silent-peer native harness remains to
+      be added.
+- [x] Align `fujinet-mount --eject` parser behavior with its documented
+      optional-drive syntax.
+- [x] Stage catalog mapping bytes before the corresponding mount/eject and
+      restore the previous mapping when the media operation fails. Explicit
+      AppStore failure injection and crash/restart consistency tests remain
+      outstanding before this item can be considered complete.
+- [ ] Add an integrated resident-device harness for production Exec-list queue
+      behavior, request lifetime, notifications, AbortIO, STOP/START, and
+      CMD_FLUSH.
+- [ ] Add Amiberry failure-path cases for replacement, mapping persistence,
+      notifications, queue cancellation, malformed URI requests, transport
+      reopen, and assert the unit-7 direct URI operation.
+- [ ] Run repeated focused stability and complete `amiga-tests` validation
+      after all Stage 9 changes, then update this section with evidence and
+      close only the acceptance items actually demonstrated.
+
+Validation snapshot (2026-08-11): the transactional replacement test and
+Amiga driver policy tests pass; `fujinet-nio` passes 262 C++ tests plus 23
+Python tests; sourced `repos/fujinet-nio-lib make check` passes all configured
+targets and wire/context/link tests; the native Amiga driver builds; the full
+`scripts/build.sh amiga-tests` gate passes all three Amiberry cases; and two
+additional focused `diskdevice-adf` Amiberry repetitions pass. Stage 9 remains
+open because the Exec-boundary queue/notification harness, AppStore failure
+injection, and silent-peer native timeout harness are not yet present.
+
 ## Review points
 
 Stop for user review after stages 4, 5, and 6. Do not advance past the raw-
