@@ -301,8 +301,10 @@ prove the rest of the Stage 8 contract.
       needs concurrent BeginIO, FIFO barriers, AbortIO, and multi-unit draining.
 - [ ] **Test media notifications at the Exec boundary:** add tests for
       `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
-      multiple registrations, per-unit registrations, and TD_REMOVE. Current
-      Amiberry tests only inspect status and successful workflow output.
+      multiple registrations, per-unit registrations, and TD_REMOVE. Native
+      Amiberry now covers registration removal, registration AbortIO, and
+      deferred TD_REMOVE AbortIO; repeated Cause and multi-registration paths
+      remain open.
 - [ ] **Expand Amiberry failure coverage:** add acceptance cases for failed
       flush, failed replacement after removal, invalid replacement geometry,
       failed mapping persistence, notification lifecycle, STOP/START,
@@ -407,6 +409,12 @@ directly, with native queue-node allocation and cleanup. Added
 The disk Amiberry case asserts its pass marker, direct unit-7 mount, and failed
 replacement state preservation. Native asynchronous AbortIO and change
 notification lifetime tests remain the next boundary work.
+
+Follow-up (2026-08-11): extended the native boundary command with asynchronous
+`TD_ADDCHANGEINT` removal, registration `AbortIO`, and deferred `TD_REMOVE`
+`AbortIO`, each verified through `WaitIO()` and asserted by the disk Amiberry
+case. Concurrent FIFO cancellation and repeated/multiple media notification
+delivery remain open.
 
 ## Review points
 
