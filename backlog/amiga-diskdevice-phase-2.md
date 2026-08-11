@@ -45,6 +45,10 @@ progression are specified in the associated
 - [ ] Add tests proving the standard tools cannot bypass or desynchronise the
       resident driver's media state, change counter, protection state, flush,
       or replacement behavior.
+- [ ] Coordinate replacement with the existing AmigaDOS filesystem handler so
+      `FMOUNT` can retire the old volume and rescan the inserted one without a
+      `You MUST replace volume`/`Not a DOS disk` requester. Stage 8 proves the
+      safe baseline by dismounting and recreating the DNx handler.
 
 ## Media geometry
 

@@ -145,9 +145,12 @@ def run_amiga_case(amiga_environment, amiga_cases):
             create_standard_adf(amiga_environment, host_root / "standard.adf")
             create_standard_adf(amiga_environment, host_root / "second.adf",
                                 "SECOND.TXT", "FUJINET SECOND DRIVE PASSED\n")
+            create_standard_adf(amiga_environment, host_root / "writable.adf",
+                                "BASE.TXT", "FUJINET WRITABLE BASE\n")
             catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
             catalog_dir.mkdir(parents=True, exist_ok=True)
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
+            (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
         command = [

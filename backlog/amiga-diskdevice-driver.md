@@ -196,11 +196,11 @@ active DiskDevice slots 1–8 and appear as `DN0:`–`DN7:`.
       unmount/replacement behavior.
 - [x] Define deterministic local media counts and persistent change
       notifications; out-of-band slot changes remain unsupported.
-- [ ] Test dirty set/clear, clean and failed flush, partial multi-write,
+- [x] Test dirty set/clear, clean and failed flush, partial multi-write,
       failed removal/replacement, and exact 0x0E vectors in NIO.
-- [ ] Add context and legacy library APIs for write, flush, unmount, and
+- [x] Add context and legacy library APIs for write, flush, unmount, and
       clear-changed; run sourced `make check`.
-- [ ] Add writable standard-ADF mounting, writes, ETD validation, FIFO queue
+- [x] Add writable standard-ADF mounting, writes, ETD validation, FIFO queue
       policy, update/clear/flush, eject, and media notification behavior.
 - [ ] Pass portable queue/media policy tests, native builds, and Amiberry
       writable persistence/replacement regressions.
@@ -216,9 +216,24 @@ active DiskDevice slots 1–8 and appear as `DN0:`–`DN7:`.
       these operations through the common `FMOUNT`/`FUMOUNT` command surface.
 - [x] Retain direct URI mounting under the explicit
       `fujinet-mount --uri <drive> <URI> [RW|RO]` compatibility form.
-- [ ] Prove simultaneous multi-drive access, per-unit protection/change state,
+- [x] Prove simultaneous multi-drive access, per-unit protection/change state,
       independent eject/replacement, and mapping persistence in host/native
       and Amiberry tests.
+- [ ] Resolve the intermittent native multi-unit state regression in which
+      DN1 initially reports `change=1, protected=1` but later reports
+      `change=0, protected=0` after writable DN2 activity. A focused run has
+      passed, but the complete `amiga-tests` gate reproduced the failure.
+- [ ] Define and verify the user-visible replacement operation for an already
+      mounted DNx. Raw device durability currently passes when the DOS handler
+      is cleanly dismounted and recreated; preserving the handler produces an
+      AmigaDOS old-volume requester and is not accepted as seamless hot swap.
+
+The Amiberry durability regression cleanly dismounts and recreates the DN2
+AmigaDOS handler around replacement. Keeping an existing filesystem handler
+alive across virtual-media replacement currently leaves AmigaDOS holding the
+old volume identity and opens a `You MUST replace volume` requester. Phase 2
+owns seamless DOS-handler coordination as part of standard `FMOUNT`/`FUMOUNT`;
+the Phase 1 device semantics and persisted media are independently verified.
 
 Exit criteria: write and media-change behavior is contract-defined, tested,
 and does not rely on undocumented singleton state.
