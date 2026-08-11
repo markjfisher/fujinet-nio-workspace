@@ -161,9 +161,12 @@ The first tests cover Wi-Fi SET/GET/status/scan using the public
 exercises the application argument paths and persistence mechanism rather
 than only launching an executable.
 
-Every case leaves a guest-only IPC screenshot at
-`build/amiga-e2e-tests/<case>/amiberry-screen.png`, alongside the HDF and
-component logs. Protocol cases run in the Amiga boot CLI and do not load
+Every run creates a timestamped evidence tree at
+`test-evidence/amiberry-YYYYMMDD-HHMMSS/`. Each case leaves a guest-only IPC
+screenshot at `<run>/<case>/amiberry-screen.png`, alongside its HDF and
+component logs. Set `AMIGA_E2E_EVIDENCE_ROOT` to choose an explicit directory.
+These ignored artifacts are retained for manual review and cleanup. Protocol
+cases run in the Amiga boot CLI and do not load
 Workbench: their result files are displayed with `Type`, then the CLI
 framebuffer is captured through IPC. Amiberry is launched visibly (with
 `-G`, which skips its configuration GUI but does not hide the emulated
@@ -171,6 +174,14 @@ display), at maximum emulation speed (`-w -1`). The screenshot does not
 capture the host desktop. Adjust the short capture delay with
 `AMIGA_E2E_SCREENSHOT_DELAY` when a test's guest display changes later in
 boot.
+
+For cases whose mounted handlers continue producing protocol traffic, set a
+unique `completion_log` marker in `integration-tests/amiberry/tests.toml` and
+emit its successful NIO operation only after the guest has displayed all
+results. This triggers immediate capture and IPC shutdown; the configured
+timeout remains a safety bound rather than the normal completion mechanism.
+The harness clears stale IPC/evidence files before launch and fails if the
+new screenshot is not retained.
 
 See `integration-tests/amiberry/README.md` for the four-step process for
 adding another test. The test registry is

@@ -53,3 +53,7 @@ C:Type DH0:disk-status-0.result
 C:Type DH0:disk-status-1.result
 C:Type DH0:disk-status-2.result
 C:Type DH0:disk-status-3.result
+C:Wait 3 SECS
+C:Echo "E2E COMPLETE"
+C:fujinet-mount --uri 7 host:/standard.adf RO >NIL:
+C:Wait 10 SECS

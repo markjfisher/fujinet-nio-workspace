@@ -32,7 +32,15 @@ def request(path: Path, command: str, *arguments: str, timeout: float = 2.0) -> 
         connection.sendall(message.encode("utf-8"))
         response = bytearray()
         while b"\n" not in response:
-            chunk = connection.recv(4096)
+            try:
+                chunk = connection.recv(4096)
+            except socket.timeout:
+                # Amiberry's IPC replies are not newline-terminated in all
+                # released builds. A received chunk is a complete response
+                # when the peer leaves the connection open.
+                if response:
+                    break
+                raise
             if not chunk:
                 break
             response.extend(chunk)
@@ -49,7 +57,10 @@ def find_socket(explicit: str | None = None, timeout: float = 2.0) -> Path:
     while True:
         for path in candidates:
             try:
-                if request(path, "PING", timeout=min(0.25, max(0.05, timeout)) ).startswith("OK"):
+                # Amiberry versions have returned both OK and PONG for PING.
+                # A non-empty, non-ERROR response proves that this is a live
+                # IPC endpoint; request() already rejects ERROR responses.
+                if request(path, "PING", timeout=min(0.25, max(0.05, timeout))):
                     return path
             except OSError:
                 continue

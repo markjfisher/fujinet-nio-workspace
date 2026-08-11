@@ -1,4 +1,5 @@
 /build/
+/test-evidence/
 /fujinet-data/
 /local/config.env
 *.log

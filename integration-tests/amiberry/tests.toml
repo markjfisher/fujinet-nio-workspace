@@ -30,6 +30,8 @@ driver = true
 timeout = 75
 activity_timeout = 60
 screenshot_quiet = 10
+completion_log = "Mount request: slot=8 uri='host:/standard.adf'"
+screenshot_delay = 0.2
 startup = "startup/diskdevice-adf.sequence"
 results = [
   "disk-load.result",

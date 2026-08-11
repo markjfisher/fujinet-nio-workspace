@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import time
 import tomllib
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / "integration-tests" / "amiberry"
-BUILD_DIR = ROOT / "build" / "amiga-e2e-tests"
+DEFAULT_EVIDENCE_DIR = ROOT / "test-evidence"
 
 
 def xdf_command(environment: dict[str, str]) -> list[str]:
@@ -106,7 +107,6 @@ def amiga_environment(pytestconfig):
     if missing:
         pytest.skip("Amiga E2E prerequisites unavailable: " + ", ".join(missing))
 
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [str(ROOT / "scripts/build.sh"), "lib-amiga", "apps-amiga", "core-apps-amiga"],
         cwd=ROOT,
@@ -122,8 +122,20 @@ def amiga_cases():
     return load_cases()
 
 
+@pytest.fixture(scope="session")
+def amiga_evidence_root() -> Path:
+    configured = os.environ.get("AMIGA_E2E_EVIDENCE_ROOT")
+    if configured:
+        root = Path(configured).expanduser().resolve()
+    else:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        root = DEFAULT_EVIDENCE_DIR / f"amiberry-{stamp}"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 @pytest.fixture()
-def run_amiga_case(amiga_environment, amiga_cases):
+def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
     def run(name: str) -> dict[str, str]:
         case = amiga_cases[name]
         app_dir = ROOT / "repos" / ("nio-apps" if case["project"] == "apps" else "nio-core-apps") / "build" / "amiga" / "bin"
@@ -131,7 +143,7 @@ def run_amiga_case(amiga_environment, amiga_cases):
         if not app.is_file():
             raise AssertionError(f"Amiga test application was not built: {app}")
 
-        run_dir = BUILD_DIR / name
+        run_dir = amiga_evidence_root / name
         run_dir.mkdir(parents=True, exist_ok=True)
         if case.get("driver"):
             subprocess.run(
@@ -141,6 +153,7 @@ def run_amiga_case(amiga_environment, amiga_cases):
                 check=True,
             )
             host_root = run_dir / "fujinet-data"
+            shutil.rmtree(host_root, ignore_errors=True)
             host_root.mkdir(parents=True, exist_ok=True)
             create_standard_adf(amiga_environment, host_root / "standard.adf")
             create_standard_adf(amiga_environment, host_root / "second.adf",
@@ -188,6 +201,14 @@ def run_amiga_case(amiga_environment, amiga_cases):
         if "activity_timeout" in case:
             test_env["AMIGA_E2E_ACTIVITY_TIMEOUT"] = str(case["activity_timeout"])
         runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
+        for stale_name in (
+            "amiberry.sock.path",
+            "amiberry-screen.png",
+            "amiberry.log",
+            "fujinet-nio.log",
+            "bridge.log",
+        ):
+            (run_dir / stale_name).unlink(missing_ok=True)
         runner = subprocess.Popen(
             [str(ROOT / "scripts/run-amiberry-nio"), "--tcp", "--disk", str(image),
              "--timeout", runner_timeout],
@@ -212,12 +233,22 @@ def run_amiga_case(amiga_environment, amiga_cases):
                     test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "15")
                 )
                 saw_activity = False
+                completion_log = case.get("completion_log")
+                completion_seen_at = None
                 previous = ""
                 quiet_since = None
                 while time.monotonic() < activity_deadline:
                     current = nio_log.read_text(encoding="utf-8", errors="replace") if nio_log.is_file() else ""
                     if "fujibus: receive:" in current:
                         saw_activity = True
+                        if completion_log:
+                            if completion_seen_at is None:
+                                marker_index = current.find(completion_log)
+                                if marker_index >= 0:
+                                    completion_seen_at = marker_index
+                            if (completion_seen_at is not None and
+                                    "fujibus: send:" in current[completion_seen_at:]):
+                                break
                         if current == previous:
                             quiet_since = quiet_since or time.monotonic()
                             if time.monotonic() - quiet_since >= float(
@@ -230,7 +261,11 @@ def run_amiga_case(amiga_environment, amiga_cases):
                     time.sleep(0.1)
                 if not saw_activity:
                     raise AssertionError("Amiga guest produced no FujiBus activity before screenshot")
-                time.sleep(float(os.environ.get("AMIGA_E2E_SCREENSHOT_DELAY", "1")))
+                capture_delay = case.get(
+                    "screenshot_delay",
+                    os.environ.get("AMIGA_E2E_SCREENSHOT_DELAY", "1"),
+                )
+                time.sleep(float(capture_delay))
                 screenshot = run_dir / "amiberry-screen.png"
                 subprocess.run(
                     [str(ROOT / "scripts/amiberry-ipc"), "--socket",
@@ -238,8 +273,10 @@ def run_amiga_case(amiga_environment, amiga_cases):
                      "SCREENSHOT", str(screenshot)],
                     cwd=ROOT,
                     env=test_env,
-                    check=False,
+                    check=True,
                 )
+                if not screenshot.is_file():
+                    raise AssertionError("Amiberry IPC reported success but retained no screenshot")
                 # End the emulator immediately after evidence capture rather
                 # than waiting for the safety timeout.
                 quit_result = subprocess.run(

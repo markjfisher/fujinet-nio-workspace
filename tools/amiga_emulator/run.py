@@ -18,9 +18,6 @@ import time
 from pathlib import Path
 from typing import TextIO
 
-from .ipc import find_socket
-
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -284,7 +281,17 @@ class AmigaRunner:
             logged_socket = wait_for_logged_ipc_socket(self.amiberry_log)
             if logged_socket is None:
                 raise FileNotFoundError("Amiberry IPC was not reported in its log")
-            self.ipc_socket = find_socket(str(logged_socket), timeout=1)
+            # The listening message belongs to the process just launched and
+            # is a stronger identity check than sending PING to a shared
+            # well-known socket. Some Amiberry releases also leave PING
+            # replies unterminated, which made discovery discard a live
+            # endpoint and forced integration tests to wait for timeout.
+            deadline = time.monotonic() + 2
+            while not logged_socket.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if not logged_socket.exists():
+                raise FileNotFoundError(f"Amiberry IPC socket was not created: {logged_socket}")
+            self.ipc_socket = logged_socket
             (self.run_dir / "amiberry.sock.path").write_text(
                 str(self.ipc_socket) + "\n", encoding="utf-8"
             )
