@@ -297,8 +297,9 @@ prove the rest of the Stage 8 contract.
       device-owned storage, and test malformed and queued requests.
 - [ ] **Test the production queue:** the resident device now uses the shared
       `fujinet_io_queue_t` abstraction, so portable FIFO tests cover the
-      production queue implementation. An integrated native harness still
-      needs concurrent BeginIO, FIFO barriers, AbortIO, and multi-unit draining.
+      production queue implementation. Native Amiberry now covers concurrent
+      BeginIO and queued AbortIO with a separate worker process; multi-unit
+      draining and FIFO barriers across several queued requests remain open.
 - [ ] **Test media notifications at the Exec boundary:** add tests for
       `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
       multiple registrations, per-unit registrations, and TD_REMOVE. Native
@@ -415,6 +416,13 @@ Follow-up (2026-08-11): extended the native boundary command with asynchronous
 `AbortIO`, each verified through `WaitIO()` and asserted by the disk Amiberry
 case. Concurrent FIFO cancellation and repeated/multiple media notification
 delivery remain open.
+
+Follow-up (2026-08-11): added a real `CreateNewProcTags()` worker to hold a
+resident disk read in flight while the parent submits and aborts a second read.
+The Amiberry case now proves the second request is cancelled with
+`IOERR_ABORTED` while the worker request completes successfully. Multi-unit
+draining, repeated live `Cause()` delivery, and simultaneous registrations
+remain open.
 
 ## Review points
 
