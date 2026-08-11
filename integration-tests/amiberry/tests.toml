@@ -35,6 +35,7 @@ screenshot_delay = 0.2
 startup = "startup/diskdevice-adf.sequence"
 results = [
   "disk-load.result",
+  "disk-exec-boundary.result",
   "disk-mount.result",
   "disk-mount-rc.result",
   "disk-dos-mount.result",
