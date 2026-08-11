@@ -388,6 +388,14 @@ additional focused `diskdevice-adf` Amiberry repetitions pass. Stage 9 remains
 open because the Exec-boundary queue/notification harness, AppStore failure
 injection, and silent-peer native timeout harness are not yet present.
 
+Follow-up (2026-08-11): added the initial host
+`test_fujinet_exec_boundary` contract harness under
+`repos/fujinet-nio-driver/amiga/tests/`. It is wired into `make tests` and
+currently validates queue selection, STOP/START, queued flush/abort removal,
+repeated change-registration delivery, removal, and close cleanup. It does not
+yet exercise the production resident Exec-list implementation or native Amiga
+message-port/interrupt ABI; those remain the next expansion decision.
+
 ## Review points
 
 Stop for user review after stages 4, 5, and 6. Do not advance past the raw-
