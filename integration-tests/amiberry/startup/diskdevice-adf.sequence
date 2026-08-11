@@ -11,6 +11,10 @@ C:Wait 2 SECS
 C:Dir DN0: >DH0:disk-dir.result
 C:Echo "DIR RC=$RC" >DH0:disk-dir-rc.result
 C:Type DN0:KNOWN.TXT >DH0:disk-type.result
+C:fujinet-mount 12 1 RO >DH0:disk-mount-1.result
+C:Mount DN1: FROM DEVS:DN1
+C:Echo "DOS MOUNT 1 RC=$RC" >DH0:disk-dos-mount-1.result
+C:Type DN1:SECOND.TXT >DH0:disk-type-1.result
 C:Type DH0:disk-load.result
 C:Type DH0:disk-mount.result
 C:Type DH0:disk-dos-mount.result
@@ -19,3 +23,6 @@ C:Type DH0:disk-read-b.result
 C:Type DH0:disk-dir.result
 C:Type DH0:disk-dir-rc.result
 C:Type DH0:disk-type.result
+C:Type DH0:disk-mount-1.result
+C:Type DH0:disk-dos-mount-1.result
+C:Type DH0:disk-type-1.result

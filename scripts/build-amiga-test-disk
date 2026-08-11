@@ -49,8 +49,8 @@ def main() -> int:
                         help="native fujinet-disk.device to install in DEVS:")
     parser.add_argument("--disk-mount-tool", type=Path,
                         help="fujinet-mount command to install in C:")
-    parser.add_argument("--disk-mountlist", type=Path,
-                        help="DN0 MountList entry to install in DEVS:")
+    parser.add_argument("--disk-mountlist", action="append", type=Path,
+                        default=[], help="DNx MountList entry to install in DEVS:")
     parser.add_argument("--command", default=None,
                         help="startup command; defaults to the installed app name")
     parser.add_argument("--startup-script", type=Path,
@@ -74,9 +74,12 @@ def main() -> int:
             raise SystemExit(f"additional Amiga application directory not found: {app_dir}")
     for path, label in ((args.disk_device, "disk device"),
                         (args.disk_mount_tool, "disk mount tool"),
-                        (args.disk_mountlist, "disk MountList")):
+                        ):
         if path is not None and not path.is_file():
             raise SystemExit(f"{label} not found: {path}")
+    for path in args.disk_mountlist:
+        if not path.is_file():
+            raise SystemExit(f"disk MountList not found: {path}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.unlink(missing_ok=True)
@@ -105,9 +108,9 @@ def main() -> int:
         if args.disk_mount_tool:
             run_xdf(args.output, "write", str(args.disk_mount_tool),
                     "C/fujinet-mount")
-        if args.disk_mountlist:
-            run_xdf(args.output, "write", str(args.disk_mountlist),
-                    "Devs/DN0")
+        for mountlist in args.disk_mountlist:
+            run_xdf(args.output, "write", str(mountlist),
+                    f"Devs/{mountlist.name}")
         installed_names = {args.app_name}
         for app_dir in args.extra_app_dir:
             for app in sorted(app_dir.iterdir()):

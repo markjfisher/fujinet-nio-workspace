@@ -64,13 +64,15 @@ def build_nio_binary(environment: dict[str, str]) -> None:
         env=environment,
         check=True,
     )
-def create_standard_adf(environment: dict[str, str], image: Path) -> None:
+def create_standard_adf(environment: dict[str, str], image: Path,
+                        marker_name: str = "KNOWN.TXT",
+                        marker_text: str = "FUJINET ADF READ PASSED\n") -> None:
     image.unlink(missing_ok=True)
-    marker = image.parent / "KNOWN.TXT"
-    marker.write_text("FUJINET ADF READ PASSED\n", encoding="ascii")
+    marker = image.parent / marker_name
+    marker.write_text(marker_text, encoding="ascii")
     subprocess.run(
         [*xdf_command(environment), str(image), "create", "+", "format", "NIOADF",
-         "+", "boot", "install", "+", "write", str(marker), "KNOWN.TXT"],
+         "+", "boot", "install", "+", "write", str(marker), marker_name],
         cwd=ROOT,
         env=environment,
         check=True,
@@ -141,6 +143,11 @@ def run_amiga_case(amiga_environment, amiga_cases):
             host_root = run_dir / "fujinet-data"
             host_root.mkdir(parents=True, exist_ok=True)
             create_standard_adf(amiga_environment, host_root / "standard.adf")
+            create_standard_adf(amiga_environment, host_root / "second.adf",
+                                "SECOND.TXT", "FUJINET SECOND DRIVE PASSED\n")
+            catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
+            catalog_dir.mkdir(parents=True, exist_ok=True)
+            (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
         command = [
@@ -159,8 +166,11 @@ def run_amiga_case(amiga_environment, amiga_cases):
             command.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
-                "--disk-mountlist", driver_root / "amiga/config/DN0",
             ])
+            for unit in range(8):
+                command.extend([
+                    "--disk-mountlist", driver_root / f"amiga/config/DN{unit}",
+                ])
         subprocess.run(command, cwd=ROOT, env=amiga_environment, check=True)
 
         test_env = amiga_environment.copy()
@@ -261,6 +271,9 @@ def run_amiga_case(amiga_environment, amiga_cases):
                     text=True,
                 )
                 results[result_name] = destination.read_text(encoding="latin-1")
+        mappings = run_dir / "fujinet-data" / "FujiNet" / "app-store" / "v1" / "config-nio" / "mappings.bin"
+        if mappings.is_file():
+            results["_mappings"] = mappings.read_bytes().hex()
         return results
 
     return run

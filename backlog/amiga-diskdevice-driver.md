@@ -11,9 +11,9 @@ Repositories:
 
 ## Goal
 
-Deliver a read-only Amiga DiskDevice driver over the documented FujiBus
-channel, then make an explicit raw-state architecture decision before adding
-write or hot-swap behavior.
+Deliver an Amiga DiskDevice driver over FujiBus whose units follow the same
+catalogue-slot-to-active-drive model as Atari, BBC, and MS-DOS. Direct URI
+mounting remains available as an expert/diagnostic path.
 
 ## Library change gate
 
@@ -181,22 +181,59 @@ Exit criteria: a consumer can add both repositories as git submodules, build
 the resident device and mount utility, install the documented files, and mount
 the read-only standard ADF profile without relying on workspace tooling.
 
-### 8. Write, cache, flush, and media-change policy — `TODO`
+### 8. Write, cache, flush, and media-change policy — `IN PROGRESS`
 
-- [ ] Define cache ownership and dirty-state behavior.
-- [ ] Define flush ordering and failure semantics.
-- [ ] Define media-change detection and acknowledgement.
-- [ ] Add write support only after those contracts are stable.
-- [ ] Add hot-swap behavior and tests.
+The original one-unit skeleton was an implementation milestone, not an Amiga
+architecture constraint. Stage 8 must remove that shortcut before completion:
+catalogue slots 0–255 are persistent choices, while Amiga units 0–7 map to
+active DiskDevice slots 1–8 and appear as `DN0:`–`DN7:`.
+
+- [x] Define no driver block cache; NIO owns buffering and dirty state.
+- [x] Define `CMD_UPDATE`/`ETD_UPDATE` as DiskDevice flush barriers,
+      `CMD_CLEAR`/`ETD_CLEAR` as no-flush cache invalidation, and Exec
+      `CMD_FLUSH` as queued-request cancellation only.
+- [x] Define additive DiskDevice v1 `Flush (0x0E)` and transactional
+      unmount/replacement behavior.
+- [x] Define deterministic local media counts and persistent change
+      notifications; out-of-band slot changes remain unsupported.
+- [ ] Test dirty set/clear, clean and failed flush, partial multi-write,
+      failed removal/replacement, and exact 0x0E vectors in NIO.
+- [ ] Add context and legacy library APIs for write, flush, unmount, and
+      clear-changed; run sourced `make check`.
+- [ ] Add writable standard-ADF mounting, writes, ETD validation, FIFO queue
+      policy, update/clear/flush, eject, and media notification behavior.
+- [ ] Pass portable queue/media policy tests, native builds, and Amiberry
+      writable persistence/replacement regressions.
+- [ ] Refresh standalone documentation, compatible revisions, and known
+      limitations; stop for review before Stage 9.
+- [x] Replace the singleton resident unit/media/queue/change state with eight
+      independent Amiga units sharing one serialized physical session.
+- [x] Map Amiga unit N to active DiskDevice slot N+1 and provide MountLists
+      `DN0` through `DN7`.
+- [x] Add `fujinet-mount <catalog-slot> <drive> [RW|RO]` and
+      `fujinet-mount --eject [drive]` using Slot Catalog and the shared
+      `config-nio/mappings` contract. The `nio-config` port may later present
+      these operations through the common `FMOUNT`/`FUMOUNT` command surface.
+- [x] Retain direct URI mounting under the explicit
+      `fujinet-mount --uri <drive> <URI> [RW|RO]` compatibility form.
+- [ ] Prove simultaneous multi-drive access, per-unit protection/change state,
+      independent eject/replacement, and mapping persistence in host/native
+      and Amiberry tests.
 
 Exit criteria: write and media-change behavior is contract-defined, tested,
 and does not rely on undocumented singleton state.
 
-### 9. Faster backends — `TODO`
+### Deliberate Stage 8 boundary
 
-- [ ] Develop the Pico/native packet backend.
-- [ ] Develop faster-channel backends behind the same packet/session contract.
-- [ ] Add backend capability tests and performance measurements.
+Stage 8 supports standard 880 KiB ADF media only: 512-byte sectors, 1760
+sectors, 80 cylinders, two heads, and 11 sectors per track. The `DN0`–`DN7`
+MountLists describe that profile and are not a general geometry mechanism.
+
+General inferred geometry and consolidation onto the standard
+`nio-core-apps` `FMOUNT`/`FUMOUNT` interface are tracked in
+[`amiga-diskdevice-phase-2.md`](amiga-diskdevice-phase-2.md). The private
+`fujinet-mount` program is transitional and must not become the permanent
+parallel user interface.
 
 ## Review points
 

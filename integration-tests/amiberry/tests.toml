@@ -41,4 +41,7 @@ results = [
   "disk-dir.result",
   "disk-dir-rc.result",
   "disk-type.result",
+  "disk-mount-1.result",
+  "disk-dos-mount-1.result",
+  "disk-type-1.result",
 ]
