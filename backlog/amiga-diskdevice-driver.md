@@ -299,13 +299,14 @@ prove the rest of the Stage 8 contract.
       `fujinet_io_queue_t` abstraction, so portable FIFO tests cover the
       production queue implementation. Native Amiberry now covers concurrent
       BeginIO and queued AbortIO with a separate worker process; multi-unit
-      draining and FIFO barriers across several queued requests remain open.
+      selection and cancellation also pass; FIFO ordering across several
+      queued requests and full drain coverage remain open.
 - [ ] **Test media notifications at the Exec boundary:** add tests for
       `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
       multiple registrations, per-unit registrations, and TD_REMOVE. Native
-      Amiberry now covers registration removal, registration AbortIO, and
-      deferred TD_REMOVE AbortIO; repeated Cause and multi-registration paths
-      remain open.
+      Amiberry now covers live `Cause()`, registration removal, registration
+      AbortIO, and deferred TD_REMOVE AbortIO; multiple simultaneous and
+      per-unit registrations remain open.
 - [ ] **Expand Amiberry failure coverage:** add acceptance cases for failed
       flush, failed replacement after removal, invalid replacement geometry,
       failed mapping persistence, notification lifecycle, STOP/START,
@@ -423,6 +424,12 @@ The Amiberry case now proves the second request is cancelled with
 `IOERR_ABORTED` while the worker request completes successfully. Multi-unit
 draining, repeated live `Cause()` delivery, and simultaneous registrations
 remain open.
+
+Follow-up (2026-08-11): the native boundary probe now queues and aborts two
+requests across units 6 and 7 while the worker owns unit 6, and verifies a live
+`Cause()` callback by replacing unit 6 through a second request. Full Amiberry
+validation passes; FIFO ordering across several queued requests and simultaneous
+multi-unit notification registrations remain the final harness refinements.
 
 ## Review points
 
