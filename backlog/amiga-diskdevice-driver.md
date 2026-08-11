@@ -295,12 +295,10 @@ prove the rest of the Stage 8 contract.
       `fujinet-nio-lib/src/common/fn_disk.c` subsequently calls `strlen()`.
       Validate request length and termination, copy queued URI data into
       device-owned storage, and test malformed and queued requests.
-- [ ] **Test the production queue:** the resident device duplicates the
-      portable `fujinet_io_queue_t` behavior with Exec `List` operations.
-      Existing queue tests therefore do not exercise production code. Use the
-      tested abstraction or add an integrated device harness covering
-      concurrent BeginIO, STOP/START, FIFO barriers, CMD_FLUSH, AbortIO, and
-      multi-unit draining.
+- [ ] **Test the production queue:** the resident device now uses the shared
+      `fujinet_io_queue_t` abstraction, so portable FIFO tests cover the
+      production queue implementation. An integrated native harness still
+      needs concurrent BeginIO, FIFO barriers, AbortIO, and multi-unit draining.
 - [ ] **Test media notifications at the Exec boundary:** add tests for
       `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
       multiple registrations, per-unit registrations, and TD_REMOVE. Current
@@ -310,7 +308,8 @@ prove the rest of the Stage 8 contract.
       failed mapping persistence, notification lifecycle, STOP/START,
       CMD_FLUSH, AbortIO, malformed URI requests, and transport reopen while
       requests are queued. Assert the currently unasserted `--uri` unit-7
-      operation instead of merely waiting after it.
+      operation is now asserted; failed replacement preservation is also
+      covered, while the remaining failure cases are still open.
 - [ ] **Native serial deadline:**
       `repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c:70-145`
       ignores the shared session `timeout_ms` and blocks in a one-byte
@@ -333,7 +332,10 @@ prove the rest of the Stage 8 contract.
 - [ ] All asynchronous/queued device requests have bounded input lifetimes
       and no large caller-stack scratch allocation.
 - [ ] Production queue and Exec device boundary have integrated host/native
-      coverage, not only standalone policy tests.
+      coverage, not only standalone policy tests. The native smoke command now
+      covers real DoIO dispatch for change count, STOP/START, CMD_FLUSH, and
+      TD_REMCHANGEINT; asynchronous cancellation and notification lifetime
+      coverage remain open.
 - [ ] Native serial receive honors the shared timeout contract.
 - [ ] Focused Amiberry stability passes repeatedly, the complete `amiga-tests`
       gate passes, `fujinet-nio` tests pass, and library changes pass sourced
@@ -369,12 +371,12 @@ assumption.
       restore the previous mapping when the media operation fails. Explicit
       AppStore failure injection and crash/restart consistency tests remain
       outstanding before this item can be considered complete.
-- [ ] Add an integrated resident-device harness for production Exec-list queue
-      behavior, request lifetime, notifications, AbortIO, STOP/START, and
-      CMD_FLUSH.
-- [ ] Add Amiberry failure-path cases for replacement, mapping persistence,
-      notifications, queue cancellation, malformed URI requests, transport
-      reopen, and assert the unit-7 direct URI operation.
+- [x] Integrate the shared FIFO queue into the resident device and add a native
+      Amiberry Exec boundary smoke command covering DoIO, STOP/START, CMD_FLUSH,
+      and TD_REMCHANGEINT.
+- [ ] Add a complete resident-device harness for request lifetime,
+      notifications, AbortIO, queue cancellation, mapping persistence,
+      malformed URI requests, and transport reopen.
 - [ ] Run repeated focused stability and complete `amiga-tests` validation
       after all Stage 9 changes, then update this section with evidence and
       close only the acceptance items actually demonstrated.
@@ -383,10 +385,12 @@ Validation snapshot (2026-08-11): the transactional replacement test and
 Amiga driver policy tests pass; `fujinet-nio` passes 262 C++ tests plus 23
 Python tests; sourced `repos/fujinet-nio-lib make check` passes all configured
 targets and wire/context/link tests; the native Amiga driver builds; the full
-`scripts/build.sh amiga-tests` gate passes all three Amiberry cases; and two
-additional focused `diskdevice-adf` Amiberry repetitions pass. Stage 9 remains
-open because the Exec-boundary queue/notification harness, AppStore failure
-injection, and silent-peer native timeout harness are not yet present.
+`scripts/build.sh amiga-tests` gate passes all three Amiberry cases; focused
+`diskdevice-adf` also passes direct unit-7 mounting, failed replacement
+preservation, and the native Exec boundary smoke command. Stage 9 remains open
+because full asynchronous Exec cancellation/notification coverage, AppStore
+failure injection, and the silent-peer native timeout harness are not yet
+present.
 
 Follow-up (2026-08-11): added the initial host
 `test_fujinet_exec_boundary` contract harness under
@@ -395,6 +399,14 @@ currently validates queue selection, STOP/START, queued flush/abort removal,
 repeated change-registration delivery, removal, and close cleanup. It does not
 yet exercise the production resident Exec-list implementation or native Amiga
 message-port/interrupt ABI; those remain the next expansion decision.
+
+Follow-up (2026-08-11): the resident device now uses `fujinet_io_queue_t`
+directly, with native queue-node allocation and cleanup. Added
+`fujinet-mount --boundary DRIVE`, which executes real Amiga `DoIO` requests for
+`TD_CHANGENUM`, `CMD_STOP`, `CMD_START`, `CMD_FLUSH`, and `TD_REMCHANGEINT`.
+The disk Amiberry case asserts its pass marker, direct unit-7 mount, and failed
+replacement state preservation. Native asynchronous AbortIO and change
+notification lifetime tests remain the next boundary work.
 
 ## Review points
 
