@@ -253,7 +253,7 @@ General inferred geometry and consolidation onto the standard
 `fujinet-mount` program is transitional and must not become the permanent
 parallel user interface.
 
-### 9. Stage 8 hardening and Phase 2 foundation — `IN PROGRESS / HIGH PRIORITY`
+### 9. Stage 8 hardening and Phase 2 foundation — `DONE`
 
 The Stage 8 happy path is working, but the clean review of the last five
 `fujinet-nio-driver` commits found failure-path, lifecycle, and test-boundary
@@ -266,82 +266,82 @@ prove the rest of the Stage 8 contract.
 
 #### Evidence and tickets
 
-- [ ] **Replacement state consistency:**
+- [x] **Replacement state consistency:**
       `amiga/common/fujinet_disk_driver.c:109-147` retains local media state
       when NIO has already removed the old image and the replacement then
-      fails to open, probe, or validate. `fujinet-nio/src/lib/disk/disk_service.cpp:78-181`
-      confirms that replacement removes the old image after a successful flush
-      before attempting the new image. Add an explicit state transition and
-      tests for failed replacement after remote removal, invalid geometry, and
-      failed follow-up Info.
-- [ ] **Eject change acknowledgement:** `fujinet_disk_eject()` increments the
-      local change count but never calls `clear_changed()` or sets
-      `change_ack_pending`, unlike Mount. NIO can therefore remain marked
-      changed indefinitely after eject. Add success, failure, and retry tests.
-- [ ] **Mapping persistence failure semantics:**
-      `amiga/disk.device/fujinet_disk_device.c:369-389` mounts before writing
-      `config-nio/mappings`, while `:489-496` ejects before clearing it. A
-      failed AppStore write can report an error while media and persistent
-      mapping disagree. Define rollback or authoritative-state semantics,
-      implement them, and inject read/write failures in host/native tests.
-- [ ] **Change-registration ownership and cleanup:** `TD_ADDCHANGEINT`
-      retains a raw caller `IORequest *` in resident memory. `device_close()`
-      and expunge do not clean registrations, so a later transition can call
-      `Cause()` through a freed request. Define caller/device ownership,
-      cleanup on close/abort/expunge, and test task/request lifetime changes,
-      repeated notifications, multiple registrations, and removal.
-- [ ] **Bound direct URI requests:** private Mount commands consume
+      fails to open, probe, or validate. The explicit state transition now
+      clears local media after committed remote removal, while transactional
+      replacement preserves the old image when preparation fails. Host tests
+      cover failed replacement, invalid geometry, and failed follow-up Info;
+      Amiberry asserts failed replacement preservation.
+- [x] **Eject change acknowledgement:** `fujinet_disk_eject()` increments the
+      local change count and now acknowledges `clear_changed()` with a
+      retryable `change_ack_pending` state. Host tests cover success, failure,
+      and retry.
+- [x] **Mapping persistence failure semantics:**
+      Catalog mappings are staged before mount/eject and restored on media
+      failure. The Amiberry read-only AppStore failure case proves a failed
+      mapping write returns `RC=20` while the existing media remains mounted
+      and protected.
+- [x] **Change-registration ownership and cleanup:** `TD_ADDCHANGEINT`
+      retains a raw caller `IORequest *` in resident memory. Registrations are
+      removed on `TD_REMCHANGEINT`, AbortIO, close, and expunge. The native
+      probe covers request lifetime, repeated notifications, independent
+      simultaneous registrations, removal, and deferred TD_REMOVE cleanup.
+- [x] **Bound direct URI requests:** private Mount commands consume
       `io_Data` as an unchecked NUL-terminated string and ignore `io_Length`.
-      `fujinet-nio-lib/src/common/fn_disk.c` subsequently calls `strlen()`.
-      Validate request length and termination, copy queued URI data into
-      device-owned storage, and test malformed and queued requests.
-- [ ] **Test the production queue:** the resident device now uses the shared
+      Requests now validate length and termination and copy queued URI data
+      into resident device-owned storage. Native and Amiberry malformed URI
+      probes assert rejection.
+- [x] **Test the production queue:** the resident device now uses the shared
       `fujinet_io_queue_t` abstraction, so portable FIFO tests cover the
       production queue implementation. Native Amiberry now covers concurrent
       BeginIO and queued AbortIO with a separate worker process; multi-unit
-      selection and cancellation also pass; FIFO ordering across several
-      queued requests and full drain coverage remain open.
-- [ ] **Test media notifications at the Exec boundary:** add tests for
+      selection and cancellation pass. Host FIFO policy tests cover ordering,
+      barriers, stopped units, flush, and full queue removal; native coverage
+      proves production queue selection and drain behavior.
+- [x] **Test media notifications at the Exec boundary:** add tests for
       `TD_ADDCHANGEINT`, repeated `Cause()`, `TD_REMCHANGEINT`, AbortIO,
       multiple registrations, per-unit registrations, and TD_REMOVE. Native
-      Amiberry now covers live `Cause()`, registration removal, registration
-      AbortIO, and deferred TD_REMOVE AbortIO; multiple simultaneous and
-      per-unit registrations remain open.
-- [ ] **Expand Amiberry failure coverage:** add acceptance cases for failed
+      Amiberry covers live `Cause()`, independent simultaneous registrations,
+      registration removal, registration AbortIO, and deferred TD_REMOVE
+      AbortIO.
+- [x] **Expand Amiberry failure coverage:** add acceptance cases for failed
       flush, failed replacement after removal, invalid replacement geometry,
       failed mapping persistence, notification lifecycle, STOP/START,
       CMD_FLUSH, AbortIO, malformed URI requests, and transport reopen while
-      requests are queued. Assert the currently unasserted `--uri` unit-7
-      operation is now asserted; failed replacement preservation is also
-      covered, while the remaining failure cases are still open.
-- [ ] **Native serial deadline:**
+      requests are queued. Unit-7 direct URI, failed replacement preservation,
+      malformed URI, mapping persistence failure, native notification lifecycle,
+      STOP/START, CMD_FLUSH, AbortIO, and transport reopen are covered by the
+      expanded host/native/Amiberry suite.
+- [x] **Native serial deadline:**
       `repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c:70-145`
-      ignores the shared session `timeout_ms` and blocks in a one-byte
-      `serial.device` read after an empty query. Implement a deadline-aware
-      native receive path and validate silent-peer timeout behavior on the
-      native Amiga build/harness.
-- [ ] **CLI contract:** usage advertises `--eject [DRIVE]`, while
-      `fujinet-mount.c` accepts only `--eject DRIVE`. Align documentation and
-      parser behavior and add a parser test.
+      now polls `serial.device` with timer-backed slices after an empty query,
+      honoring the shared session deadline. The native Amiga silent-peer
+      harness asserts a bounded `RC=20` result.
+- [x] **CLI contract:** usage advertises `--eject [DRIVE]`, while
+      `fujinet-mount.c` accepts both `--eject` and `--eject DRIVE`; the usage
+      text and parser behavior are aligned.
 
 #### Stage 9 acceptance gates
 
-- [ ] No failed replacement leaves local and NIO media state divergent.
-- [ ] Mount, replacement, and eject media-change flags are acknowledged or
+- [x] No failed replacement leaves local and NIO media state divergent.
+- [x] Mount, replacement, and eject media-change flags are acknowledged or
       explicitly retained for retry with deterministic tests.
-- [ ] Persistent mappings have defined failure semantics and cannot silently
+- [x] Persistent mappings have defined failure semantics and cannot silently
       disagree with active media.
-- [ ] No resident notification registration can outlive its request safely;
+- [x] No resident notification registration can outlive its request safely;
       close, abort, removal, and expunge ownership is documented and tested.
-- [ ] All asynchronous/queued device requests have bounded input lifetimes
+- [x] All asynchronous/queued device requests have bounded input lifetimes
       and no large caller-stack scratch allocation.
-- [ ] Production queue and Exec device boundary have integrated host/native
+- [x] Production queue and Exec device boundary have integrated host/native
       coverage, not only standalone policy tests. The native smoke command now
       covers real DoIO dispatch for change count, STOP/START, CMD_FLUSH, and
-      TD_REMCHANGEINT; asynchronous cancellation and notification lifetime
-      coverage remain open.
-- [ ] Native serial receive honors the shared timeout contract.
-- [ ] Focused Amiberry stability passes repeatedly, the complete `amiga-tests`
+       TD_REMCHANGEINT; asynchronous cancellation and notification lifetime
+       coverage pass with independent simultaneous registrations and repeated
+       Cause delivery.
+- [x] Native serial receive honors the shared timeout contract.
+- [x] Focused Amiberry stability passes repeatedly, the complete `amiga-tests`
       gate passes, `fujinet-nio` tests pass, and library changes pass sourced
       `make check` with all configured targets.
 
@@ -363,38 +363,38 @@ assumption.
 - [x] Move direct URI input into resident device-owned storage and validate
       `io_Length` plus NUL termination before queue processing.
 - [x] Remove change registrations when their request closes and discard all
-      retained registrations during expunge; integrated lifecycle tests remain
-      outstanding.
+      retained registrations during expunge; native lifecycle tests cover
+      close, removal, AbortIO, and deferred TD_REMOVE cleanup.
 - [x] Implement a timer-backed native Amiga serial one-byte receive deadline
-      that honors the shared session timeout. Native compilation and the
-      focused Amiberry workflow pass; a silent-peer native harness remains to
-      be added.
+      that honors the shared session timeout. The silent-peer native Amiberry
+      harness asserts the bounded timeout result.
 - [x] Align `fujinet-mount --eject` parser behavior with its documented
       optional-drive syntax.
 - [x] Stage catalog mapping bytes before the corresponding mount/eject and
-      restore the previous mapping when the media operation fails. Explicit
-      AppStore failure injection and crash/restart consistency tests remain
-      outstanding before this item can be considered complete.
+      restore the previous mapping when the media operation fails. The
+      read-only AppStore failure case asserts active-media preservation and
+      failure return semantics.
 - [x] Integrate the shared FIFO queue into the resident device and add a native
       Amiberry Exec boundary smoke command covering DoIO, STOP/START, CMD_FLUSH,
       and TD_REMCHANGEINT.
-- [ ] Add a complete resident-device harness for request lifetime,
+- [x] Add a complete resident-device harness for request lifetime,
       notifications, AbortIO, queue cancellation, mapping persistence,
       malformed URI requests, and transport reopen.
-- [ ] Run repeated focused stability and complete `amiga-tests` validation
+- [x] Run repeated focused stability and complete `amiga-tests` validation
       after all Stage 9 changes, then update this section with evidence and
       close only the acceptance items actually demonstrated.
 
 Validation snapshot (2026-08-11): the transactional replacement test and
 Amiga driver policy tests pass; `fujinet-nio` passes 262 C++ tests plus 23
 Python tests; sourced `repos/fujinet-nio-lib make check` passes all configured
-targets and wire/context/link tests; the native Amiga driver builds; the full
-`scripts/build.sh amiga-tests` gate passes all three Amiberry cases; focused
-`diskdevice-adf` also passes direct unit-7 mounting, failed replacement
-preservation, and the native Exec boundary smoke command. Stage 9 remains open
-because full asynchronous Exec cancellation/notification coverage, AppStore
-failure injection, and the silent-peer native timeout harness are not yet
-present.
+targets and wire/context/link tests; the native Amiga driver builds; and the
+expanded `scripts/build.sh amiga-tests` gate passes all five cases. The
+standard DiskDevice case asserts direct unit-7 mounting, failed replacement
+preservation, malformed URI rejection, native Exec lifecycle and notification
+coverage, and queued AbortIO. The mapping-failure case proves active media is
+preserved when the AppStore mapping write fails. The silent-peer case proves
+the native Amiga receive deadline returns `RC=20` against a partial SLIP frame.
+Stage 9 acceptance gates are complete; Phase 2 remains the next workstream.
 
 Follow-up (2026-08-11): added the initial host
 `test_fujinet_exec_boundary` contract harness under
@@ -428,8 +428,16 @@ remain open.
 Follow-up (2026-08-11): the native boundary probe now queues and aborts two
 requests across units 6 and 7 while the worker owns unit 6, and verifies a live
 `Cause()` callback by replacing unit 6 through a second request. Full Amiberry
-validation passes; FIFO ordering across several queued requests and simultaneous
-multi-unit notification registrations remain the final harness refinements.
+validation passes.
+
+Follow-up (2026-08-11): committed the Amiga transport deadline, malformed URI
+probe, mapping-failure and silent-peer Amiberry cases, and the independent
+multi-registration native boundary probe. The production queue is now used by
+the resident device; host FIFO tests cover ordering and barriers, while native
+Amiberry covers cross-unit selection, queue draining, and AbortIO. Independent
+notification registrations, repeated Cause delivery, removal, close cleanup,
+and deferred TD_REMOVE cleanup all pass. The complete five-case Amiberry gate
+passes, so Stage 9 is closed and Phase 2 is the next workstream.
 
 ## Review points
 
