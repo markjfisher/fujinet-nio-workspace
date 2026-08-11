@@ -28,6 +28,13 @@ C:Type DN2:PERSIST.TXT >DH0:disk-persist.result
 C:fujinet-mount --status 0 >DH0:disk-status-0.result
 C:fujinet-mount --status 1 >DH0:disk-status-1.result
 C:fujinet-mount --status 2 >DH0:disk-status-2.result
+C:fujinet-mount --uri 7 host:/standard.adf RO >DH0:disk-mount-direct.result
+C:Echo "DIRECT MOUNT RC=$RC" >DH0:disk-mount-direct-rc.result
+C:Failat 30
+C:fujinet-mount --uri 7 host:/missing.adf RO >NIL:
+C:Echo "FAILED REPLACEMENT RC=$RC" >DH0:disk-failed-replacement.result
+C:Failat 10
+C:fujinet-mount --status 7 >DH0:disk-status-7.result
 C:fujinet-mount --uri 3 host:/second.adf RO >NIL:
 C:fujinet-mount --eject 3 >DH0:disk-eject.result
 C:fujinet-mount --status 3 >DH0:disk-status-3.result
@@ -53,7 +60,8 @@ C:Type DH0:disk-status-0.result
 C:Type DH0:disk-status-1.result
 C:Type DH0:disk-status-2.result
 C:Type DH0:disk-status-3.result
-C:Wait 3 SECS
+C:Type DH0:disk-mount-direct.result
+C:Type DH0:disk-mount-direct-rc.result
+C:Type DH0:disk-failed-replacement.result
+C:Type DH0:disk-status-7.result
 C:Echo "E2E COMPLETE"
-C:fujinet-mount --uri 7 host:/standard.adf RO >NIL:
-C:Wait 10 SECS

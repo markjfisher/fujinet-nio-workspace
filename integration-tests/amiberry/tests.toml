@@ -30,7 +30,7 @@ driver = true
 timeout = 75
 activity_timeout = 60
 screenshot_quiet = 10
-completion_log = "Mount request: slot=8 uri='host:/standard.adf'"
+completion_log = "E2E COMPLETE"
 screenshot_delay = 0.2
 startup = "startup/diskdevice-adf.sequence"
 results = [
@@ -57,4 +57,8 @@ results = [
   "disk-status-1.result",
   "disk-status-2.result",
   "disk-status-3.result",
+  "disk-mount-direct.result",
+  "disk-mount-direct-rc.result",
+  "disk-failed-replacement.result",
+  "disk-status-7.result",
 ]
