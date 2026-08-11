@@ -29,6 +29,7 @@ C:Type DN2:PERSIST.TXT >DH0:disk-persist.result
 C:fujinet-mount --status 0 >DH0:disk-status-0.result
 C:fujinet-mount --status 1 >DH0:disk-status-1.result
 C:fujinet-mount --status 2 >DH0:disk-status-2.result
+C:fujinet-mount --malformed 5 >DH0:disk-malformed.result
 C:fujinet-mount --uri 7 host:/standard.adf RO >DH0:disk-mount-direct.result
 C:Echo "DIRECT MOUNT RC=$RC" >DH0:disk-mount-direct-rc.result
 C:Failat 30
@@ -61,6 +62,7 @@ C:Type DH0:disk-status-0.result
 C:Type DH0:disk-status-1.result
 C:Type DH0:disk-status-2.result
 C:Type DH0:disk-status-3.result
+C:Type DH0:disk-malformed.result
 C:Type DH0:disk-mount-direct.result
 C:Type DH0:disk-mount-direct-rc.result
 C:Type DH0:disk-failed-replacement.result

@@ -1,0 +1,8 @@
+C:Assign T: RAM:
+C:LoadModule DEVS:fujinet-disk.device
+C:Failat 30
+C:fujinet-mount --uri 0 host:/standard.adf RO >NIL:
+C:Echo "SILENT TIMEOUT RC=$RC" >DH0:silent-timeout.result
+C:Failat 10
+C:Type DH0:silent-timeout.result
+C:Echo "E2E COMPLETE"

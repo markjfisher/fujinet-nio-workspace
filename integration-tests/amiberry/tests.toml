@@ -58,8 +58,39 @@ results = [
   "disk-status-1.result",
   "disk-status-2.result",
   "disk-status-3.result",
+  "disk-malformed.result",
   "disk-mount-direct.result",
   "disk-mount-direct-rc.result",
   "disk-failed-replacement.result",
   "disk-status-7.result",
 ]
+
+[[test]]
+name = "diskdevice-mapping-failure"
+project = "apps"
+app = "wifitest"
+driver = true
+mapping_readonly = true
+timeout = 45
+activity_timeout = 35
+screenshot_quiet = 2
+completion_log = "E2E COMPLETE"
+startup = "startup/diskdevice-mapping-failure.sequence"
+results = [
+  "map-load.result",
+  "map-direct.result",
+  "map-failure.result",
+  "map-status.result",
+]
+
+[[test]]
+name = "diskdevice-silent-timeout"
+project = "apps"
+app = "wifitest"
+driver = true
+silent_peer = true
+timeout = 75
+activity_timeout = 60
+screenshot_quiet = 0.2
+startup = "startup/diskdevice-silent-timeout.sequence"
+results = ["silent-timeout.result"]

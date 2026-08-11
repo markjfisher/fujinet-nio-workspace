@@ -22,6 +22,7 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "STATUS drive=1 change=1 absent=0 protected=1" in results["disk-status-1.result"]
     assert "STATUS drive=2 change=3 absent=0 protected=0" in results["disk-status-2.result"]
     assert "STATUS drive=3 change=2 absent=1 protected=1" in results["disk-status-3.result"]
+    assert "MALFORMED URI REJECTED" in results["disk-malformed.result"]
     assert "MOUNTED drive=7 slot=8 readonly=1" in results["disk-mount-direct.result"]
     assert "DIRECT MOUNT RC=0" in results["disk-mount-direct-rc.result"]
     assert "FAILED REPLACEMENT RC=20" in results["disk-failed-replacement.result"]

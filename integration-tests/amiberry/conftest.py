@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import tomllib
@@ -164,6 +165,8 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
             catalog_dir.mkdir(parents=True, exist_ok=True)
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
+            if case.get("mapping_readonly"):
+                catalog_dir.chmod(0o555)
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
         command = [
@@ -201,6 +204,20 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
         if "activity_timeout" in case:
             test_env["AMIGA_E2E_ACTIVITY_TIMEOUT"] = str(case["activity_timeout"])
         runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
+        silent_peer = None
+        if case.get("silent_peer"):
+            silent_peer = subprocess.Popen(
+                [sys.executable, "-c",
+                 "import socket, sys, time; "
+                 "s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); "
+                 "s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen(1); "
+                 "c, _ = s.accept(); c.sendall(b'\\xc0'); time.sleep(120)",
+                 test_env["FUJINET_NIO_PORT"]],
+                cwd=ROOT,
+                env=test_env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         for stale_name in (
             "amiberry.sock.path",
             "amiberry-screen.png",
@@ -209,12 +226,11 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
             "bridge.log",
         ):
             (run_dir / stale_name).unlink(missing_ok=True)
-        runner = subprocess.Popen(
-            [str(ROOT / "scripts/run-amiberry-nio"), "--tcp", "--disk", str(image),
-             "--timeout", runner_timeout],
-            cwd=ROOT,
-            env=test_env,
-        )
+        runner_args = [str(ROOT / "scripts/run-amiberry-nio"), "--tcp", "--disk", str(image),
+                       "--timeout", runner_timeout]
+        if case.get("silent_peer"):
+            runner_args.append("--external-nio")
+        runner = subprocess.Popen(runner_args, cwd=ROOT, env=test_env)
         quit_sent = False
         try:
             socket_file = run_dir / "amiberry.sock.path"
@@ -259,7 +275,7 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                             quiet_since = None
                     previous = current
                     time.sleep(0.1)
-                if not saw_activity:
+                if not saw_activity and not case.get("silent_peer"):
                     raise AssertionError("Amiga guest produced no FujiBus activity before screenshot")
                 capture_delay = case.get(
                     "screenshot_delay",
@@ -274,6 +290,7 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                     cwd=ROOT,
                     env=test_env,
                     check=True,
+                    timeout=5,
                 )
                 if not screenshot.is_file():
                     raise AssertionError("Amiberry IPC reported success but retained no screenshot")
@@ -285,6 +302,7 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                     cwd=ROOT,
                     env=test_env,
                     check=False,
+                    timeout=5,
                 )
                 quit_sent = quit_result.returncode == 0
             return_code = runner.wait()
@@ -296,6 +314,9 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
             if runner.poll() is None:
                 runner.terminate()
                 runner.wait(timeout=5)
+            if silent_peer is not None and silent_peer.poll() is None:
+                silent_peer.terminate()
+                silent_peer.wait(timeout=5)
 
         results: dict[str, str] = {}
         with tempfile.TemporaryDirectory(prefix="amiga-results-") as result_dir:
