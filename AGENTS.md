@@ -9,10 +9,6 @@ environment setup:
 source "$NIO_WORKSPACE/scripts/env.sh"
 ```
 
-When `~/.local/bin/add_watcom.sh` exists, `scripts/env.sh` sources it for the
-current shell. This is required for the MS-DOS Open Watcom targets; do not
-assume `wcc` is on the global PATH.
-
 The same setup exports `CC65_HOME` for Atari/BBC builds and adds the configured
 Amiga cross-toolchain directory when available.
 
