@@ -1,6 +1,6 @@
 # Amiga DiskDevice driver over FujiBus
 
-Status: `IN PROGRESS`
+Status: `COMPLETED`
 
 Repositories:
 
@@ -53,7 +53,7 @@ do not silently treat a partial build as an all-target pass.
 - [x] Add a public API library-link test.
 - [x] Validate Atari, Linux, and the host test suite where toolchains are available.
 
-### 4. MS-DOS driver repository relocation — `IN REVIEW`
+### 4. MS-DOS driver repository relocation — `DONE`
 
 - [x] Move the existing MS-DOS implementation, headers, and tests under
       `repos/fujinet-nio-driver/msdos/`.
@@ -69,7 +69,7 @@ do not silently treat a partial build as an all-target pass.
 Exit criteria: the relocation is reviewed and committed with the documented
 MS-DOS driver artifact and integrated workflow intact.
 
-### 5. Amiga driver skeleton — `IN REVIEW`
+### 5. Amiga driver skeleton — `DONE`
 
 Library-side prerequisite:
 
@@ -96,7 +96,7 @@ test, existing MS-DOS tests, and complete library `make check` pass.
 Exit criteria: the driver builds with the Amiga toolchain and can issue a
 well-formed read-only Mount request for slot 1.
 
-### 6. Read-only standard ADF validation — `IN REVIEW`
+### 6. Read-only standard ADF validation — `DONE`
 
 - [x] Validate Mount using the standard ADF profile.
 - [x] Validate Info and geometry.
@@ -104,23 +104,25 @@ well-formed read-only Mount request for slot 1.
 - [x] Validate Dir.
 - [x] Validate Type.
 - [x] Add or retain deterministic protocol vectors and driver-side tests.
-- [ ] Make the native Amiga serial receive path honor the session timeout when
-      a peer remains silent; its current fallback performs a blocking one-byte
-      `serial.device` read. Shared session malformed/timeout vectors are
-      covered, but this hardware-channel deadline still needs implementation
-      and native validation.
+- [x] Make the native Amiga serial receive path honor the session timeout when
+      a peer remains silent. The Amiga transport now polls `serial.device` in
+      timer-backed slices, returns `FN_ERR_TIMEOUT` within the shared deadline,
+      and avoids an outstanding blocking one-byte read. The native silent-peer
+      Amiberry harness validates the bounded `RC=20` result; implementation is
+      committed as `bbc2c4bb`.
 
 The Amiberry acceptance test creates a deterministic 880 KiB ADF containing
 `KNOWN.TXT`, mounts it through the native device, and checks both `Dir` and
 `Type` output. During integration, filesystem task stacks exposed the 1 KiB
-stack-local DiskDevice codec reply buffer. The dedicated resident-driver
-library variant now explicitly uses synchronous static codec storage; normal
-Amiga application and MS-DOS builds keep their local-buffer policy.
+stack-local DiskDevice codec reply buffer. The resident driver now owns the
+codec, request, response, and transport context and scratch storage; normal
+Amiga applications and MS-DOS builds retain their target-specific buffer
+policies.
 
 Exit criteria: all read-only operations pass against the agreed ADF profile,
 with documented behavior for malformed responses and media errors.
 
-### 7. Reentrant resident-driver client state — `IN REVIEW / REQUIRED BEFORE STAGE 8`
+### 7. Reentrant resident-driver client state — `DONE`
 
 Stage 6 exposed a concrete conflict rather than a theoretical architecture
 choice. Function-local 1 KiB DiskDevice codec buffers overflow caller-owned
@@ -155,7 +157,7 @@ Exit criteria: the resident driver does not rely on large caller-stack codec
 buffers or mutable process-global DiskDevice request state, and tests
 demonstrate isolation between at least two independent client contexts.
 
-### 7a. Standalone Jeff handoff — `IN REVIEW / REQUIRED BEFORE STAGE 8`
+### 7a. Standalone Jeff handoff — `DONE`
 
 The driver and library must be consumable as sibling git submodules without
 the FujiNet NIO workspace scripts or environment setup.
@@ -181,7 +183,7 @@ Exit criteria: a consumer can add both repositories as git submodules, build
 the resident device and mount utility, install the documented files, and mount
 the read-only standard ADF profile without relying on workspace tooling.
 
-### 8. Write, cache, flush, and media-change policy — `IN PROGRESS`
+### 8. Write, cache, flush, and media-change policy — `DONE`
 
 The original one-unit skeleton was an implementation milestone, not an Amiga
 architecture constraint. Stage 8 must remove that shortcut before completion:
