@@ -71,6 +71,18 @@ def wait_for_logged_ipc_socket(log: Path, timeout: float = 5.0) -> Path | None:
     return None
 
 
+def wait_for_log_line(log: Path, text: str, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if text in log.read_text(encoding="utf-8", errors="replace"):
+                return
+        except FileNotFoundError:
+            pass
+        time.sleep(0.05)
+    raise TimeoutError(f"Amiberry log did not contain {text!r}")
+
+
 def terminate_process(process: subprocess.Popen[object] | None) -> None:
     if process is None or process.poll() is not None:
         return
@@ -300,7 +312,10 @@ class AmigaRunner:
             # IPC is optional in Amiberry builds; serial testing must still work.
             pass
         if self.serial_mode == "tcp":
-            wait_for_tcp(self.host, self.amiga_port)
+            # Connecting here is not a harmless readiness check: Amiberry
+            # treats every TCP connection as a serial session, so the probe
+            # can reset the guest before the real socat bridge is attached.
+            wait_for_log_line(self.amiberry_log, "TCP: Listening")
             print("Bridging Amiberry TCP to FujiNet NIO TCP")
             bridge_args = ["-d", "-d"]
             if os.environ.get("SOCAT_HEXDUMP") == "1":
