@@ -146,6 +146,7 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
 
         run_dir = amiga_evidence_root / name
         run_dir.mkdir(parents=True, exist_ok=True)
+        readonly_catalog_dir = None
         if case.get("driver"):
             subprocess.run(
                 ["make", "amiga"],
@@ -154,6 +155,9 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                 check=True,
             )
             host_root = run_dir / "fujinet-data"
+            stale_catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
+            if stale_catalog_dir.is_dir():
+                stale_catalog_dir.chmod(0o755)
             shutil.rmtree(host_root, ignore_errors=True)
             host_root.mkdir(parents=True, exist_ok=True)
             create_standard_adf(amiga_environment, host_root / "standard.adf")
@@ -167,6 +171,7 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
             if case.get("mapping_readonly"):
                 catalog_dir.chmod(0o555)
+                readonly_catalog_dir = catalog_dir
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
         command = [
@@ -317,6 +322,8 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
             if silent_peer is not None and silent_peer.poll() is None:
                 silent_peer.terminate()
                 silent_peer.wait(timeout=5)
+            if readonly_catalog_dir is not None and readonly_catalog_dir.is_dir():
+                readonly_catalog_dir.chmod(0o755)
 
         results: dict[str, str] = {}
         with tempfile.TemporaryDirectory(prefix="amiga-results-") as result_dir:
