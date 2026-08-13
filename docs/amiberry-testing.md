@@ -206,6 +206,43 @@ provides commands such as `READ_MEM`, `GET_CPU_REGS`, and `GET_CONFIG` for
 future diagnostics. See the [Amiberry IPC socket documentation](https://github.com/BlitterStudio/amiberry/wiki/IPC-Socket-support)
 for command and key-code details.
 
+### Debugger IPC
+
+The existing `scripts/amiberry-ipc` helper passes debugger commands directly
+to Amiberry:
+
+```sh
+./scripts/amiberry-ipc DEBUG_ACTIVATE
+./scripts/amiberry-ipc DEBUG_STATUS
+./scripts/amiberry-ipc GET_CPU_REGS
+./scripts/amiberry-ipc SET_BREAKPOINT 0xADDRESS
+./scripts/amiberry-ipc DISASSEMBLE 0xADDRESS 16
+./scripts/amiberry-ipc READ_MEM 0xADDRESS 4
+./scripts/amiberry-ipc DEBUG_CONTINUE
+```
+
+Breakpoint hits leave the emulator paused. Capture registers, disassembly,
+and request memory with the same helper before issuing `DEBUG_CONTINUE`.
+`READ_MEM` accepts widths 1, 2, or 4 bytes.
+
+The Amiga driver link writes a symbol map beside the resident binary:
+
+```text
+repos/fujinet-nio-driver/build/amiga/fujinet-disk.device.map
+```
+
+Use the map or `m68k-amigaos-nm -n` to obtain link-time symbol offsets. The
+resident binary is relocatable, so establish the loaded relocation base from
+a known resident entry point or breakpoint/disassembly address before adding
+that base to symbol offsets. Do not add resident data or diagnostic commands
+to expose the base.
+
+At `device_begin_io()`, the live request is in `A1` and the resident base is
+in `A6`. Use `READ_MEM` against `A1` to inspect the standard request fields:
+command, flags, error, actual, length, offset, and unit. On a timeout, capture
+`GET_CPU_REGS`, `DISASSEMBLE` around `PC`, and a small `READ_MEM` window around
+`A7` before issuing the normal `QUIT`.
+
 On a native Wayland desktop such as Hyprland, `wtype` and `grim` remain useful
 fallbacks when IPC is unavailable. `grim` captures the whole desktop for test
 evidence:

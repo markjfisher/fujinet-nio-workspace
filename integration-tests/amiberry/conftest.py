@@ -647,6 +647,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
             # ---------------------------------------------------------------
             # Phase 3: Quit Amiberry cleanly, wait for runner.
             # ---------------------------------------------------------------
+            if ipc_sock is not None and time.monotonic() >= activity_deadline:
+                _capture_debug_snapshot(ipc_sock, run_dir / "amiberry-timeout-debug.log")
             quit_sent = _ipc_quit(ipc_sock)
             return_code = runner.wait(timeout=10)
             if return_code and not (quit_sent and return_code == 250):
