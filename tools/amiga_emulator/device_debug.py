@@ -23,7 +23,13 @@ DEV_ABORT_IO = -36
 
 # ExecBase has LibNode followed by the static/dynamic fields and system lists.
 # This is generated from exec/execbase.h layout for the m68k NDK ABI.
-EXEC_DEVICE_LIST = 346
+EXEC_DEVICE_LIST = 350
+AMIGA_ADDRESS_MAX = 0x00FFFFFF
+
+
+def plausible_address(value: int, alignment: int = 2) -> bool:
+    return (value != 0 and value <= AMIGA_ADDRESS_MAX and
+            value % alignment == 0)
 
 
 @dataclass(frozen=True)
@@ -47,7 +53,17 @@ def read_word(socket_path: Path, address: int, width: int) -> int:
     return _value(ipc.request(socket_path, "READ_MEM", hex(address), str(width)))
 
 
+def read_vector(socket_path: Path, base: int, offset: int) -> int:
+    """Decode an Amiga six-byte JMP absolute-long library vector."""
+    opcode = read_word(socket_path, base + offset, 2)
+    if opcode != 0x4EF9:
+        raise ValueError(f"unexpected vector opcode {opcode:#x} at {base + offset:#x}")
+    return read_word(socket_path, base + offset + 2, 4)
+
+
 def read_c_string(socket_path: Path, address: int, limit: int = 64) -> str:
+    if not plausible_address(address, 1):
+        raise ValueError(f"implausible string pointer {address:#x}")
     data = bytearray()
     for offset in range(limit):
         value = read_word(socket_path, address + offset, 1)
@@ -61,29 +77,39 @@ def resolve_device(socket_path: Path, name: str = "fujinet-disk.device",
                    max_nodes: int = 256) -> tuple[int, DeviceVectors, list[str]]:
     """Walk Exec's live device list and resolve one device's vectors."""
     exec_base = read_word(socket_path, 4, 4)
+    if not plausible_address(exec_base, 2):
+        raise ValueError(f"implausible ExecBase pointer {exec_base:#x}")
     head = read_word(socket_path, exec_base + EXEC_DEVICE_LIST, 4)
+    if head and not plausible_address(head, 2):
+        raise ValueError(f"implausible device-list head {head:#x}")
     seen: set[int] = set()
     names: list[str] = []
     node = head
     for _ in range(max_nodes):
         if node == 0 or node in seen:
             break
+        if not plausible_address(node, 2):
+            raise ValueError(f"implausible device-list node {node:#x}")
         seen.add(node)
         name_ptr = read_word(socket_path, node + NODE_NAME, 4)
+        if name_ptr and not plausible_address(name_ptr, 1):
+            raise ValueError(f"implausible ln_Name pointer {name_ptr:#x}")
         node_name = read_c_string(socket_path, name_ptr) if name_ptr else ""
         names.append(node_name)
         if node_name == name:
             vectors = DeviceVectors(
                 base=node,
-                open=read_word(socket_path, node + LIB_OPEN, 4),
-                close=read_word(socket_path, node + LIB_CLOSE, 4),
-                expunge=read_word(socket_path, node + LIB_EXPUNGE, 4),
-                reserved=read_word(socket_path, node + LIB_RESERVED, 4),
-                begin_io=read_word(socket_path, node + DEV_BEGIN_IO, 4),
-                abort_io=read_word(socket_path, node + DEV_ABORT_IO, 4),
+                open=read_vector(socket_path, node, LIB_OPEN),
+                close=read_vector(socket_path, node, LIB_CLOSE),
+                expunge=read_vector(socket_path, node, LIB_EXPUNGE),
+                reserved=read_vector(socket_path, node, LIB_RESERVED),
+                begin_io=read_vector(socket_path, node, DEV_BEGIN_IO),
+                abort_io=read_vector(socket_path, node, DEV_ABORT_IO),
             )
             return exec_base, vectors, names
         node = read_word(socket_path, node + NODE_SUCC, 4)
+        if node and not plausible_address(node, 2):
+            raise ValueError(f"implausible successor pointer {node:#x}")
     raise LookupError(f"device {name!r} not found; walked {names!r}")
 
 

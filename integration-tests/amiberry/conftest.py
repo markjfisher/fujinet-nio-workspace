@@ -464,11 +464,15 @@ def run_amiga_case(amiga_environment: dict[str, str],
         # Timing parameters — screen-quiet is now the primary completion signal.
         screenshot_quiet = float(case.get("screenshot_quiet", 3))
         activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
+        debugger_mode = test_env.get("AMIGA_E2E_DEBUGGER", "0") == "1"
         screenshot_interval = float(case.get("screenshot_interval", 1.0))
         external_activity_evidence = bool(case.get("silent_peer") or case.get("native_floppy"))
         # How long after boot with NO screen movement before giving up.
         no_activity_timeout = float(case.get("no_activity_timeout", 20))
-        runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
+        runner_timeout = str(
+            3600 if debugger_mode else
+            case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20"))
+        )
 
         # Kill any stale processes left from a prior crashed run of THIS test
         # by checking the specific ports this test uses.  We do NOT pkill by
@@ -558,11 +562,32 @@ def run_amiga_case(amiga_environment: dict[str, str],
             screen_ever_changed = False
             last_shot_at = 0.0
             shot_index = 0
+            debugger_paused = False
             boot_time = time.monotonic()
             activity_deadline = boot_time + activity_timeout
+            if debugger_mode:
+                # The external controller owns the debugger session duration;
+                # retain the normal deadline as a fallback after it resumes.
+                activity_deadline = boot_time + max(activity_timeout, 3600)
 
             while time.monotonic() < activity_deadline:
                 now = time.monotonic()
+
+                # Host-side debugger work may intentionally pause the emulator
+                # while resolving resident state or collecting a breakpoint
+                # snapshot. Do not let the normal activity deadline terminate
+                # that diagnostic session.
+                if debugger_mode and ipc_sock is not None:
+                    try:
+                        status = _amiberry_ipc.request(ipc_sock, "GET_STATUS",
+                                                       timeout=0.25)
+                        debugger_paused = "Paused=true" in status
+                        if debugger_paused:
+                            activity_deadline = max(
+                                activity_deadline, now + activity_timeout
+                            )
+                    except (OSError, RuntimeError):
+                        pass
 
                 # NIO log — check for any FujiBus traffic (evidence only).
                 if nio_log.is_file():
@@ -610,14 +635,16 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 # gone quiet -> sequence finished. This avoids cutting off
                 # longer runs that keep a static Workbench frame while guest
                 # commands continue in the background.
-                if screen_quiet_since is not None and (now - screen_quiet_since) >= screenshot_quiet:
+                if (not debugger_mode and not debugger_paused and screen_quiet_since is not None and
+                        (now - screen_quiet_since) >= screenshot_quiet):
                     if external_activity_evidence:
                         break
                     if last_activity_at is None or (now - last_activity_at) >= screenshot_quiet:
                         break
 
                 # Fast-fail: booted but screen has never moved for no_activity_timeout.
-                if prev_shot and not screen_ever_changed and not external_activity_evidence:
+                if (not debugger_mode and prev_shot and not screen_ever_changed and
+                        not external_activity_evidence):
                     if (now - boot_time) > no_activity_timeout:
                         break
 
