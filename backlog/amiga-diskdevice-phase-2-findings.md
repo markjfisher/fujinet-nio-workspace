@@ -4,6 +4,14 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 13:30
+
+- Second resident-device lifetime fix landed: retained `TD_ADDCHANGEINT` registrations now store the interrupt pointer at registration time and `signal_media_change()` no longer re-reads `io_Data` from possibly stale `IORequest` objects. This moved the live Amiberry boundary forward again.
+- With that fix in place, the `diskdevice-adf` run once more reaches the RW `DN2:` mount and issues multiple successful `CMD_WRITE` sector transfers before dying during ordinary AmigaDOS file output. Latest good narrowed boundary: RW mount succeeds, five sector writes complete, but `disk-copy-rw.result` is still never written and `PERSIST.TXT` does not survive in the resulting ADF.
+- Tried correcting `TD_GETNUMTRACKS` from 80 to 160 because the current code was returning cylinders, not tracks. Native tests still passed, but it did not resolve the writable-DN2 crash.
+- Tried keeping the resident transport session open across empty FIFO batches; this regressed the suite back to the first mount because standalone CLI tools need the backend handle released between batches. That experiment was reverted immediately.
+
+
 ## Progress 2026-08-13 13:18
 
 - First concrete driver fix landed in `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c`: `device_close()` now clears retained `TD_REMOVE` waiters and removes queued work for the closing `IORequest`, instead of leaving stale request pointers inside the resident device across handler/CLI teardown.
