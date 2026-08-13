@@ -3,6 +3,13 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 21:47
+
+- The first post-Copy `CMD_UPDATE` trace is complete in `test-evidence/amiberry-20260813-214611/diskdevice-adf/beginio-command-stream.log`. The exact quick request is command `4`, flags `0x1`, zero offset and length; it reaches CMD_UPDATE entry, `fujinet_disk_flush()` entry, flush return, and the common post-`io_Error` completion point.
+- `fujinet_disk_flush()` returns `FN_OK` (`D0 & 0xff == 0`; upper D0 bits are outside the byte-sized result), and at common completion the request still has `IOF_QUICK`, `io_Error=0`, and `io_Actual=0`. No ReplyMsg is expected for this quick request. The next BeginIO is command `22` (`TD_ADDCHANGEINT`), so CMD_UPDATE returned synchronously as Exec expects.
+- The matching NIO log confirms transport activity: after the six DiskDevice write requests (`cmd=0x04`, ids 54-59), the traced unit's DiskDevice Flush is transmitted as `id=60 dev=0xFC cmd=0x0E`, payload slot `3`, and receives `status=0` response (`fujinet-nio.log` lines 1480-1485). The update/flush operation neither stalls nor fails.
+- No resident device or guest-sequence change was made. The next narrowing boundary is after the successful quick CMD_UPDATE, beginning with `TD_ADDCHANGEINT`, not CMD_WRITE, Flush, IOF_QUICK completion, or ReplyMsg.
+
 ## Progress 2026-08-13 21:36
 
 - Internal host-only completion tracing is complete for Copy records 52-57. Evidence is `test-evidence/amiberry-20260813-213612/diskdevice-adf/beginio-command-stream.log`; it resolves the live relocation delta (`0xc30010`) and verifies the runtime opcodes for `fujinet_disk_write()` entry, its CMD_WRITE return site, and the common pre-`ReplyMsg()` completion call.
