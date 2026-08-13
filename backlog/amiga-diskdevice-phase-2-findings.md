@@ -3,6 +3,13 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 21:36
+
+- Internal host-only completion tracing is complete for Copy records 52-57. Evidence is `test-evidence/amiberry-20260813-213612/diskdevice-adf/beginio-command-stream.log`; it resolves the live relocation delta (`0xc30010`) and verifies the runtime opcodes for `fujinet_disk_write()` entry, its CMD_WRITE return site, and the common pre-`ReplyMsg()` completion call.
+- Every targeted `CMD_WRITE` enters `fujinet_disk_write()`, returns with success (`D0 & 0xff == 0`; upper D0 bits are not part of the byte-sized FN result), sets `io_Actual=512`, retains `io_Error=0`, and reaches the common pre-`ReplyMsg()` boundary. This includes record 57 at LBA 882.
+- Record 57 therefore is not the failure boundary: it enters, completes, and replies normally. The next `BeginIO` after record 57 is `CMD_UPDATE` (command `4`), `IOF_QUICK` (`flags=0x1`), zero length and offset, on a distinct request pointer. Progression reaches the filesystem update/flush phase after the Copy writes.
+- No resident device or guest-sequence change was made. The next investigation boundary is the `CMD_UPDATE`/flush handling and its completion, not `CMD_WRITE`, `io_Actual`, or ReplyMsg for the six Copy writes.
+
 ## Progress 2026-08-13 21:18
 
 - The host-side Amiberry `BeginIO` trace is now deterministic without changing the resident device or the guest startup sequence. The runner pauses before opening the serial bridge; the controller waits for the existing `LoadModule` command to register `fujinet-disk.device`, resolves the live vector from Exec's `DeviceList`, arms only `device_begin_io()`, then resumes and records each request.
