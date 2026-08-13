@@ -3,6 +3,13 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-14 00:00
+
+- Current fresh evidence (`test-evidence/amiberry-20260813-232447/diskdevice-adf/fujinet-data/writable.adf`) does **not** reproduce the older malformed-file state. `xdftool` lists `PERSIST.TXT` at 24 bytes; raw LBA 882 is its OFS file header (data block pointer `883`, byte count `24`) and LBA 883 contains `FUJINET WRITE PERSISTED\n`. LBA 881 is a valid bitmap block. Do not carry forward the historical FileData Block Count Mismatch as a current result without re-verifying it.
+- Added `tools/amiga_emulator/disk_write_compare.py`, a host-only offline comparator for full NIO log records and backing ADF sectors. For the current run, the final logged DiskDevice write payload prefixes match the stored sectors: LBA 880 request 63, LBA 881 request 61, LBA 882 request 62, and LBA 883 request 57 all match for the 504 sector bytes retained by the NIO formatter.
+- The NIO formatter truncates each 520-byte write record after 512 wire bytes, leaving the final 8 sector bytes unavailable from historical logs. A host-only exact-buffer capture controller was prepared, but its debugger-mode runs did not reach the Copy phase within the controller deadline and produced no target captures; do not treat them as sector evidence. The available current evidence excludes a persistence mismatch in all recorded metadata/payload bytes and supports normal stored OFS metadata.
+- This run therefore cannot establish either requested failure case A or B: it has a correct persisted file and no structural inconsistency. No native DF0 control artifact is retained in the current evidence tree for an optional sector comparison.
+
 ## Progress 2026-08-13 23:24
 
 - The existing `amiberry-20260813-231309` HDF was extracted directly with the harness's `xdftool` path. It contains `disk-copy-rw.result` (`COPY RC=0`), `disk-update.result` (`UPDATED drive=2 slot=3`), `disk-remount-rw.result`, `disk-dos-remount-2.result` (`DOS REMOUNT 2 RC=0`), and an empty `disk-persist.result`. All later requested checkpoints are absent. That run definitely reached `C:Type DN2:PERSIST.TXT` and created its redirected result file, even though the Type output was empty.
