@@ -3,12 +3,19 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 22:51
+
+- Corrected the post-update command decoding using the installed NDK: `CMD_NONSTD=9`, so `TD_ADDCHANGEINT=20`, `TD_REMCHANGEINT=21`, and `TD_GETGEOMETRY=22`. The earlier label of command `22` as ADDCHANGEINT was wrong; it is ordinary quick geometry bookkeeping.
+- The bounded post-update trace in `test-evidence/amiberry-20260813-225058/diskdevice-adf/beginio-command-stream.log` did not issue any command `20` before its 55-second cutoff. Therefore this Copy reproduction provides no `TD_ADDCHANGEINT` registration to inspect, and there is no evidence of a retained-request lifecycle violation, removal, abort, or media-change callback on this path.
+- The first 10 post-update BeginIO calls are normal geometry/write/update/query work: command `22` (`TD_GETGEOMETRY`), writes at LBAs 881/882/880, quick `CMD_UPDATE`, command `9` (`TD_MOTOR`), command `268` (`TD_GETGEOMETRY` with extension bit), then more update/motor/query/read operations. The trace continues past these operations; no first non-completing command was isolated before the controller deadline.
+- Do not investigate ADDCHANGEINT registration as the immediate post-Copy boundary unless a future trace actually observes command `20`. The immediate observed sequence instead returns to normal OFS metadata writes, including LBA 881, after the successful quick update.
+
 ## Progress 2026-08-13 21:47
 
 - The first post-Copy `CMD_UPDATE` trace is complete in `test-evidence/amiberry-20260813-214611/diskdevice-adf/beginio-command-stream.log`. The exact quick request is command `4`, flags `0x1`, zero offset and length; it reaches CMD_UPDATE entry, `fujinet_disk_flush()` entry, flush return, and the common post-`io_Error` completion point.
-- `fujinet_disk_flush()` returns `FN_OK` (`D0 & 0xff == 0`; upper D0 bits are outside the byte-sized result), and at common completion the request still has `IOF_QUICK`, `io_Error=0`, and `io_Actual=0`. No ReplyMsg is expected for this quick request. The next BeginIO is command `22` (`TD_ADDCHANGEINT`), so CMD_UPDATE returned synchronously as Exec expects.
+- `fujinet_disk_flush()` returns `FN_OK` (`D0 & 0xff == 0`; upper D0 bits are outside the byte-sized result), and at common completion the request still has `IOF_QUICK`, `io_Error=0`, and `io_Actual=0`. No ReplyMsg is expected for this quick request. The immediate next BeginIO is command `22` (`TD_GETGEOMETRY`), so CMD_UPDATE returned synchronously as Exec expects. `TD_ADDCHANGEINT` is command `20` (`CMD_NONSTD + 11`) and requires a separate lifecycle trace.
 - The matching NIO log confirms transport activity: after the six DiskDevice write requests (`cmd=0x04`, ids 54-59), the traced unit's DiskDevice Flush is transmitted as `id=60 dev=0xFC cmd=0x0E`, payload slot `3`, and receives `status=0` response (`fujinet-nio.log` lines 1480-1485). The update/flush operation neither stalls nor fails.
-- No resident device or guest-sequence change was made. The next narrowing boundary is after the successful quick CMD_UPDATE, beginning with `TD_ADDCHANGEINT`, not CMD_WRITE, Flush, IOF_QUICK completion, or ReplyMsg.
+- No resident device or guest-sequence change was made. The next narrowing boundary is after the successful quick CMD_UPDATE, including normal `TD_GETGEOMETRY` bookkeeping and then the actual `TD_ADDCHANGEINT` registration, not CMD_WRITE, Flush, IOF_QUICK completion, or ReplyMsg.
 
 ## Progress 2026-08-13 21:36
 

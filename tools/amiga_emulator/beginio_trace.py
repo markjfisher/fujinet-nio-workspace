@@ -21,6 +21,11 @@ UPDATE_ENTRY_LINK = 0x159C
 FLUSH_ENTRY_LINK = 0x0450
 FLUSH_RETURN_LINK = 0x15A8
 COMPLETION_LINK = 0x13E4
+ADD_EXISTING_LINK = 0x1810
+ADD_ALLOC_LINK = 0x1B72
+ADD_REQUEST_STORE_LINK = 0x1B8C
+ADD_TAIL_LINK = 0x1BA4
+ADD_CLEAR_QUICK_LINK = 0x1840
 COPY_WRITE_LBAS = (880, 882, 882, 883, 880, 882)
 
 
@@ -152,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
             flush_entry = delta + FLUSH_ENTRY_LINK
             flush_return = delta + FLUSH_RETURN_LINK
             completion = delta + COMPLETION_LINK
+            add_existing = delta + ADD_EXISTING_LINK
+            add_alloc = delta + ADD_ALLOC_LINK
+            add_request_store = delta + ADD_REQUEST_STORE_LINK
+            add_tail = delta + ADD_TAIL_LINK
+            add_clear_quick = delta + ADD_CLEAR_QUICK_LINK
             assert_instruction(socket_path, write_entry, 0x4FEF, "fujinet_disk_write")
             assert_instruction(socket_path, write_return, 0x4FEF, "write return")
             assert_instruction(socket_path, reply_msg, 0x4EAE, "ReplyMsg")
@@ -159,6 +169,11 @@ def main(argv: list[str] | None = None) -> int:
             assert_instruction(socket_path, flush_entry, 0x518F, "fujinet_disk_flush")
             assert_instruction(socket_path, flush_return, 0x508F, "flush return")
             assert_instruction(socket_path, completion, 0x226D, "completion")
+            assert_instruction(socket_path, add_existing, 0x226D, "ADDCHANGEINT existing")
+            assert_instruction(socket_path, add_alloc, 0x2C79, "ADDCHANGEINT allocation")
+            assert_instruction(socket_path, add_request_store, 0x276D, "registration request store")
+            assert_instruction(socket_path, add_tail, 0x4EAE, "registration AddTail")
+            assert_instruction(socket_path, add_clear_quick, 0x226D, "ADDCHANGEINT quick clear")
             ipc.request(socket_path, "SET_CPU_SPEED", "10")
             trace.write(
                 f"EXEC_BASE {exec_base:#x}\nDEVICE_BASE {vectors.base:#x}\n"
@@ -178,12 +193,17 @@ def main(argv: list[str] | None = None) -> int:
             await_next_begin = False
             update_request: int | None = None
             await_next_after_update = False
+            change_request: int | None = None
+            change_registration: int | None = None
+            change_events = 0
+            change_begin_seen = False
             while hits < args.limit and time.monotonic() < deadline:
                 try:
                     pc = wait_for_breakpoint_addresses(
                         socket_path,
                         {vectors.begin_io, write_entry, write_return, reply_msg,
-                         update_entry, flush_entry, flush_return, completion},
+                         update_entry, flush_entry, flush_return, completion,
+                         add_existing, add_alloc, add_request_store, add_tail, add_clear_quick},
                         timeout=min(args.hit_timeout, deadline - time.monotonic()),
                     )
                 except TimeoutError:
@@ -193,11 +213,9 @@ def main(argv: list[str] | None = None) -> int:
                 registers = parse_registers(ipc.request(socket_path, "GET_CPU_REGS"))
                 if pc == vectors.begin_io:
                     request = read_request(socket_path, registers["A1"])
-                    if await_next_after_update:
-                        trace.write("event=next-after-update " + request_record(registers, request, "begin") + "\n")
-                        trace.write("NEXT_BEGIN_AFTER_UPDATE_CAPTURED\n")
+                    if await_next_after_update and request["io_Command"] != 20:
+                        trace.write("event=post-update " + request_record(registers, request, "begin") + "\n")
                         trace.flush()
-                        break
                     if await_next_begin:
                         if (request["io_Command"] == 4 and request["io_Flags"] == 0x1 and
                                 request["io_Offset"] == 0 and request["io_Length"] == 0):
@@ -214,6 +232,19 @@ def main(argv: list[str] | None = None) -> int:
                             trace.write("event=unexpected-after-copy " + request_record(registers, request, "begin") + "\n")
                             trace.flush()
                             break
+                    elif (request["io_Command"] == 20 and update_request is not None and
+                          change_request is None):
+                        change_request = request["address"]
+                        change_begin_seen = True
+                        ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(update_entry))
+                        ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(flush_entry))
+                        ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(flush_return))
+                        ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(completion))
+                        ipc.request(socket_path, "SET_BREAKPOINT", hex(add_existing), "1")
+                        ipc.request(socket_path, "SET_BREAKPOINT", hex(add_alloc), "2")
+                        ipc.request(socket_path, "SET_BREAKPOINT", hex(add_clear_quick), "3")
+                        trace.write("event=addchange-begin " + request_record(registers, request, "begin") + "\n")
+                        trace.flush()
                     lba = request["io_Offset"] // 512 if request["io_Offset"] % 512 == 0 else None
                     if (request["io_Command"] == 3 and request["io_Length"] == 512 and
                             len(copy_records) < len(COPY_WRITE_LBAS) and
@@ -237,23 +268,24 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     if request_address in target_requests:
                         request = read_request(socket_path, request_address)
-                        event = {
-                            write_entry: "write-entry",
-                            write_return: "write-return",
-                            reply_msg: "pre-reply",
-                        }[pc]
-                        result = registers["D0"] if pc == write_return else None
-                        trace.write(
-                            f"record={target_requests[request_address]} " +
-                            request_record(registers, request, event, result) + "\n"
-                        )
-                        if event == "write-return" and target_requests[request_address] == 57:
-                            # The six Copy writes have all reached the driver
-                            # return. Stop pausing on later reused IORequests
-                            # and leave only BeginIO plus ReplyMsg armed.
-                            ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(write_entry))
-                            ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(write_return))
-                            final_write_returned = True
+                        if pc in {write_entry, write_return, reply_msg}:
+                            event = {
+                                write_entry: "write-entry",
+                                write_return: "write-return",
+                                reply_msg: "pre-reply",
+                            }[pc]
+                            result = registers["D0"] if pc == write_return else None
+                            trace.write(
+                                f"record={target_requests[request_address]} " +
+                                request_record(registers, request, event, result) + "\n"
+                            )
+                            if event == "write-return" and target_requests[request_address] == 57:
+                                # The six Copy writes have all reached the driver
+                                # return. Stop pausing on later reused IORequests
+                                # and leave only BeginIO plus ReplyMsg armed.
+                                ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(write_entry))
+                                ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(write_return))
+                                final_write_returned = True
                     elif update_request is not None and request_address == update_request:
                         request = read_request(socket_path, request_address)
                         event = {
@@ -267,6 +299,31 @@ def main(argv: list[str] | None = None) -> int:
                         if pc == completion:
                             trace.write("UPDATE_COMPLETION_CAPTURED\n")
                             await_next_after_update = True
+                            update_request = None
+                    elif change_request is not None and pc in {add_existing, add_alloc, add_request_store, add_tail, add_clear_quick}:
+                        active = active_request_address(socket_path, registers)
+                        if active == change_request:
+                            if pc in {add_existing, add_request_store, add_tail}:
+                                change_registration = registers.get("A3", change_registration)
+                            event = {
+                                add_existing: "addchange-existing-or-converged",
+                                add_alloc: "addchange-alloc",
+                                add_request_store: "addchange-request-store",
+                                add_tail: "addchange-addtail",
+                                add_clear_quick: "addchange-before-clear-quick",
+                            }[pc]
+                            request = read_request(socket_path, change_request)
+                            trace.write(
+                                f"event=addchange registration={(change_registration or 0):#x} " +
+                                request_record(registers, request, event) + "\n"
+                            )
+                            if pc == add_alloc:
+                                ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(add_alloc))
+                                ipc.request(socket_path, "SET_BREAKPOINT", hex(add_request_store), "2")
+                            elif pc == add_request_store:
+                                ipc.request(socket_path, "CLEAR_BREAKPOINT", hex(add_request_store))
+                                ipc.request(socket_path, "SET_BREAKPOINT", hex(add_tail), "2")
+                            change_events += 1
                 trace.flush()
                 if final_write_returned and pc == reply_msg:
                     # One completion boundary per target is enough; the next
@@ -276,6 +333,16 @@ def main(argv: list[str] | None = None) -> int:
                            for record in range(52, 58)):
                         trace.write("COPY_COMPLETION_BOUNDARY_CAPTURED\n")
                         await_next_begin = True
+                if change_request is not None and change_begin_seen and pc == vectors.begin_io:
+                    request = read_request(socket_path, registers["A1"])
+                    if request["address"] == change_request and request["io_Command"] != 22:
+                        trace.write("LIFECYCLE_VIOLATION_REUSED_REQUEST\n")
+                        break
+                    trace.write("event=after-addchange " + request_record(registers, request, "begin") + "\n")
+                    change_events += 1
+                    if change_events >= 8:
+                        trace.write("ADDCHANGE_FOLLOWING_COMMANDS_CAPTURED\n")
+                        break
                 ipc.request(socket_path, "DEBUG_CONTINUE")
             else:
                 trace.write(f"LIMIT_OR_DEADLINE index={hits}\n")
