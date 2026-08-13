@@ -27,3 +27,23 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "DIRECT MOUNT RC=0" in results["disk-mount-direct-rc.result"]
     assert "FAILED REPLACEMENT RC=20" in results["disk-failed-replacement.result"]
     assert "STATUS drive=7 change=1 absent=0 protected=1" in results["disk-status-7.result"]
+
+
+def test_native_floppy_adf_dir_and_type(run_amiga_case):
+    results = run_amiga_case("diskdevice-adf-native-floppy")
+
+    assert "DIR RC=0" in results["df0-dir-rc.result"]
+    assert "KNOWN.TXT" in results["df0-dir.result"].upper()
+    assert "FUJINET ADF READ PASSED" in results["df0-type.result"]
+
+
+def test_hd_adf_mount_geometry_dir_and_type(run_amiga_case):
+    results = run_amiga_case("diskdevice-hd-adf")
+
+    assert "LOAD RC=0" in results["hd-load.result"]
+    assert "sectorCount=3520" in results["hd-mount.result"]
+    assert "HD MOUNT RC=0" in results["hd-mount.result"]
+    assert "HD.TXT" in results["hd-dir.result"].upper()
+    assert "DIR RC=0" in results["hd-dir.result"]
+    assert "FUJINET HD ADF READ PASSED" in results["hd-type.result"]
+    assert "STATUS drive=0 change=1 absent=0 protected=1" in results["hd-status.result"]

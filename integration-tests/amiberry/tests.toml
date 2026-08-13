@@ -29,9 +29,9 @@ app = "wifitest"
 driver = true
 timeout = 75
 activity_timeout = 60
-screenshot_quiet = 10
-completion_log = "E2E COMPLETE"
-screenshot_delay = 0.2
+no_activity_timeout = 30
+screenshot_quiet = 5
+screenshot_interval = 1.0
 startup = "startup/diskdevice-adf.sequence"
 results = [
   "disk-load.result",
@@ -66,6 +66,46 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-hd-adf"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 5
+screenshot_interval = 1.0
+startup = "startup/diskdevice-hd-adf.sequence"
+results = [
+  "hd-load.result",
+  "hd-mount.result",
+  "hd-geometry.result",
+  "hd-dir.result",
+  "hd-type.result",
+  "hd-status.result",
+]
+
+[[test]]
+name = "diskdevice-fmount"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 75
+activity_timeout = 45
+screenshot_quiet = 5
+screenshot_interval = 1.0
+no_activity_timeout = 25
+startup = "startup/diskdevice-fmount.sequence"
+results = [
+  "fmount-load.result",
+  "fmount-mount.result",
+  "fmount-status.result",
+  "fmount-dir.result",
+  "fmount-type.result",
+  "fumount-eject.result",
+  "fumount-status.result",
+]
+
+[[test]]
 name = "diskdevice-mapping-failure"
 project = "apps"
 app = "wifitest"
@@ -74,7 +114,7 @@ mapping_readonly = true
 timeout = 45
 activity_timeout = 35
 screenshot_quiet = 2
-completion_log = "E2E COMPLETE"
+screenshot_interval = 1.0
 startup = "startup/diskdevice-mapping-failure.sequence"
 results = [
   "map-load.result",
@@ -95,5 +135,23 @@ silent_peer = true
 timeout = 40
 activity_timeout = 25
 screenshot_quiet = 0.2
+screenshot_interval = 0.5
 startup = "startup/diskdevice-silent-timeout.sequence"
 results = ["silent-timeout.result"]
+
+[[test]]
+name = "diskdevice-adf-native-floppy"
+project = "apps"
+app = "wifitest"
+native_floppy = true
+timeout = 60
+activity_timeout = 50
+no_activity_timeout = 20
+screenshot_quiet = 5
+screenshot_interval = 1.0
+startup = "startup/diskdevice-adf-native-floppy.sequence"
+results = [
+  "df0-dir.result",
+  "df0-dir-rc.result",
+  "df0-type.result",
+]

@@ -1,6 +1,6 @@
 # Amiga DiskDevice Phase 2 — general media and standard tools
 
-Status: `TODO`
+Status: `IN PROGRESS`
 
 ## Goal
 
@@ -26,16 +26,16 @@ progression are specified in the associated
 
 ## Standard command ownership
 
-- [ ] Make the Amiga build of `nio-core-apps` `FMOUNT` perform the complete
+- [x] Make the Amiga build of `nio-core-apps` `FMOUNT` perform the complete
       catalogue-slot-to-`DNx:` operation through `fujinet-disk.device`,
       including RO/RW selection, replacement, local change notification, and
       persistent `config-nio/mappings` updates.
-- [ ] Provide the corresponding standard `FUMOUNT` operation for an Amiga
+- [x] Provide the corresponding standard `FUMOUNT` operation for an Amiga
       drive, with driver-mediated flush/eject and mapping removal.
-- [ ] Define Amiga-appropriate arguments (`FMOUNT slot drive [RO|RW]`, where
+- [x] Define Amiga-appropriate arguments (`FMOUNT slot drive [RO|RW]`, where
       drive accepts `DN0:`–`DN7:` or the documented numeric equivalent)
       without forcing BBC or MS-DOS syntax onto Amiga users.
-- [ ] Move the required resident-device interface into a shared, versioned
+- [x] Move the required resident-device interface into a shared, versioned
       Amiga platform header/library boundary that `nio-core-apps` can consume.
       Treat this as a normal cross-repository build dependency.
 - [ ] Stop installing or documenting `fujinet-mount` as a second mounting
@@ -44,7 +44,7 @@ progression are specified in the associated
       end-user functions.
 - [ ] Add tests proving the standard tools cannot bypass or desynchronise the
       resident driver's media state, change counter, protection state, flush,
-      or replacement behavior.
+      or replacement behavior. (Amiberry integration test in progress.)
 - [ ] Coordinate replacement with the existing AmigaDOS filesystem handler so
       `FMOUNT` can retire the old volume and rescan the inserted one without a
       `You MUST replace volume`, `Not a DOS disk`, or invalid-block requester.
@@ -60,7 +60,7 @@ progression are specified in the associated
 - [ ] Treat NIO's mounted-media sector size and sector count as authoritative;
       hints may assist raw-image probing but must not override successfully
       inferred geometry.
-- [ ] Remove the driver's unconditional 1760-sector validation and fixed
+- [x] Remove the driver's unconditional 1760-sector validation and fixed
       `TD_GETGEOMETRY` result. Validate supported media from the committed NIO
       Info response and retain that geometry independently per unit.
 - [ ] Define how AmigaDOS receives matching DosEnvec geometry. Do not assume
@@ -85,7 +85,8 @@ progression are specified in the associated
       calls.
 - [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
-      `FUMOUNT`, and remounting persisted assignments.
+      `FUMOUNT`, and remounting persisted assignments. (HD test complete;
+      fmount/fumount DD test in progress.)
 - [ ] Preserve Stage 8 writable durability, replacement, concurrent access,
       and change-notification regressions for every supported geometry.
 - [ ] Document the exact supported media families and distinguish current

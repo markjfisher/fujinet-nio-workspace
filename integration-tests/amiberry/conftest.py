@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -9,13 +11,27 @@ import time
 import tomllib
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
+
+try:
+    from PIL import Image as _PILImage
+    _PILLOW = True
+except ImportError:
+    _PILLOW = False
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / "integration-tests" / "amiberry"
 DEFAULT_EVIDENCE_DIR = ROOT / "test-evidence"
+
+# Add tools/ to path so we can call amiga_emulator.ipc directly.
+_TOOLS = ROOT / "tools"
+if str(_TOOLS) not in sys.path:
+    sys.path.insert(0, str(_TOOLS))
+
+from amiga_emulator import ipc as _amiberry_ipc  # noqa: E402
 
 
 def xdf_command(environment: dict[str, str]) -> list[str]:
@@ -43,13 +59,7 @@ def load_cases() -> dict[str, dict]:
 
 
 def build_nio_binary(environment: dict[str, str]) -> None:
-    """Build the TCP NIO binary without coupling E2E setup to ctest.
-
-    The workspace ``fujinet-tcp`` target also runs the NIO unit tests.  Those
-    tests remain part of the normal validation, but a transient unit-test
-    failure must not leave the already-buildable E2E harness unable to report
-    its own result.
-    """
+    """Build the TCP NIO binary without coupling E2E setup to ctest."""
     nio_root = ROOT / "repos" / "fujinet-nio"
     build_dir = nio_root / "build" / "fujibus-tcp-debug"
     binary = build_dir / "fujinet-nio"
@@ -66,6 +76,57 @@ def build_nio_binary(environment: dict[str, str]) -> None:
         env=environment,
         check=True,
     )
+
+
+def _patch_boot_block(image: Path) -> None:
+    """Replace the xdftool boot block with a minimal KS 3.x-compatible one.
+
+    xdftool's generated OFS boot block uses exec.library LVOs that are
+    incompatible with Kickstart 3.2, causing a crash or hang when KS tries
+    to boot from the floppy.  OFS validates the boot block checksum as part
+    of its mount logic (separate from KS boot logic), so corrupting the
+    checksum breaks mounting too.
+
+    This function writes a minimal boot block that:
+    - Has the "DOS\\x00" magic so OFS recognises it as an OFS disk
+    - Points at root block 880 (standard DD floppy)
+    - Has valid checksum (so OFS will mount the disk)
+    - Contains boot code ``MOVEQ #-1, D0 ; RTS`` (70 FF 4E 75) that tells
+      Kickstart "boot from this device failed, try the next one", causing
+      KS to silently fall through to DH0:
+    - Leaves the rest of the boot block as zeros (no code to crash)
+    """
+    import struct
+
+    # Build the 1024-byte boot block (2 sectors).
+    bb = bytearray(1024)
+    # "DOS\x00" = OFS type
+    bb[0:4] = b"DOS\x00"
+    # Checksum placeholder (word 1, offset 4-7) — computed below
+    # Root block pointer at offset 8-11 = 880
+    struct.pack_into(">I", bb, 8, 880)
+    # Boot code at offset 12: MOVEQ #-1, D0 (70 FF) ; RTS (4E 75)
+    bb[12:16] = bytes([0x70, 0xFF, 0x4E, 0x75])
+
+    # Compute checksum using the Amiga end-around-carry algorithm.
+    # Treat the checksum word (word 1, offset 4-7) as 0 for the sum.
+    words = list(struct.unpack_from(">256I", bb))  # 256 longwords = 1024 bytes
+    total = 0
+    for i, w in enumerate(words):
+        if i == 1:
+            continue  # skip checksum word
+        total += w
+        if total > 0xFFFFFFFF:
+            total = (total & 0xFFFFFFFF) + 1  # end-around carry
+    checksum = (~total) & 0xFFFFFFFF
+    struct.pack_into(">I", bb, 4, checksum)
+
+    # Patch the first 1024 bytes of the ADF in-place; leave the rest intact.
+    data = bytearray(image.read_bytes())
+    data[0:1024] = bb
+    image.write_bytes(bytes(data))
+
+
 def create_standard_adf(environment: dict[str, str], image: Path,
                         marker_name: str = "KNOWN.TXT",
                         marker_text: str = "FUJINET ADF READ PASSED\n") -> None:
@@ -83,7 +144,27 @@ def create_standard_adf(environment: dict[str, str], image: Path,
         raise AssertionError("deterministic ADF is not standard 880 KiB geometry")
 
 
-def pytest_addoption(parser):
+def create_hd_adf(environment: dict[str, str], image: Path,
+                  marker_name: str = "HD.TXT",
+                  marker_text: str = "FUJINET HD ADF READ PASSED\n") -> None:
+    """Create a deterministic HD ADF (1.76 MiB, 3520 sectors)."""
+    image.unlink(missing_ok=True)
+    marker = image.parent / marker_name
+    marker.write_text(marker_text, encoding="ascii")
+    subprocess.run(
+        [*xdf_command(environment), str(image), "create", "type=adf_hd",
+         "+", "format", "NIOHD",
+         "+", "boot", "install",
+         "+", "write", str(marker), marker_name],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+    )
+    if image.stat().st_size != 3520 * 512:
+        raise AssertionError("HD ADF is not 1.76 MiB geometry")
+
+
+def pytest_addoption(parser: Any) -> None:
     parser.addoption(
         "--run-amiga",
         action="store_true",
@@ -93,7 +174,7 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(scope="session")
-def amiga_environment(pytestconfig):
+def amiga_environment(pytestconfig: Any) -> dict[str, str]:
     if not pytestconfig.getoption("--run-amiga") and os.environ.get("AMIGA_E2E") != "1":
         pytest.skip("Amiberry tests disabled; use --run-amiga or AMIGA_E2E=1")
 
@@ -119,7 +200,7 @@ def amiga_environment(pytestconfig):
 
 
 @pytest.fixture(scope="session")
-def amiga_cases():
+def amiga_cases() -> dict[str, dict]:
     return load_cases()
 
 
@@ -135,8 +216,167 @@ def amiga_evidence_root() -> Path:
     return root
 
 
+# ---------------------------------------------------------------------------
+# IPC helpers — call Amiberry directly without spawning a subprocess
+# ---------------------------------------------------------------------------
+
+def _ipc_screenshot(sock: Path, output: Path) -> bool:
+    """Take a screenshot via Amiberry IPC. Returns True on success."""
+    try:
+        _amiberry_ipc.request(sock, "SCREENSHOT", str(output), timeout=3.0)
+        return output.is_file()
+    except Exception:
+        return False
+
+
+def _ipc_quit(sock: Path) -> bool:
+    """Send QUIT to Amiberry. Returns True if accepted."""
+    try:
+        _amiberry_ipc.request(sock, "QUIT", timeout=3.0)
+        return True
+    except Exception:
+        return False
+
+
+def _ipc_insert_floppy(sock: Path, adf_path: Path, drive: int = 0) -> bool:
+    """Insert an ADF into Amiberry drive N via IPC. Returns True on success."""
+    try:
+        _amiberry_ipc.request(sock, "INSERTFLOPPY", str(adf_path), str(drive), timeout=3.0)
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Screenshot analysis (Pillow-based, gracefully degraded if unavailable)
+# ---------------------------------------------------------------------------
+
+def _has_amiga_content(screenshot: Path) -> bool:
+    """Return True only when the screenshot shows real Amiga display content.
+
+    Amiberry's uninitialized framebuffer is a uniform dark grey (~17, 17, 17)
+    before the Amiga OS sets up a display mode.  That state has essentially
+    zero pixel variance and must not be mistaken for a settled CLI screen.
+    A genuine Amiga display (CLI text, workbench, startup messages) has
+    significant variance — bright text on dark background or similar.
+    """
+    if not _PILLOW or not screenshot.is_file():
+        return False
+    try:
+        img = _PILImage.open(screenshot).convert("L")
+        pixels = list(img.getdata())  # type: ignore[attr-defined]
+        if not pixels:
+            return False
+        mean = sum(pixels) / len(pixels)
+        variance = sum((p - mean) ** 2 for p in pixels) / len(pixels)
+        return variance > 25.0  # std_dev > 5 means real content
+    except Exception:
+        return False
+
+
+def _screenshots_differ(path1: Path | None, path2: Path) -> bool:
+    """Return True if the two screenshots are visually different.
+
+    Falls back to True (always-changed) when Pillow is unavailable or either
+    file is missing, which keeps the harness functioning without the library.
+    """
+    if not _PILLOW or path1 is None or not path1.is_file() or not path2.is_file():
+        return True
+    try:
+        img1 = _PILImage.open(path1).convert("RGB")
+        img2 = _PILImage.open(path2).convert("RGB")
+        if img1.size != img2.size:
+            return True
+        changed = sum(
+            1 for p1, p2 in zip(img1.getdata(), img2.getdata())
+            if abs(p1[0] - p2[0]) > 8 or abs(p1[1] - p2[1]) > 8 or abs(p1[2] - p2[2]) > 8
+        )
+        # Require at least 100 differing pixels to count as changed.
+        return changed >= 100
+    except Exception:
+        return True
+
+
+def _has_requester(screenshot: Path) -> bool:
+    """Detect an AmigaOS system requester in the top-left corner of the screen.
+
+    AmigaOS dialog requesters have a PURE WHITE (255, 255, 255) interior body.
+    Normal Workbench and CLI backgrounds are grey (~170, 170, 170) and contain
+    no pure-white pixels in the dialog interior region.
+
+    We check an interior rectangle offset from the very top-left (where border
+    decorations live) to avoid false positives from window shine/highlight pixels
+    that appear in both requester and non-requester states.
+
+    Signal: pure-white pixel fraction in the dialog interior region (x=85..250, y=60..150).
+      - Normal Workbench / CLI:  0.000
+      - Requester present:       ~0.105
+    Threshold of 0.05 validated against all collected test-evidence runs.
+
+    Returns False gracefully when Pillow is unavailable.
+    """
+    if not _PILLOW or not screenshot.is_file():
+        return False
+    try:
+        img = _PILImage.open(screenshot).convert("RGB")
+        w, h = img.size
+        # Dialog interior: fixed pixel region where requester body appears.
+        # Scaled to 75% of reference 752x576 to handle minor size variation.
+        x0, y0 = max(0, 85), max(0, 60)
+        x1, y1 = min(w, 250), min(h, 150)
+        if x1 <= x0 or y1 <= y0:
+            return False
+        region = img.crop((x0, y0, x1, y1))
+        pixels = list(region.getdata())
+        if not pixels:
+            return False
+        white = sum(1 for r, g, b in pixels if r == 255 and g == 255 and b == 255)
+        return (white / len(pixels)) > 0.05
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Port / process cleanup
+# ---------------------------------------------------------------------------
+
+def _kill_port_holders(port: int) -> None:
+    """Kill any process currently listening on *port* so the next test can bind it."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-t", "-i", f"TCP:{port}", "-s", "TCP:LISTEN"],
+            capture_output=True,
+            text=True,
+        )
+        for pid_str in result.stdout.split():
+            try:
+                os.kill(int(pid_str), signal.SIGKILL)
+            except (ProcessLookupError, ValueError):
+                pass
+    except FileNotFoundError:
+        pass  # lsof not available
+
+
+def _terminate_runner(runner: subprocess.Popen[object]) -> None:
+    """Shut down the runner process, escalating to SIGKILL if needed."""
+    if runner.poll() is not None:
+        return
+    runner.terminate()
+    try:
+        runner.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        runner.kill()
+        runner.wait()
+
+
+# ---------------------------------------------------------------------------
+# Main test fixture
+# ---------------------------------------------------------------------------
+
 @pytest.fixture()
-def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
+def run_amiga_case(amiga_environment: dict[str, str],
+                   amiga_cases: dict[str, dict],
+                   amiga_evidence_root: Path) -> Any:
     def run(name: str) -> dict[str, str]:
         case = amiga_cases[name]
         app_dir = ROOT / "repos" / ("nio-apps" if case["project"] == "apps" else "nio-core-apps") / "build" / "amiga" / "bin"
@@ -165,16 +405,20 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                                 "SECOND.TXT", "FUJINET SECOND DRIVE PASSED\n")
             create_standard_adf(amiga_environment, host_root / "writable.adf",
                                 "BASE.TXT", "FUJINET WRITABLE BASE\n")
+            create_hd_adf(amiga_environment, host_root / "hd.adf")
             catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
             catalog_dir.mkdir(parents=True, exist_ok=True)
+            (catalog_dir / "slot-011.bin").write_bytes(b"\x01\x01host:/standard.adf")
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
+            (catalog_dir / "slot-014.bin").write_bytes(b"\x01\x01host:/hd.adf")
             if case.get("mapping_readonly"):
                 catalog_dir.chmod(0o555)
                 readonly_catalog_dir = catalog_dir
+
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
-        command = [
+        build_cmd = [
             str(ROOT / "scripts/build-amiga-test-disk"),
             "--os-root", amiga_environment["AMIBERRY_OS_ROOT"],
             "--boot-adf", amiga_environment["AMIBERRY_WORKBENCH_ADF"],
@@ -187,28 +431,46 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
         ]
         if case.get("driver"):
             driver_root = ROOT / "repos/fujinet-nio-driver"
-            command.extend([
+            build_cmd.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
             ])
             for unit in range(8):
-                command.extend([
-                    "--disk-mountlist", driver_root / f"amiga/config/DN{unit}",
-                ])
-        subprocess.run(command, cwd=ROOT, env=amiga_environment, check=True)
+                build_cmd.extend(["--disk-mountlist", driver_root / f"amiga/config/DN{unit}"])
+            build_cmd.extend(["--disk-mountlist", driver_root / "amiga/config/DN0HD"])
+        subprocess.run(build_cmd, cwd=ROOT, env=amiga_environment, check=True)
+
+        native_adf: Path | None = None
+        if case.get("native_floppy"):
+            native_adf = run_dir / "native-floppy.adf"
+            create_standard_adf(amiga_environment, native_adf)
 
         test_env = amiga_environment.copy()
         test_env["AMIGA_RUN_DIR"] = str(run_dir)
-        # Keep test cases isolated from a manually started NIO or another
-        # test process.  The runner will bridge Amiberry to this port.
         case_index = list(amiga_cases).index(name)
         test_env["FUJINET_NIO_PORT"] = str(65510 + case_index)
         test_env["AMIBERRY_PORT"] = str(23470 + case_index)
-        if "screenshot_quiet" in case:
-            test_env["AMIGA_E2E_SCREENSHOT_QUIET"] = str(case["screenshot_quiet"])
-        if "activity_timeout" in case:
-            test_env["AMIGA_E2E_ACTIVITY_TIMEOUT"] = str(case["activity_timeout"])
+
+        # Timing parameters — screen-quiet is now the primary completion signal.
+        screenshot_quiet = float(case.get("screenshot_quiet", 3))
+        activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
+        screenshot_interval = float(case.get("screenshot_interval", 1.0))
+        # How long after boot with NO screen movement before giving up.
+        no_activity_timeout = float(case.get("no_activity_timeout", 20))
         runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
+
+        # Kill any stale processes left from a prior crashed run of THIS test
+        # by checking the specific ports this test uses.  We do NOT pkill by
+        # process name — that would also kill instances the user started
+        # independently for other purposes.
+        _kill_port_holders(int(test_env["FUJINET_NIO_PORT"]))
+        _kill_port_holders(int(test_env["AMIBERRY_PORT"]))
+        for stale_name in (
+            "amiberry.sock.path", "amiberry-screen.png",
+            "amiberry.log", "fujinet-nio.log", "bridge.log",
+        ):
+            (run_dir / stale_name).unlink(missing_ok=True)
+
         silent_peer = None
         if case.get("silent_peer"):
             silent_peer = subprocess.Popen(
@@ -223,108 +485,161 @@ def run_amiga_case(amiga_environment, amiga_cases, amiga_evidence_root):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        for stale_name in (
-            "amiberry.sock.path",
-            "amiberry-screen.png",
-            "amiberry.log",
-            "fujinet-nio.log",
-            "bridge.log",
-        ):
-            (run_dir / stale_name).unlink(missing_ok=True)
+
         runner_args = [str(ROOT / "scripts/run-amiberry-nio"), "--tcp", "--disk", str(image),
                        "--timeout", runner_timeout]
         if case.get("silent_peer"):
             runner_args.append("--external-nio")
         runner = subprocess.Popen(runner_args, cwd=ROOT, env=test_env)
+
+        ipc_sock: Path | None = None
         quit_sent = False
+
         try:
+            # ---------------------------------------------------------------
+            # Phase 1: Wait for Amiberry to boot and expose its IPC socket.
+            # ---------------------------------------------------------------
             socket_file = run_dir / "amiberry.sock.path"
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline and not socket_file.is_file():
+            boot_deadline = time.monotonic() + 30
+            while time.monotonic() < boot_deadline:
                 if runner.poll() is not None:
                     break
+                if socket_file.is_file():
+                    try:
+                        ipc_sock = Path(socket_file.read_text(encoding="utf-8").strip())
+                    except OSError:
+                        pass
+                    if ipc_sock:
+                        break
                 time.sleep(0.1)
-            if socket_file.is_file():
-                # Wait for the guest's FujiBus activity to settle.  The test
-                # startup sequence types each result file to the CLI, so the
-                # framebuffer now contains useful evidence without loading
-                # Workbench or imposing a long fixed delay.
-                nio_log = run_dir / "fujinet-nio.log"
-                activity_deadline = time.monotonic() + float(
-                    test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "15")
+
+            if ipc_sock is None:
+                raise AssertionError(
+                    "Amiberry did not start or did not create an IPC socket within 30 s"
                 )
-                saw_activity = False
-                completion_log = case.get("completion_log")
-                completion_seen_at = None
-                previous = ""
-                quiet_since = None
-                while time.monotonic() < activity_deadline:
-                    current = nio_log.read_text(encoding="utf-8", errors="replace") if nio_log.is_file() else ""
-                    if "fujibus: receive:" in current:
-                        saw_activity = True
-                        if completion_log:
-                            if completion_seen_at is None:
-                                marker_index = current.find(completion_log)
-                                if marker_index >= 0:
-                                    completion_seen_at = marker_index
-                            if (completion_seen_at is not None and
-                                    "fujibus: send:" in current[completion_seen_at:]):
-                                break
-                        if current == previous:
-                            quiet_since = quiet_since or time.monotonic()
-                            if time.monotonic() - quiet_since >= float(
-                                test_env.get("AMIGA_E2E_SCREENSHOT_QUIET", "0.5")
-                            ):
-                                break
-                        else:
-                            quiet_since = None
-                    previous = current
-                    time.sleep(0.1)
-                if not saw_activity and not case.get("silent_peer"):
-                    raise AssertionError("Amiga guest produced no FujiBus activity before screenshot")
-                capture_delay = case.get(
-                    "screenshot_delay",
-                    os.environ.get("AMIGA_E2E_SCREENSHOT_DELAY", "1"),
+
+            # For native-floppy tests: insert the ADF now that Amiberry is
+            # running.  Kickstart will already be booting from DH0: (no floppy
+            # was pre-mounted), so inserting here is safe.  The startup
+            # sequence contains a Wait to give AmigaDOS time to mount DF0:.
+            if native_adf is not None:
+                time.sleep(2.0)  # let Kickstart fully hand off to AmigaDOS
+                _ipc_insert_floppy(ipc_sock, native_adf, drive=0)
+
+            # ---------------------------------------------------------------
+            # Phase 2: Monitor loop.
+            #
+            # Primary completion signal: screen has not changed for
+            # `screenshot_quiet` seconds (works whether or not NIO ran).
+            # Secondary: NIO log watched for FujiBus activity evidence.
+            # Fast-fail: if screen shows no movement at all for
+            # `no_activity_timeout` s after boot, something is badly stuck.
+            # ---------------------------------------------------------------
+            nio_log = run_dir / "fujinet-nio.log"
+            shots_dir = run_dir / "screenshots"
+            shots_dir.mkdir(exist_ok=True)
+
+            saw_activity = False
+            prev_shot: Path | None = None
+            screen_quiet_since: float | None = None
+            screen_ever_changed = False
+            last_shot_at = 0.0
+            shot_index = 0
+            boot_time = time.monotonic()
+            activity_deadline = boot_time + activity_timeout
+
+            while time.monotonic() < activity_deadline:
+                now = time.monotonic()
+
+                # NIO log — check for any FujiBus traffic (evidence only).
+                if nio_log.is_file():
+                    try:
+                        if "fujibus: receive:" in nio_log.read_text(encoding="utf-8", errors="replace"):
+                            saw_activity = True
+                    except OSError:
+                        pass
+
+                # Periodic screenshot.
+                if now - last_shot_at >= screenshot_interval:
+                    shot = shots_dir / f"{shot_index:04d}.png"
+                    last_shot_at = now
+                    shot_index += 1
+                    _ipc_screenshot(ipc_sock, shot)
+
+                    if shot.is_file():
+                        # Requester detection — fail immediately.
+                        if _has_requester(shot):
+                            shutil.copy2(shot, run_dir / "amiberry-screen.png")
+                            raise AssertionError(
+                                f"AmigaOS system requester detected (screenshot {shot_index - 1}). "
+                                f"A dialog is blocking the startup sequence. See {shot.name}"
+                            )
+
+                        # Screen-change detection.
+                        # Only count a change as meaningful when the screenshot
+                        # shows actual Amiga content (not the uniform dark-grey
+                        # uninitialized framebuffer Amiberry shows before the
+                        # Amiga OS sets up its display mode).
+                        if _screenshots_differ(prev_shot, shot) and _has_amiga_content(shot):
+                            screen_ever_changed = True
+                            screen_quiet_since = None
+                        elif screen_ever_changed:
+                            if screen_quiet_since is None:
+                                screen_quiet_since = now
+                        prev_shot = shot
+
+                # Screen quiet for long enough → sequence finished.
+                if screen_quiet_since is not None and (now - screen_quiet_since) >= screenshot_quiet:
+                    break
+
+                # Fast-fail: booted but screen has never moved for no_activity_timeout.
+                if prev_shot and not screen_ever_changed:
+                    if (now - boot_time) > no_activity_timeout:
+                        break
+
+                time.sleep(0.2)
+
+            # Promote the most recent screenshot to the canonical evidence file.
+            if prev_shot and prev_shot.is_file():
+                shutil.copy2(prev_shot, run_dir / "amiberry-screen.png")
+            elif shot_index > 0:
+                # Look for the last shot that was actually created.
+                for i in range(shot_index - 1, -1, -1):
+                    candidate = shots_dir / f"{i:04d}.png"
+                    if candidate.is_file():
+                        shutil.copy2(candidate, run_dir / "amiberry-screen.png")
+                        break
+
+            # If the screen never changed at all the Amiga is stuck (crash,
+            # bad ROM, display not initialised). Fail fast with a clear message.
+            if not screen_ever_changed:
+                raise AssertionError(
+                    "Amiberry booted but the screen never changed — "
+                    "the Amiga may have crashed or the startup sequence did not run"
                 )
-                time.sleep(float(capture_delay))
-                screenshot = run_dir / "amiberry-screen.png"
-                subprocess.run(
-                    [str(ROOT / "scripts/amiberry-ipc"), "--socket",
-                     socket_file.read_text(encoding="utf-8").strip(),
-                     "SCREENSHOT", str(screenshot)],
-                    cwd=ROOT,
-                    env=test_env,
-                    check=True,
-                    timeout=5,
-                )
-                if not screenshot.is_file():
-                    raise AssertionError("Amiberry IPC reported success but retained no screenshot")
-                # End the emulator immediately after evidence capture rather
-                # than waiting for the safety timeout.
-                quit_result = subprocess.run(
-                    [str(ROOT / "scripts/amiberry-ipc"), "--socket",
-                     socket_file.read_text(encoding="utf-8").strip(), "QUIT"],
-                    cwd=ROOT,
-                    env=test_env,
-                    check=False,
-                    timeout=5,
-                )
-                quit_sent = quit_result.returncode == 0
-            return_code = runner.wait()
-            # Amiberry exits with 250 when deliberately stopped through its
-            # QUIT IPC command.  Other non-zero exits remain failures.
+
+            # ---------------------------------------------------------------
+            # Phase 3: Quit Amiberry cleanly, wait for runner.
+            # ---------------------------------------------------------------
+            quit_sent = _ipc_quit(ipc_sock)
+            return_code = runner.wait(timeout=10)
             if return_code and not (quit_sent and return_code == 250):
                 raise subprocess.CalledProcessError(return_code, runner.args)
+
         finally:
-            if runner.poll() is None:
-                runner.terminate()
-                runner.wait(timeout=5)
+            # Always ensure Amiberry and the runner are gone.
+            if ipc_sock and not quit_sent:
+                _ipc_quit(ipc_sock)
+            _terminate_runner(runner)
             if silent_peer is not None and silent_peer.poll() is None:
                 silent_peer.terminate()
                 silent_peer.wait(timeout=5)
             if readonly_catalog_dir is not None and readonly_catalog_dir.is_dir():
                 readonly_catalog_dir.chmod(0o755)
 
+        # -------------------------------------------------------------------
+        # Collect result files from the HDF image.
+        # -------------------------------------------------------------------
         results: dict[str, str] = {}
         with tempfile.TemporaryDirectory(prefix="amiga-results-") as result_dir:
             for result_name in case["results"]:

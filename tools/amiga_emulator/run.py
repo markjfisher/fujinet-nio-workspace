@@ -277,8 +277,10 @@ class AmigaRunner:
                    "-s", "serial_status=false",
                    "-s", "serial_direct=true",
                    "-s", f"cpu_type={os.environ.get('AMIBERRY_CPU_TYPE', '68000')}",
-                   "-s", "cpu_compatible=true",
-                   "-s", "cachesize=0"]
+                   "-s", "cpu_compatible=true"]
+        extra_floppy = os.environ.get("AMIBERRY_EXTRA_FLOPPY_0", "")
+        if extra_floppy:
+            command.extend(["-0", extra_floppy])
         for setting in settings:
             command.extend(["-s", setting])
         return command
@@ -366,6 +368,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Convert SIGTERM to SystemExit so the finally block runs cleanup().
+    # Python does not run finally blocks on bare SIGTERM by default.
+    signal.signal(signal.SIGTERM, lambda _s, _f: sys.exit(130))
+
     args = parse_args(argv)
     if args.pty:
         os.environ["AMIBERRY_SERIAL_MODE"] = "pty"

@@ -1,0 +1,25 @@
+C:Assign T: RAM:
+C:FailAt 21
+C:LoadModule DEVS:fujinet-disk.device
+C:Echo "LOAD RC=$RC" >DH0:fmount-load.result
+C:fmount 11 0 RO >DH0:fmount-mount.result
+C:Echo "FMOUNT RC=$RC" >>DH0:fmount-mount.result
+C:If NOT ERROR
+C:Mount DN0: FROM DEVS:DN0
+C:Wait 2 SECS
+C:fujinet-mount --status 0 >DH0:fmount-status.result
+C:Dir DN0: >DH0:fmount-dir.result
+C:Echo "DIR RC=$RC" >>DH0:fmount-dir.result
+C:Type DN0:KNOWN.TXT >DH0:fmount-type.result
+C:fumount DN0: >DH0:fumount-eject.result
+C:Echo "FUMOUNT RC=$RC" >>DH0:fumount-eject.result
+C:fujinet-mount --status 0 >DH0:fumount-status.result
+C:EndIf
+C:Type DH0:fmount-load.result
+C:Type DH0:fmount-mount.result
+C:Type DH0:fmount-status.result
+C:Type DH0:fmount-dir.result
+C:Type DH0:fmount-type.result
+C:Type DH0:fumount-eject.result
+C:Type DH0:fumount-status.result
+C:Echo "E2E COMPLETE"

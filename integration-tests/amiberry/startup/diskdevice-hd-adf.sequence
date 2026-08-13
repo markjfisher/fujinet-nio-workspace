@@ -1,0 +1,18 @@
+C:Assign T: RAM:
+C:LoadModule DEVS:fujinet-disk.device
+C:Echo "LOAD RC=$RC" >DH0:hd-load.result
+C:fujinet-mount host:/hd.adf >DH0:hd-mount.result
+C:Echo "HD MOUNT RC=$RC" >>DH0:hd-mount.result
+C:Mount DN0HD: FROM DEVS:DN0HD
+C:fujinet-mount --status 0 >DH0:hd-geometry.result
+C:Dir DN0HD: >DH0:hd-dir.result
+C:Echo "DIR RC=$RC" >>DH0:hd-dir.result
+C:Type DN0HD:HD.TXT >DH0:hd-type.result
+C:fujinet-mount --status 0 >DH0:hd-status.result
+C:Type DH0:hd-load.result
+C:Type DH0:hd-mount.result
+C:Type DH0:hd-geometry.result
+C:Type DH0:hd-dir.result
+C:Type DH0:hd-type.result
+C:Type DH0:hd-status.result
+C:Echo "E2E COMPLETE"
