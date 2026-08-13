@@ -323,6 +323,13 @@ class AmigaRunner:
                      "--output-dir", str(self.run_dir)],
                     self.run_dir / "beginio-controller.log", cwd=ROOT,
                 )
+            elif os.environ.get("AMIGA_E2E_TASK_SNAPSHOT") == "1":
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.task_snapshot",
+                     "--socket", str(self.ipc_socket),
+                     "--output-dir", str(self.run_dir)],
+                    self.run_dir / "task-snapshot-controller.log", cwd=ROOT,
+                )
         except (FileNotFoundError, OSError):
             # IPC is optional in Amiberry builds; serial testing must still work.
             pass

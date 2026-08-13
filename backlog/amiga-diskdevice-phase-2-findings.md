@@ -3,6 +3,13 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 23:00
+
+- A host-only Exec task snapshot was captured at the bounded reproduction timeout: `test-evidence/amiberry-20260813-230029/diskdevice-adf/task-timeout-snapshot.log`. It uses NDK-derived `ThisTask`, `TaskReady`, `TaskWait`, Node, and Task offsets; Process extension offsets have subsequently been verified with `m68k-amigaos-gcc` as `pr_FileSystemTask=0xa8` and `pr_CLI=0xac`.
+- The snapshot current task is the `DN2` filesystem handler (`NT_PROCESS`, `TS_WAIT`), waiting on signals `0x10000000` with received `0x08000100`. The handler also appears in Exec's wait list. It is not currently running or ready, so the timeout snapshot is not a CPU spin in the driver/handler.
+- No task/process named `Copy` appears in current, ready, or wait task lists at capture time. This rules out the narrow interpretation that foreground Copy is still blocked waiting for the device or DN2 handler at timeout; it has already exited or is no longer represented under that task name before the checkpoint failure.
+- Other filesystem handlers (`DN0`, `DN1`, `DF0`, `DF1`, `RAM`, `DH0`) are likewise waiting normally. The current PC is in Amiberry/ROM-side scheduling code (`0xfc983e`), not resident disk-device code. Do not add more disk breakpoints from this evidence; investigate checkpoint/process-sequencing state next.
+
 ## Progress 2026-08-13 22:51
 
 - Corrected the post-update command decoding using the installed NDK: `CMD_NONSTD=9`, so `TD_ADDCHANGEINT=20`, `TD_REMCHANGEINT=21`, and `TD_GETGEOMETRY=22`. The earlier label of command `22` as ADDCHANGEINT was wrong; it is ordinary quick geometry bookkeeping.
