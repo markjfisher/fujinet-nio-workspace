@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from . import ipc
 
@@ -33,6 +34,17 @@ def parse_registers(response: str) -> dict[str, int]:
         name, value = field.split("=", 1)
         values[name.upper()] = int(value, 16)
     return values
+
+
+def next_instruction_address(disassembly: str) -> tuple[int, int]:
+    """Return the first instruction address and decoded byte length."""
+    for line in disassembly.splitlines():
+        match = re.search(r"\b([0-9a-fA-F]{8})\s+([0-9a-fA-F]{4,})\s{2,}", line)
+        if match:
+            address = int(match.group(1), 16)
+            byte_length = len(match.group(2)) // 2
+            return address, byte_length
+    raise ValueError(f"cannot parse disassembly response: {disassembly!r}")
 
 
 def capture_breakpoint(socket_path: Path, destination: Path) -> dict[str, int]:
