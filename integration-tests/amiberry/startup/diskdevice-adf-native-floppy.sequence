@@ -1,6 +1,9 @@
 C:Assign T: RAM:
 C:Wait 10 SECS
+C:Echo "FUJINET WRITE PERSISTED" >DH0:df0-persist-source.txt
 C:Dir DF0: >DH0:df0-dir.result
 C:Echo "DIR RC=$RC" >DH0:df0-dir-rc.result
 C:Type DF0:KNOWN.TXT >DH0:df0-type.result
+C:Copy DH0:df0-persist-source.txt TO DF0:PERSIST.TXT
+C:Echo "COPY RC=$RC" >DH0:df0-copy.result
 C:Echo "E2E COMPLETE"

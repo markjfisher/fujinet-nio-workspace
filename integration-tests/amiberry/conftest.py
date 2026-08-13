@@ -465,7 +465,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         screenshot_quiet = float(case.get("screenshot_quiet", 3))
         activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
         screenshot_interval = float(case.get("screenshot_interval", 1.0))
-        external_activity_evidence = bool(case.get("silent_peer"))
+        external_activity_evidence = bool(case.get("silent_peer") or case.get("native_floppy"))
         # How long after boot with NO screen movement before giving up.
         no_activity_timeout = float(case.get("no_activity_timeout", 20))
         runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))

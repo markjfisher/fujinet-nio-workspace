@@ -4,6 +4,16 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 14:10
+
+- Added a native-floppy write control case that copies the same `FUJINET WRITE PERSISTED` payload to `DF0:PERSIST.TXT` and preserves the resulting `native-floppy.adf` for comparison.
+- The native control write passes. Comparing `native-floppy.adf` against the driver-written `writable.adf` is now the strongest narrowing tool.
+- Key result from that comparison: the file data block is correct. `PERSIST.TXT` payload matches, and block 883 is identical between the native-written and driver-written images.
+- The corruption is entirely in OFS metadata bookkeeping. `xdftool` reports `FileData Block Count Mismatch(13)` for the driver-written image: the directory entry says `PERSIST.TXT` has one data block, while the file header says zero.
+- Byte diffs are tightly localized: root/directory bookkeeping block 881 differs in only two positions; `PERSIST.TXT` file-header block 882 differs in six bytes/fields; the data block is identical. This means accepted `CMD_WRITE` traffic reaches the image, but OFS finalization is being driven inconsistently by the resident device contract.
+- Current leading hypothesis is still the geometry/trackdisk contract exposed by `fujinet-disk.device` during writable OFS allocation/finalization (`TD_GETGEOMETRY` and related queries), not transport, queueing, or `io_Actual` handling.
+
+
 ## Progress 2026-08-13 14:00
 
 - Cleaned up the duplicate-registration hardening into a proper helper (`remove_all_change_requests`) so `device_close()`, `TD_REMCHANGEINT`, and `AbortIO()` all exhaustively remove retained change registrations for the same `IORequest` without the previous empty `while (...) {}` loops.

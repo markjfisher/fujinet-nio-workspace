@@ -36,6 +36,7 @@ def test_native_floppy_adf_dir_and_type(run_amiga_case):
     assert "DIR RC=0" in results["df0-dir-rc.result"]
     assert "KNOWN.TXT" in results["df0-dir.result"].upper()
     assert "FUJINET ADF READ PASSED" in results["df0-type.result"]
+    assert "COPY RC=0" in results["df0-copy.result"]
 
 
 def test_hd_adf_mount_geometry_dir_and_type(run_amiga_case):

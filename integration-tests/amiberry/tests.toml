@@ -156,4 +156,5 @@ results = [
   "df0-dir.result",
   "df0-dir-rc.result",
   "df0-type.result",
+  "df0-copy.result",
 ]
