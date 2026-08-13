@@ -237,6 +237,15 @@ a known resident entry point or breakpoint/disassembly address before adding
 that base to symbol offsets. Do not add resident data or diagnostic commands
 to expose the base.
 
+The host-side resolver in `tools/amiga_emulator/device_debug.py` performs this
+bootstrap without a guessed breakpoint: it reads the ExecBase pointer at
+address 4, walks `ExecBase.DeviceList`, follows each node name, and reads the
+six standard device vectors from the matched library base. Its offsets come
+from the NDK headers: `LIB_OPEN=-6`, `LIB_CLOSE=-12`, `LIB_EXPUNGE=-18`, the
+reserved vector at `-24`, `BeginIO` at `-30`, and `AbortIO` at `-36`. It
+validates the relocation delta using `BeginIO`, `Close`, and `AbortIO` before
+internal breakpoints are calculated.
+
 At `device_begin_io()`, the live request is in `A1` and the resident base is
 in `A6`. Use `READ_MEM` against `A1` to inspect the standard request fields:
 command, flags, error, actual, length, offset, and unit. On a timeout, capture
