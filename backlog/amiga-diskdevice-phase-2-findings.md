@@ -4,6 +4,15 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 14:00
+
+- Cleaned up the duplicate-registration hardening into a proper helper (`remove_all_change_requests`) so `device_close()`, `TD_REMCHANGEINT`, and `AbortIO()` all exhaustively remove retained change registrations for the same `IORequest` without the previous empty `while (...) {}` loops.
+- The duplicate-registration/idempotent `TD_ADDCHANGEINT` fix did not eliminate the writable DN2 failure, but it preserved the useful narrowed boundary and removed another stale-callback class from the resident device.
+- Strongest current finding: this is now a specific on-disk OFS metadata corruption, not a generic write failure. In the latest focused `diskdevice-adf` run, `fujinet-nio.log` shows five successful `CMD_WRITE` sector transfers for `PERSIST.TXT`, including the file payload (`FUJINET WRITE PERSISTED`).
+- The resulting `writable.adf` is structurally inconsistent: `xdftool` reports `FileData Block Count Mismatch(13)` for `PERSIST.TXT` (directory entry says one data block, file header says zero). This means the data sectors reach the image, but OFS finalization/bookkeeping is being driven inconsistently.
+- Because `io_Actual` is already being set correctly for `CMD_WRITE`, the next most likely driver-side cause is the geometry contract exposed through `TD_GETGEOMETRY` and related trackdisk queries during writable file allocation/finalization, not transport or queue lifetime.
+
+
 ## Progress 2026-08-13 13:30
 
 - Second resident-device lifetime fix landed: retained `TD_ADDCHANGEINT` registrations now store the interrupt pointer at registration time and `signal_media_change()` no longer re-reads `io_Data` from possibly stale `IORequest` objects. This moved the live Amiberry boundary forward again.
