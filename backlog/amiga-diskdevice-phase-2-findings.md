@@ -4,6 +4,15 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 14:50
+
+- The native-vs-driver ADF comparison now shows the most precise symptom so far: a native `DF0:` write changes blocks `866, 880, 881, 882, 883`, while the driver-backed `DN2:` write changes only `866, 880, 882, 883`. The missing metadata write is block `881`.
+- Block 883 (the `PERSIST.TXT` data block) is identical between the native-written and driver-written images. The remaining corruption is therefore not data delivery; it is a missing or inconsistent metadata finalization write in the driver-backed path.
+- Tried forcing a `Flush` after every successful `CMD_WRITE` in `fujinet_disk_write()`. This was informative but wrong: it removed the previous corrupt half-created `PERSIST.TXT`, but it also caused the file not to appear at all. The NIO trace showed a `cmd=0x0E` flush after every write, and the write sequence stopped earlier (four writes instead of five). Reverted this experiment.
+- Tried additional live tracing/geometry probing inside the Amiberry sequence (`--trace`, then `--geometry`). Those probes made the pre-RW boundary less stable without providing enough new leverage. Do not keep expanding the e2e sequence further unless needed for final validation.
+- Current preferred approach has changed: stop perturbing the live Amiberry workflow and instead use the known image delta (especially missing block 881) to reason directly about the resident device's `BeginIO`/`CMD_WRITE`/`CMD_UPDATE` contract, then validate in Amiberry only after a targeted driver change.
+
+
 ## Progress 2026-08-13 14:10
 
 - Added a native-floppy write control case that copies the same `FUJINET WRITE PERSISTED` payload to `DF0:PERSIST.TXT` and preserves the resulting `native-floppy.adf` for comparison.

@@ -48,6 +48,7 @@ results = [
   "disk-dos-mount-1.result",
   "disk-type-1.result",
   "disk-status-1-early.result",
+  "disk-geometry-2.result",
   "disk-mount-rw.result",
   "disk-copy-rw.result",
   "disk-update.result",
