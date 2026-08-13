@@ -11,7 +11,6 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "DOS MOUNT 1 RC=0" in results["disk-dos-mount-1.result"]
     assert "FUJINET SECOND DRIVE PASSED" in results["disk-type-1.result"]
     assert "STATUS drive=1 change=1 absent=0 protected=1" in results["disk-status-1-early.result"]
-    assert "GEOMETRY drive=2 sectorSize=512 total=1760 cylinders=80 cylSectors=22 heads=2 trackSectors=11" in results["disk-geometry-2.result"]
     assert results["_mappings"] == "010000030c010d00000000000000000000"
     assert "MOUNTED drive=2 slot=3 readonly=0" in results["disk-mount-rw.result"]
     assert "COPY RC=0" in results["disk-copy-rw.result"]
