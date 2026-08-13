@@ -4,6 +4,14 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 13:18
+
+- First concrete driver fix landed in `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c`: `device_close()` now clears retained `TD_REMOVE` waiters and removes queued work for the closing `IORequest`, instead of leaving stale request pointers inside the resident device across handler/CLI teardown.
+- Added a host regression in `repos/fujinet-nio-driver/amiga/tests/test_fujinet_exec_boundary.c` covering close-time cleanup of a retained remove waiter.
+- This fix did not fully solve the Amiberry `diskdevice-adf` failure, but it changed the failure surface. The latest focused run now reaches `disk-status-1-early.result` and then disconnects before `disk-mount-rw.result`, pointing to a remaining close/reopen lifetime bug in the resident device rather than the earlier DN2 write/update phase.
+- Latest NIO evidence confirms the failure now happens before the RW mount request is even sent. So the current live boundary is the transition from the last `DN1:` operations / `--status 1` shell tool back into the next standalone `fujinet-mount 13 2 RW` process.
+
+
 ## Progress 2026-08-13 13:10
 
 - The broad Amiberry failures were partly harness issues, now fixed. `cli-stateful`, `diskdevice-fmount`, `diskdevice-mapping-failure`, `wifi-config`, and the renamed stalled-external-peer timeout case all pass again.
