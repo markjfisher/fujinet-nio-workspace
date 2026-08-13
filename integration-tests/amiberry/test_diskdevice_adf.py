@@ -13,6 +13,7 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "STATUS drive=1 change=1 absent=0 protected=1" in results["disk-status-1-early.result"]
     assert results["_mappings"] == "010000030c010d00000000000000000000"
     assert "MOUNTED drive=2 slot=3 readonly=0" in results["disk-mount-rw.result"]
+    assert "COPY RC=0" in results["disk-copy-rw.result"]
     assert "UPDATED drive=2 slot=3" in results["disk-update.result"]
     assert "EJECTED drive=3 slot=4" in results["disk-eject.result"]
     assert "MOUNTED drive=2 slot=3 readonly=0" in results["disk-remount-rw.result"]

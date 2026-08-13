@@ -30,7 +30,7 @@ driver = true
 timeout = 75
 activity_timeout = 60
 no_activity_timeout = 30
-screenshot_quiet = 5
+screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf.sequence"
 results = [
@@ -49,6 +49,7 @@ results = [
   "disk-type-1.result",
   "disk-status-1-early.result",
   "disk-mount-rw.result",
+  "disk-copy-rw.result",
   "disk-update.result",
   "disk-eject.result",
   "disk-remount-rw.result",
@@ -148,7 +149,7 @@ native_floppy = true
 timeout = 60
 activity_timeout = 50
 no_activity_timeout = 20
-screenshot_quiet = 5
+screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf-native-floppy.sequence"
 results = [

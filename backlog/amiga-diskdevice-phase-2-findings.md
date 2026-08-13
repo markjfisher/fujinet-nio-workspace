@@ -4,6 +4,15 @@ Add from the top down, so previous history is at the bottom of this document mak
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
 
+## Progress 2026-08-13 13:10
+
+- The broad Amiberry failures were partly harness issues, now fixed. `cli-stateful`, `diskdevice-fmount`, `diskdevice-mapping-failure`, `wifi-config`, and the renamed stalled-external-peer timeout case all pass again.
+- The remaining `diskdevice-adf` failure is not another harness false negative. Fresh focused reruns still stop at missing `disk-update.result` even after increasing `screenshot_quiet` from 5s to 15s.
+- Latest evidence shows the writable path definitely reaches the resident driver and NIO: `host:/writable.adf` mounts RW, `PERSIST.TXT` sector writes are sent, and multiple `CMD_WRITE` requests succeed before the guest dies.
+- The latest `amiberry.log` shows a guest crash during the writable DN2 workflow (`M68K PC=00f82e00`) rather than a plain mount/update shell failure. This points at a real Amiga-side bug around the RW/update/remount path, not a missing NIO response.
+- Strong suspect area now is the resident device's writable-media transition / change-notification lifetime handling (`TD_ADDCHANGEINT`, `CMD_UPDATE`, `TD_EJECT`, `signal_media_change`). The repo README already warned the host exec-boundary test does not validate real Amiga `Cause()` and request lifetimes.
+
+
 ## Progress 2026-08-12 18:00
 
 These were captured by me from claude conversations, not actually written by claude:

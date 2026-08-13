@@ -1,4 +1,5 @@
 C:Assign T: RAM:
+C:Echo "FUJINET WRITE PERSISTED" >DH0:persist-source.txt
 C:LoadModule DEVS:fujinet-disk.device
 C:Echo "LOAD RC=$RC" >DH0:disk-load.result
 C:fujinet-mount --boundary 6 >DH0:disk-exec-boundary.result
@@ -19,7 +20,8 @@ C:Type DN1:SECOND.TXT >DH0:disk-type-1.result
 C:fujinet-mount --status 1 >DH0:disk-status-1-early.result
 C:fujinet-mount 13 2 RW >DH0:disk-mount-rw.result
 C:Mount DN2: FROM DEVS:DN2
-C:Echo "FUJINET WRITE PERSISTED" >DN2:PERSIST.TXT
+C:Copy DH0:persist-source.txt TO DN2:PERSIST.TXT
+C:Echo "COPY RC=$RC" >DH0:disk-copy-rw.result
 C:fujinet-mount --update 2 >DH0:disk-update.result
 C:Assign DN2: DISMOUNT
 C:fujinet-mount 13 2 RW >DH0:disk-remount-rw.result
@@ -53,6 +55,7 @@ C:Type DH0:disk-dos-mount-1.result
 C:Type DH0:disk-type-1.result
 C:Type DH0:disk-status-1-early.result
 C:Type DH0:disk-mount-rw.result
+C:Type DH0:disk-copy-rw.result
 C:Type DH0:disk-update.result
 C:Type DH0:disk-remount-rw.result
 C:Type DH0:disk-dos-remount-2.result
