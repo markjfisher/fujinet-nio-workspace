@@ -1,4 +1,12 @@
-# Commentary from Agent on phase 2 work
+# Progress document for phase 2 work
+
+Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
+Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
+
+
+## Progress 2026-08-12 18:00
+
+These were captured by me from claude conversations, not actually written by claude:
 
 ```
 The data is correct but OFS still rejects it. Let me check what the Amiga actually sees — let me look at the amiberry.log and also check whether there's something about how io_Actual is set differently than OFS expects
