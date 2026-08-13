@@ -18,6 +18,7 @@ C:Mount DN1: FROM DEVS:DN1
 C:Echo "DOS MOUNT 1 RC=$RC" >DH0:disk-dos-mount-1.result
 C:Type DN1:SECOND.TXT >DH0:disk-type-1.result
 C:fujinet-mount --status 1 >DH0:disk-status-1-early.result
+C:fujinet-mount --geometry 2 >DH0:disk-geometry-2.result
 C:fujinet-mount 13 2 RW >DH0:disk-mount-rw.result
 C:Mount DN2: FROM DEVS:DN2
 C:Copy DH0:persist-source.txt TO DN2:PERSIST.TXT
@@ -54,6 +55,7 @@ C:Type DH0:disk-mount-1.result
 C:Type DH0:disk-dos-mount-1.result
 C:Type DH0:disk-type-1.result
 C:Type DH0:disk-status-1-early.result
+C:Type DH0:disk-geometry-2.result
 C:Type DH0:disk-mount-rw.result
 C:Type DH0:disk-copy-rw.result
 C:Type DH0:disk-update.result
