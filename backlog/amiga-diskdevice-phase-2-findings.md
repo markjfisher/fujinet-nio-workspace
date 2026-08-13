@@ -3,6 +3,14 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 21:18
+
+- The host-side Amiberry `BeginIO` trace is now deterministic without changing the resident device or the guest startup sequence. The runner pauses before opening the serial bridge; the controller waits for the existing `LoadModule` command to register `fujinet-disk.device`, resolves the live vector from Exec's `DeviceList`, arms only `device_begin_io()`, then resumes and records each request.
+- Successful evidence is `test-evidence/amiberry-20260813-211831/diskdevice-adf/beginio-command-stream.log`. It captured 60 ordered requests and reached the foreground `Copy` write sequence with the corrected `io_Offset +44` decoder.
+- The expected foreground writes are records 52-56: `CMD_WRITE` (command `3`), 512 bytes, unit `12871686`, at LBAs `880, 882, 882, 883, 880` respectively.
+- The answer to the current breakpoint question is **yes**: after the final LBA 880 write (record 56), `device_begin_io()` receives another request. Record 57 is `CMD_WRITE`, unit `12871686`, flags `0x0`, error `0x0`, actual `0`, length `512`, offset `451584`, LBA `882`.
+- This disproves the narrower hypothesis that the filesystem submits no device work after the final LBA 880. Do not add internal `fujinet_disk_write()` or `ReplyMsg()` breakpoints yet; first interpret the completed BeginIO stream alongside the existing image delta showing missing block 881.
+
 
 ## Progress 2026-08-13 14:50
 

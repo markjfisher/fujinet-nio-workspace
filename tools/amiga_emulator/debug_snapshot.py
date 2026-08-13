@@ -8,6 +8,29 @@ import re
 from . import ipc
 
 
+IOREQUEST_FIELDS = {
+    "io_Unit": (24, 4),
+    "io_Command": (28, 2),
+    "io_Flags": (30, 1),
+    "io_Error": (31, 1),
+    "io_Actual": (32, 4),
+    "io_Length": (36, 4),
+    "io_Offset": (44, 4),
+}
+
+
+def read_memory(socket_path: Path, address: int, width: int) -> int:
+    response = ipc.request(socket_path, "READ_MEM", hex(address), str(width))
+    return int(response.split("\t", 1)[-1].strip(), 0)
+
+
+def read_io_request(socket_path: Path, request_address: int) -> dict[str, int]:
+    return {
+        name: read_memory(socket_path, request_address + offset, width)
+        for name, (offset, width) in IOREQUEST_FIELDS.items()
+    }
+
+
 def wait_for_breakpoint(socket_path: Path, timeout: float = 60.0) -> str:
     """Require running-then-paused, avoiding the controller's initial pause."""
     import time
@@ -66,7 +89,8 @@ def capture_breakpoint(socket_path: Path, destination: Path) -> dict[str, int]:
         "io_Unit": (24, 4),
         "io_Actual": (32, 4),
         "io_Length": (36, 4),
-        "io_Offset": (40, 4),
+        # Standard IORequest layout: io_Data is at 40 and io_Offset follows it.
+        "io_Offset": (44, 4),
     }
     for name, (offset, width) in fields.items():
         response = ipc.request(socket_path, "READ_MEM", hex(a1 + offset), str(width))

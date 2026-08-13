@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import TextIO
 
+from . import ipc
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -135,6 +137,7 @@ class AmigaRunner:
         self.amiga_pty = self.run_dir / "amiga-serial"
         self.nio_pty = self.run_dir / "nio-serial"
         self.ipc_socket: Path | None = None
+        self.debugger_controller: subprocess.Popen[object] | None = None
 
     def validate(self) -> None:
         require_command(self.amiberry_bin)
@@ -310,6 +313,16 @@ class AmigaRunner:
                 str(self.ipc_socket) + "\n", encoding="utf-8"
             )
             print(f"Amiberry IPC socket: {self.ipc_socket}")
+            if os.environ.get("AMIGA_E2E_BEGINIO_TRACE") == "1":
+                # Start before opening the serial bridge: that bridge releases
+                # the guest startup sequence and its first device requests.
+                ipc.request(self.ipc_socket, "DEBUG_ACTIVATE")
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.beginio_trace",
+                     "--socket", str(self.ipc_socket),
+                     "--output-dir", str(self.run_dir)],
+                    self.run_dir / "beginio-controller.log", cwd=ROOT,
+                )
         except (FileNotFoundError, OSError):
             # IPC is optional in Amiberry builds; serial testing must still work.
             pass
@@ -346,6 +359,7 @@ class AmigaRunner:
         return self.amiberry.returncode or 0
 
     def cleanup(self) -> None:
+        terminate_process(self.debugger_controller)
         terminate_process(self.bridge)
         terminate_process(self.amiberry)
         terminate_process(self.nio)

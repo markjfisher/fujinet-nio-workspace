@@ -25,6 +25,7 @@ DEV_ABORT_IO = -36
 # This is generated from exec/execbase.h layout for the m68k NDK ABI.
 EXEC_DEVICE_LIST = 350
 AMIGA_ADDRESS_MAX = 0x00FFFFFF
+EXEC_LIST_TAIL = 0xFFFFFFFF
 
 
 def plausible_address(value: int, alignment: int = 2) -> bool:
@@ -108,6 +109,8 @@ def resolve_device(socket_path: Path, name: str = "fujinet-disk.device",
             )
             return exec_base, vectors, names
         node = read_word(socket_path, node + NODE_SUCC, 4)
+        if node == EXEC_LIST_TAIL:
+            break
         if node and not plausible_address(node, 2):
             raise ValueError(f"implausible successor pointer {node:#x}")
     raise LookupError(f"device {name!r} not found; walked {names!r}")
