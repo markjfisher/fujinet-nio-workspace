@@ -36,6 +36,25 @@ TASK_SIG_RECVD = 26
 TASK_SIZE = 92
 PROCESS_FILE_SYSTEM_TASK = 0xA8
 PROCESS_CLI = 0xAC
+PROCESS_MSG_PORT = 0x5C
+MSGPORT_FLAGS = 0x0E
+MSGPORT_SIGBIT = 0x0F
+MSGPORT_SIGTASK = 0x10
+MSGPORT_MSGLIST = 0x14
+MESSAGE_REPLY_PORT = 0x0E
+MESSAGE_LENGTH = 0x12
+DOSPACKET_LINK = 0x00
+DOSPACKET_PORT = 0x04
+DOSPACKET_TYPE = 0x08
+DOSPACKET_RES1 = 0x0C
+DOSPACKET_RES2 = 0x10
+DOSPACKET_ARG1 = 0x14
+MESSAGE_SIZE = 20
+CLI_COMMAND_NAME = 0x10
+CLI_CURRENT_INPUT = 0x20
+CLI_COMMAND_FILE = 0x24
+CLI_CURRENT_OUTPUT = 0x30
+CLI_MODULE = 0x3C
 EXEC_LIST_TAIL = 0xFFFFFFFF
 TASK_STATES = {
     0: "INVALID", 1: "ADDED", 2: "RUN", 3: "READY", 4: "WAIT",
@@ -67,6 +86,16 @@ def read_c_string(socket_path: Path, address: int, limit: int = 80) -> str:
     return chars.decode("ascii", errors="replace")
 
 
+def read_b_string(socket_path: Path, bptr: int, limit: int = 80) -> str:
+    """Read an Amiga BCPL BSTR referenced through a BPTR."""
+    if not bptr:
+        return ""
+    address = bptr << 2
+    length = min(read_memory(socket_path, address, 1), limit)
+    chars = bytearray(read_memory(socket_path, address + 1 + offset, 1) for offset in range(length))
+    return chars.decode("ascii", errors="replace")
+
+
 def read_task(socket_path: Path, address: int, list_name: str) -> dict[str, int | str]:
     node_type = read_memory(socket_path, address + NODE_TYPE, 1)
     name = read_c_string(socket_path, read_memory(socket_path, address + NODE_NAME, 4))
@@ -86,11 +115,85 @@ def walk_task_list(socket_path: Path, list_address: int, list_name: str) -> list
     tasks: list[dict[str, int | str]] = []
     node = read_memory(socket_path, list_address, 4)
     seen: set[int] = set()
-    while node not in {0, EXEC_LIST_TAIL} and node not in seen and len(tasks) < 256:
+    # Exec List.lh_Tail points at the in-place tail sentinel at list+4.
+    tail = list_address + 4
+    while node not in {0, EXEC_LIST_TAIL, tail} and node not in seen and len(tasks) < 256:
         seen.add(node)
         tasks.append(read_task(socket_path, node, list_name))
         node = read_memory(socket_path, node + NODE_SUCC, 4)
     return tasks
+
+
+def read_process_port(socket_path: Path, process: int) -> dict[str, int | list[dict[str, int]]]:
+    address = process + PROCESS_MSG_PORT
+    return {
+        "address": address,
+        "flags": read_memory(socket_path, address + MSGPORT_FLAGS, 1),
+        "sigbit": read_memory(socket_path, address + MSGPORT_SIGBIT, 1),
+        "sigtask": read_memory(socket_path, address + MSGPORT_SIGTASK, 4),
+        "messages": walk_port_messages(socket_path, address),
+    }
+
+
+def walk_port_messages(socket_path: Path, port: int) -> list[dict[str, int]]:
+    messages: list[dict[str, int]] = []
+    node = read_memory(socket_path, port + MSGPORT_MSGLIST, 4)
+    seen: set[int] = set()
+    # MsgPort.mp_MsgList is an Exec List at port+0x14; its tail sentinel is
+    # stored in-place at list+4 and must not be decoded as a Message.
+    tail = port + MSGPORT_MSGLIST + 4
+    while node not in {0, EXEC_LIST_TAIL, tail} and node not in seen and len(messages) < 64:
+        seen.add(node)
+        packet = node + MESSAGE_SIZE
+        messages.append({
+            "address": node,
+            "reply_port": read_memory(socket_path, node + MESSAGE_REPLY_PORT, 4),
+            "length": read_memory(socket_path, node + MESSAGE_LENGTH, 2),
+            "packet": packet,
+            "packet_link": read_memory(socket_path, packet + DOSPACKET_LINK, 4),
+            "packet_port": read_memory(socket_path, packet + DOSPACKET_PORT, 4),
+            "packet_type": read_memory(socket_path, packet + DOSPACKET_TYPE, 4),
+            "packet_res1": read_memory(socket_path, packet + DOSPACKET_RES1, 4),
+            "packet_res2": read_memory(socket_path, packet + DOSPACKET_RES2, 4),
+            "packet_arg1": read_memory(socket_path, packet + DOSPACKET_ARG1, 4),
+        })
+        node = read_memory(socket_path, node + NODE_SUCC, 4)
+    return messages
+
+
+def append_process_port_snapshot(lines: list[str], socket_path: Path,
+                                 task: dict[str, int | str]) -> None:
+    process = int(task["address"])
+    port = read_process_port(socket_path, process)
+    cli_bptr = int(task.get("cli", 0))
+    command_name = read_b_string(socket_path, read_memory(
+        socket_path, (cli_bptr << 2) + CLI_COMMAND_NAME, 4
+    )) if cli_bptr else ""
+    command_file = read_b_string(socket_path, read_memory(
+        socket_path, (cli_bptr << 2) + CLI_COMMAND_FILE, 4
+    )) if cli_bptr else ""
+    current_input = read_memory(socket_path, (cli_bptr << 2) + CLI_CURRENT_INPUT, 4) if cli_bptr else 0
+    current_output = read_memory(socket_path, (cli_bptr << 2) + CLI_CURRENT_OUTPUT, 4) if cli_bptr else 0
+    module = read_memory(socket_path, (cli_bptr << 2) + CLI_MODULE, 4) if cli_bptr else 0
+    signal_mask = 1 << int(port["sigbit"])
+    lines.append(
+        f"PROCESS name={task['name']!r} address={process:#x} cli_bptr={cli_bptr:#x} "
+        f"command_name={command_name!r} command_file={command_file!r} "
+        f"current_input_bptr={current_input:#x} current_output_bptr={current_output:#x} "
+        f"module_bptr={module:#x} "
+        f"port={int(port['address']):#x} port_flags={int(port['flags']):#x} "
+        f"sigbit={int(port['sigbit'])} signal_mask={signal_mask:#x} "
+        f"sigtask={int(port['sigtask']):#x} queued={len(port['messages'])}"
+    )
+    for message in port["messages"]:
+        lines.append(
+            f"MESSAGE owner={process:#x} address={message['address']:#x} "
+            f"reply_port={message['reply_port']:#x} length={message['length']} "
+            f"packet={message['packet']:#x} packet_link={message['packet_link']:#x} "
+            f"packet_port={message['packet_port']:#x} packet_type={message['packet_type']:#x} "
+            f"res1={message['packet_res1']:#x} res2={message['packet_res2']:#x} "
+            f"arg1={message['packet_arg1']:#x}"
+        )
 
 
 def capture_task_snapshot(socket_path: Path, destination: Path) -> list[dict[str, int | str]]:
@@ -121,6 +224,11 @@ def capture_task_snapshot(socket_path: Path, destination: Path) -> list[dict[str
             line += (f" filesystem_task={int(task['filesystem_task']):#x}"
                      f" cli={int(task['cli']):#x}")
         lines.append(line)
+    # Decode the shell and every DN2 process independently.  Duplicate DN2
+    # names are valid: only the live process/port addresses establish role.
+    for task in tasks:
+        if task["type"] == 13 and task["name"] in {"Initial CLI", "DN2"}:
+            append_process_port_snapshot(lines, socket_path, task)
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return tasks
 

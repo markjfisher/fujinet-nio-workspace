@@ -20,9 +20,13 @@ C:Type DN1:SECOND.TXT >DH0:disk-type-1.result
 C:fujinet-mount --status 1 >DH0:disk-status-1-early.result
 C:fujinet-mount 13 2 RW >DH0:disk-mount-rw.result
 C:Mount DN2: FROM DEVS:DN2
+C:Echo "COPY-BEGIN"
 C:Copy DH0:persist-source.txt TO DN2:PERSIST.TXT
+C:Echo "COPY-END rc=$RC"
 C:Echo "COPY RC=$RC" >DH0:disk-copy-rw.result
+C:Echo "UPDATE-BEGIN"
 C:fujinet-mount --update 2 >DH0:disk-update.result
+C:Echo "UPDATE-END rc=$RC"
 C:Assign DN2: DISMOUNT
 C:fujinet-mount 13 2 RW >DH0:disk-remount-rw.result
 C:Mount DN2: FROM DEVS:DN2
@@ -42,6 +46,7 @@ C:fujinet-mount --status 7 >DH0:disk-status-7.result
 C:fujinet-mount --uri 3 host:/second.adf RO >NIL:
 C:fujinet-mount --eject 3 >DH0:disk-eject.result
 C:fujinet-mount --status 3 >DH0:disk-status-3.result
+C:Echo "RESULTS-BEGIN"
 C:Type DH0:disk-load.result
 C:Type DH0:disk-mount.result
 C:Type DH0:disk-dos-mount.result
@@ -70,4 +75,5 @@ C:Type DH0:disk-mount-direct.result
 C:Type DH0:disk-mount-direct-rc.result
 C:Type DH0:disk-failed-replacement.result
 C:Type DH0:disk-status-7.result
+C:Echo "RESULTS-END"
 C:Echo "E2E COMPLETE"

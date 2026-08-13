@@ -3,6 +3,21 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-13 23:24
+
+- The existing `amiberry-20260813-231309` HDF was extracted directly with the harness's `xdftool` path. It contains `disk-copy-rw.result` (`COPY RC=0`), `disk-update.result` (`UPDATED drive=2 slot=3`), `disk-remount-rw.result`, `disk-dos-remount-2.result` (`DOS REMOUNT 2 RC=0`), and an empty `disk-persist.result`. All later requested checkpoints are absent. That run definitely reached `C:Type DN2:PERSIST.TXT` and created its redirected result file, even though the Type output was empty.
+- Added visible, non-redirected markers only around the writable section and final display section: `COPY-BEGIN`, `COPY-END rc=$RC`, `UPDATE-BEGIN`, `UPDATE-END rc=$RC`, `RESULTS-BEGIN`, and `RESULTS-END`. This preserves every command and stored result path.
+- Fresh marker evidence (`amiberry-20260813-232447`) visibly shows `COPY-BEGIN`, `COPY-END rc=0`, `UPDATE-BEGIN`, and `UPDATE-END rc=0`. Its extracted HDF contains Copy, Update, remount, and DOS-remount checkpoints but lacks `disk-persist.result`; it is therefore paused/stalled at the immediately following `C:Type DN2:PERSIST.TXT`, before the final result-display block.
+- NDK/cross-compiler verified CLI fields now record `cli_CurrentInput=0x20`, `cli_CurrentOutput=0x30`, and `cli_Module=0x3c` in snapshots. These identify CLI stream/module BPTRs but do not encode a command argument. Sequence position plus the HDF checkpoint boundary identifies the active `C:Type` as `DN2:PERSIST.TXT`, not a final `Type DH0:...result` command.
+
+## Progress 2026-08-13 23:13
+
+- The Initial CLI wait was decoded with m68k-amigaos-gcc-verified offsets for `Process`, `MsgPort`, `Message`, `DosPacket`, and `CommandLineInterface`; clean evidence is `test-evidence/amiberry-20260813-231309/diskdevice-adf/task-timeout-snapshot.log`.
+- Initial CLI (`0xc212d0`) is `TS_WAIT` on `tc_SigWait=0x100`. Its embedded process port is `0xc2132c`, uses `mp_SigBit=8`, and therefore has signal mask `1 << 8 == 0x100`; `mp_SigTask` points back to Initial CLI. This proves the foreground CLI is waiting on its DOS/process reply port at capture time.
+- That CLI port queue is empty. Its decoded CLI command name is `C:Type`, not `Copy`; do not infer that Copy is still blocked merely because Initial CLI waits on its port. There is no queued reply packet waiting to wake it and no queued packet from Initial CLI on either DN2 handler port.
+- Two distinct `DN2` filesystem processes exist: current/wait process `0xc62d38` with port `0xc62d94`, and wait process `0xc58b90` with port `0xc58bec`. Both have empty port queues and each owns its own signal bit 8. Their shared process `pr_FileSystemTask` field (`0xc0e144`) is the DOS filesystem task pointer, not evidence that one is an outstanding caller. The snapshot cannot, by itself, attribute one to the writable mounted volume beyond their observed lifecycle state.
+- No DOS packet/message is outstanding between Initial CLI and either DN2 port at timeout. This shifts the checkpoint investigation away from a missing DN2 packet reply and toward the sequence/checkpoint mechanism running after `C:Type` or the harness's command/output observation.
+
 ## Progress 2026-08-13 23:00
 
 - A host-only Exec task snapshot was captured at the bounded reproduction timeout: `test-evidence/amiberry-20260813-230029/diskdevice-adf/task-timeout-snapshot.log`. It uses NDK-derived `ThisTask`, `TaskReady`, `TaskWait`, Node, and Task offsets; Process extension offsets have subsequently been verified with `m68k-amigaos-gcc` as `pr_FileSystemTask=0xa8` and `pr_CLI=0xac`.
