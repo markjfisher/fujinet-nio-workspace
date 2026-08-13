@@ -254,11 +254,13 @@ def _ipc_insert_floppy(sock: Path, adf_path: Path, drive: int = 0) -> bool:
 def _has_amiga_content(screenshot: Path) -> bool:
     """Return True only when the screenshot shows real Amiga display content.
 
-    Amiberry's uninitialized framebuffer is a uniform dark grey (~17, 17, 17)
-    before the Amiga OS sets up a display mode.  That state has essentially
-    zero pixel variance and must not be mistaken for a settled CLI screen.
-    A genuine Amiga display (CLI text, workbench, startup messages) has
-    significant variance — bright text on dark background or similar.
+    Amiberry starts with a uniform black or dark-grey framebuffer before the
+    Amiga display is initialized. Real Amiga output can still be mostly flat
+    grey, for example an empty Workbench screen with only a title bar, so a
+    whole-frame variance threshold is too strict and causes false negatives.
+
+    Treat the frame as valid Amiga content when it is not near-uniform and it
+    includes a visible number of non-background pixels.
     """
     if not _PILLOW or not screenshot.is_file():
         return False
@@ -267,9 +269,17 @@ def _has_amiga_content(screenshot: Path) -> bool:
         pixels = list(img.getdata())  # type: ignore[attr-defined]
         if not pixels:
             return False
-        mean = sum(pixels) / len(pixels)
-        variance = sum((p - mean) ** 2 for p in pixels) / len(pixels)
-        return variance > 25.0  # std_dev > 5 means real content
+
+        lo = min(pixels)
+        hi = max(pixels)
+        if (hi - lo) < 8:
+            return False
+
+        # Count pixels that are clearly away from the dominant mid-grey or
+        # black background. Text, borders, and icons provide enough signal even
+        # on a mostly empty Workbench screen.
+        foreground = sum(1 for p in pixels if p <= 64 or p >= 224)
+        return foreground >= 100
     except Exception:
         return False
 
@@ -455,6 +465,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         screenshot_quiet = float(case.get("screenshot_quiet", 3))
         activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
         screenshot_interval = float(case.get("screenshot_interval", 1.0))
+        external_activity_evidence = bool(case.get("silent_peer"))
         # How long after boot with NO screen movement before giving up.
         no_activity_timeout = float(case.get("no_activity_timeout", 20))
         runner_timeout = str(case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20")))
@@ -540,6 +551,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
             shots_dir.mkdir(exist_ok=True)
 
             saw_activity = False
+            last_activity_at: float | None = None
+            last_nio_receive_count = 0
             prev_shot: Path | None = None
             screen_quiet_since: float | None = None
             screen_ever_changed = False
@@ -554,8 +567,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 # NIO log — check for any FujiBus traffic (evidence only).
                 if nio_log.is_file():
                     try:
-                        if "fujibus: receive:" in nio_log.read_text(encoding="utf-8", errors="replace"):
+                        nio_text = nio_log.read_text(encoding="utf-8", errors="replace")
+                        receive_count = nio_text.count("fujibus: receive:")
+                        if receive_count:
                             saw_activity = True
+                            if receive_count != last_nio_receive_count:
+                                last_activity_at = now
+                                last_nio_receive_count = receive_count
                     except OSError:
                         pass
 
@@ -588,12 +606,18 @@ def run_amiga_case(amiga_environment: dict[str, str],
                                 screen_quiet_since = now
                         prev_shot = shot
 
-                # Screen quiet for long enough → sequence finished.
+                # Screen quiet for long enough and FujiBus traffic has also
+                # gone quiet -> sequence finished. This avoids cutting off
+                # longer runs that keep a static Workbench frame while guest
+                # commands continue in the background.
                 if screen_quiet_since is not None and (now - screen_quiet_since) >= screenshot_quiet:
-                    break
+                    if external_activity_evidence:
+                        break
+                    if last_activity_at is None or (now - last_activity_at) >= screenshot_quiet:
+                        break
 
                 # Fast-fail: booted but screen has never moved for no_activity_timeout.
-                if prev_shot and not screen_ever_changed:
+                if prev_shot and not screen_ever_changed and not external_activity_evidence:
                     if (now - boot_time) > no_activity_timeout:
                         break
 
@@ -610,9 +634,11 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         shutil.copy2(candidate, run_dir / "amiberry-screen.png")
                         break
 
-            # If the screen never changed at all the Amiga is stuck (crash,
-            # bad ROM, display not initialised). Fail fast with a clear message.
-            if not screen_ever_changed:
+            # If the screen never changed and there was no FujiBus activity at
+            # all, the Amiga likely never reached the startup script. Some
+            # successful cases keep a visually static Workbench frame while the
+            # app still runs to completion, so activity is the stronger signal.
+            if not screen_ever_changed and not saw_activity and not external_activity_evidence:
                 raise AssertionError(
                     "Amiberry booted but the screen never changed — "
                     "the Amiga may have crashed or the startup sequence did not run"

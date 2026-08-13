@@ -124,20 +124,21 @@ results = [
 ]
 
 [[test]]
-name = "diskdevice-silent-timeout"
+name = "diskdevice-stalled-external-peer"
 project = "apps"
 app = "wifitest"
 driver = true
 silent_peer = true
-# The external peer has no FujiBus log marker. Allow the guest boot plus the
-# 5-second transport deadline and session framing overhead, then capture and
-# quit instead of waiting for the normal NIO activity window.
+# This case does not launch a local fujinet-nio instance. It connects Amiberry
+# to a fake external TCP peer that accepts the connection, emits a single SLIP
+# delimiter, then stalls. The mount command must fail in bounded time and must
+# not leave behind a successful mount result artifact.
 timeout = 40
 activity_timeout = 25
 screenshot_quiet = 0.2
 screenshot_interval = 0.5
 startup = "startup/diskdevice-silent-timeout.sequence"
-results = ["silent-timeout.result"]
+results = ["fmount.result", "stalled-peer-timeout.result"]
 
 [[test]]
 name = "diskdevice-adf-native-floppy"
