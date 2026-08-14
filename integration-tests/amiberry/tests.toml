@@ -94,6 +94,27 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-inhibit-poc"
+project = "apps"
+app = "inhibitpoc"
+driver = true
+inhibit_poc = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/diskdevice-inhibit-poc.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-inhibit-poc"
+results = [
+  "inhibit-a.result",
+  "inhibit-true.result",
+  "inhibit-b.result",
+  "inhibit-false.result",
+  "inhibit-a-again.result",
+  "inhibit-final.result",
+]
+
+[[test]]
 name = "diskdevice-fmount"
 project = "apps"
 app = "wifitest"

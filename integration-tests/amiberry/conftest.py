@@ -288,12 +288,13 @@ def _patch_boot_block(image: Path) -> None:
 
 def create_standard_adf(environment: dict[str, str], image: Path,
                         marker_name: str = "KNOWN.TXT",
-                        marker_text: str = "FUJINET ADF READ PASSED\n") -> None:
+                        marker_text: str = "FUJINET ADF READ PASSED\n",
+                        volume_name: str = "NIOADF") -> None:
     image.unlink(missing_ok=True)
     marker = image.parent / marker_name
     marker.write_text(marker_text, encoding="ascii")
     subprocess.run(
-        [*xdf_command(environment), str(image), "create", "+", "format", "NIOADF",
+        [*xdf_command(environment), str(image), "create", "+", "format", volume_name,
          "+", "boot", "install", "+", "write", str(marker), marker_name],
         cwd=ROOT,
         env=environment,
@@ -592,12 +593,20 @@ def run_amiga_case(amiga_environment: dict[str, str],
             create_standard_adf(amiga_environment, host_root / "writable.adf",
                                 "BASE.TXT", "FUJINET WRITABLE BASE\n")
             create_hd_adf(amiga_environment, host_root / "hd.adf")
+            if case.get("inhibit_poc"):
+                create_standard_adf(amiga_environment, host_root / "inhibit-a.adf",
+                                    "KNOWN.TXT", "INHIBIT VOLUME A\n", "INHIBIT_A")
+                create_standard_adf(amiga_environment, host_root / "inhibit-b.adf",
+                                    "KNOWN.TXT", "INHIBIT VOLUME B\n", "INHIBIT_B")
             catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
             catalog_dir.mkdir(parents=True, exist_ok=True)
             (catalog_dir / "slot-011.bin").write_bytes(b"\x01\x01host:/standard.adf")
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
             (catalog_dir / "slot-014.bin").write_bytes(b"\x01\x01host:/hd.adf")
+            if case.get("inhibit_poc"):
+                (catalog_dir / "slot-015.bin").write_bytes(b"\x01\x01host:/inhibit-a.adf")
+                (catalog_dir / "slot-016.bin").write_bytes(b"\x01\x01host:/inhibit-b.adf")
             if case.get("mapping_readonly"):
                 catalog_dir.chmod(0o555)
                 readonly_catalog_dir = catalog_dir
