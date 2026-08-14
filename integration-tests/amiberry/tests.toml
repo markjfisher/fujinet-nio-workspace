@@ -115,6 +115,39 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-inhibit-exp-a"
+project = "apps"
+app = "fmount_inhibit_exp_a"
+driver = true
+timeout = 60
+activity_timeout = 45
+no_activity_timeout = 30
+startup = "startup/diskdevice-inhibit-exp-a.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-inhibit-exp-a"
+results = [
+  "exp-a-true.result",
+  "exp-a-false.result",
+  "exp-a-type.result",
+]
+
+[[test]]
+name = "diskdevice-inhibit-exp-b"
+project = "apps"
+app = "fmount_inhibit_exp_b"
+driver = true
+timeout = 60
+activity_timeout = 45
+no_activity_timeout = 30
+startup = "startup/diskdevice-inhibit-exp-b.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-inhibit-exp-b"
+results = [
+  "exp-b-true.result",
+  "exp-b-type.result",
+]
+
+[[test]]
 name = "diskdevice-fmount"
 project = "apps"
 app = "wifitest"
@@ -133,11 +166,14 @@ results = [
   "fmount-status.result",
   "fmount-dir.result",
   "fmount-type.result",
-  "fmount-replace-eject.result",
-  "fmount-replace-absent.result",
   "fmount-replace-mount.result",
   "fmount-replace-present.result",
   "fmount-replace-type.result",
+  "fmount-replace-back-mount.result",
+  "fmount-replace-back-present.result",
+  "fmount-replace-back-type.result",
+  "fmount-failed-replace.result",
+  "fmount-failed-replace-type.result",
   "fmount-rw-mount.result",
   "fmount-rw-dos-mount.result",
   "fmount-rw-copy.result",

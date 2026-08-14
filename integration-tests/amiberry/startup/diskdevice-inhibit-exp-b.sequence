@@ -1,0 +1,15 @@
+C:Assign T: RAM:
+C:FailAt 21
+C:LoadModule DEVS:fujinet-disk.device
+C:fmount 11 0 RO >NIL:
+C:Mount DN0: FROM DEVS:DN0
+C:Wait 2 SECS
+C:fmount_inhibit_exp_b DH0:exp-b-true.result 12 >NIL:
+C:Wait 1 SECS
+C:Dir DN0: >DH0:exp-b-type.result
+C:Type DN0:SECOND.TXT >>DH0:exp-b-type.result
+C:Type DH0:exp-b-true.result
+C:FLS host:/amiga-e2e-complete/diskdevice-inhibit-exp-b >NIL:
+C:Type DH0:exp-b-true.result
+C:Type DH0:exp-b-type.result
+C:Echo "E2E COMPLETE"
