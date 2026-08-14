@@ -3,6 +3,12 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Root Cause 2026-08-14
+
+- Root cause: deferred IORequests stored in the resident device's private FIFO were not transitioned to `NT_MESSAGE`. Because private FIFO insertion bypasses Exec `PutMsg()`, queued requests could retain `NT_UNKNOWN` or stale node state, violating Exec message lifecycle semantics when the device later completed them with `ReplyMsg()`. Under real OFS writable workloads this caused intermittent completion/requester failures.
+- Historical A/B confirms the causal boundary. Pre-fix driver `53716d3c` failed 3/5 normal foreground runs with an AmigaOS requester before the writable checkpoints, while the first one-line production change `6c9bf6af` (`request->io_Message.mn_Node.ln_Type = NT_MESSAGE` immediately before FIFO append) passed 3/3. Later queued-close and invalid-unit hardening commits also pass 3/3 but are not needed to explain the first transition.
+- Added an explicit native Exec-boundary regression in `repos/fujinet-nio-driver/amiga/tests/test_fujinet_exec_boundary.c`: an IORequest beginning in `NT_UNKNOWN` must become `NT_MESSAGE` when privately deferred, remain `NT_MESSAGE` through dequeue, then become `NT_REPLYMSG` after successful non-quick completion/ReplyMsg. Native driver tests and `make amiga` pass with the new contract.
+
 ## Progress 2026-08-14 00:52
 
 - Returned to the normal foreground harness path: no `AMIGA_E2E_DEBUGGER`, controller, breakpoint, task snapshot, packet-trace, or full-payload logging environment was active. The host-side diagnostic tools remain opt-in only. The normal timeout path import was repaired so a timeout can write passive evidence without a `NameError`.
