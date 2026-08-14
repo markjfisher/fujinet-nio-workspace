@@ -43,10 +43,10 @@ C:fujinet-mount --uri 7 host:/missing.adf RO >NIL:
 C:Echo "FAILED REPLACEMENT RC=$RC" >DH0:disk-failed-replacement.result
 C:Failat 10
 C:fujinet-mount --status 7 >DH0:disk-status-7.result
-C:FLS host:/amiga-e2e-complete/diskdevice-adf >NIL:
 C:fujinet-mount --uri 3 host:/second.adf RO >NIL:
 C:fujinet-mount --eject 3 >DH0:disk-eject.result
 C:fujinet-mount --status 3 >DH0:disk-status-3.result
+C:FLS host:/amiga-e2e-complete/diskdevice-adf >NIL:
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:disk-load.result
 C:Type DH0:disk-mount.result

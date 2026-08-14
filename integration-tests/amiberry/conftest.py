@@ -549,10 +549,19 @@ def run_amiga_case(amiga_environment: dict[str, str],
     def run(name: str) -> dict[str, str]:
         case = amiga_cases[name]
         ordered_results = list(case.get("results", []))
+        completion_mode = case.get("completion_mode")
         completion_log = case.get("completion_log")
-        if ordered_results and not completion_log:
+        if completion_mode not in {"nio_marker", "expected_timeout"}:
             raise AssertionError(
-                f"Amiberry case '{name}' declares result artifacts but no completion_log"
+                f"Amiberry case '{name}' has invalid completion_mode: {completion_mode!r}"
+            )
+        if completion_mode == "nio_marker" and not completion_log:
+            raise AssertionError(
+                f"Amiberry case '{name}' uses nio_marker but has no completion_log"
+            )
+        if completion_mode == "expected_timeout" and completion_log:
+            raise AssertionError(
+                f"Amiberry case '{name}' uses expected_timeout but declares completion_log"
             )
         app_dir = ROOT / "repos" / ("nio-apps" if case["project"] == "apps" else "nio-core-apps") / "build" / "amiga" / "bin"
         app = app_dir / case["app"]
@@ -562,6 +571,14 @@ def run_amiga_case(amiga_environment: dict[str, str],
         run_dir = amiga_evidence_root / name
         run_dir.mkdir(parents=True, exist_ok=True)
         readonly_catalog_dir = None
+        host_root = run_dir / "fujinet-data"
+        stale_catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
+        if stale_catalog_dir.is_dir():
+            stale_catalog_dir.chmod(0o755)
+        shutil.rmtree(host_root, ignore_errors=True)
+        host_root.mkdir(parents=True, exist_ok=True)
+        if completion_mode == "nio_marker":
+            (host_root / "amiga-e2e-complete" / name).mkdir(parents=True, exist_ok=True)
         if case.get("driver"):
             subprocess.run(
                 ["make", "amiga"],
@@ -569,13 +586,6 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 env=amiga_environment,
                 check=True,
             )
-            host_root = run_dir / "fujinet-data"
-            stale_catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
-            if stale_catalog_dir.is_dir():
-                stale_catalog_dir.chmod(0o755)
-            shutil.rmtree(host_root, ignore_errors=True)
-            host_root.mkdir(parents=True, exist_ok=True)
-            (host_root / "amiga-e2e-complete" / name).mkdir(parents=True, exist_ok=True)
             create_standard_adf(amiga_environment, host_root / "standard.adf")
             create_standard_adf(amiga_environment, host_root / "second.adf",
                                 "SECOND.TXT", "FUJINET SECOND DRIVE PASSED\n")
@@ -779,7 +789,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         if receive_count != last_nio_receive_count:
                             last_activity_at = now
                             last_nio_receive_count = receive_count
-                    if completion_log:
+                    if completion_mode == "nio_marker":
                         chunk = nio_text[last_nio_read_offset:]
                         found_marker, completion_log_state = scan_completion_log_chunk(
                             chunk, completion_log, completion_log_state
@@ -848,10 +858,18 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     termination_reason = reason
                     break
                 if action == "failure":
+                    if reason == "timeout" and completion_mode == "expected_timeout":
+                        termination_reason = "expected_timeout"
+                        break
                     termination_reason = reason
                     break
 
                 time.sleep(0.2)
+
+            if termination_reason is None:
+                termination_reason = (
+                    "expected_timeout" if completion_mode == "expected_timeout" else "timeout"
+                )
 
             # Promote the most recent screenshot to the canonical evidence file.
             if prev_shot and prev_shot.is_file():
@@ -891,7 +909,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
             if readonly_catalog_dir is not None and readonly_catalog_dir.is_dir():
                 readonly_catalog_dir.chmod(0o755)
 
-        if termination_reason != "completion_log":
+        if termination_reason not in {"completion_log", "expected_timeout"}:
+            if termination_reason == "timeout" and completion_mode == "nio_marker":
+                termination_reason = "nio_marker_timeout"
             present_results = scan_ordered_results(test_env, image, ordered_results)
             runner_exit_state = (
                 "not-started" if runner_returncode is None else

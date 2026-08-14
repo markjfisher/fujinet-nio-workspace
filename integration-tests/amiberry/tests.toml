@@ -5,6 +5,7 @@ name = "wifi-config"
 project = "apps"
 app = "wificonfigtest"
 startup = "startup/wifi-config.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/wifi-config"
 results = ["wificonfigtest.result"]
 
@@ -13,6 +14,7 @@ name = "cli-stateful"
 project = "apps"
 app = "wifitest"
 startup = "startup/cli-stateful.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/cli-stateful"
 results = [
   "cli-fhost-set.result",
@@ -35,6 +37,7 @@ no_activity_timeout = 30
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-adf"
 results = [
   "disk-load.result",
@@ -79,6 +82,7 @@ activity_timeout = 45
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-hd-adf.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-hd-adf"
 results = [
   "hd-load.result",
@@ -100,6 +104,7 @@ screenshot_quiet = 15
 screenshot_interval = 1.0
 no_activity_timeout = 30
 startup = "startup/diskdevice-fmount.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-fmount"
 results = [
   "fmount-load.result",
@@ -128,6 +133,7 @@ activity_timeout = 35
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-mapping-failure.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-mapping-failure"
 results = [
   "map-load.result",
@@ -151,7 +157,7 @@ activity_timeout = 25
 screenshot_quiet = 2
 screenshot_interval = 0.5
 startup = "startup/diskdevice-silent-timeout.sequence"
-completion_log = "host:/amiga-e2e-complete/diskdevice-stalled-external-peer"
+completion_mode = "expected_timeout"
 results = ["fmount.result", "stalled-peer-timeout.result"]
 
 [[test]]
@@ -165,6 +171,7 @@ no_activity_timeout = 20
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf-native-floppy.sequence"
+completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-adf-native-floppy"
 results = [
   "df0-dir.result",

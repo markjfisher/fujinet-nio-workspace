@@ -5,7 +5,6 @@ C:Echo "... Module loaded"
 C:Failat 30
 C:fujinet-mount --uri 0 host:/standard.adf RO >DH0:fmount.result
 C:Echo "STALLED PEER TIMEOUT RC=$RC" >DH0:stalled-peer-timeout.result
-C:FLS host:/amiga-e2e-complete/diskdevice-stalled-external-peer >NIL:
 C:Failat 10
 C:Type DH0:fmount.result
 C:Type DH0:stalled-peer-timeout.result

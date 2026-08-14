@@ -44,6 +44,16 @@ def test_marker_never_arrives_times_out():
     assert reason == "timeout"
 
 
+def test_failed_marker_is_not_treated_as_completion():
+    chunk = (
+        "2026-08-14 [I] fujibus: receive: id=8 dev=0xFE cmd=0x02 params=0 payload=24\n"
+        "2026-08-14 [I] fujibus:   0000: 68 6f 73 74 3a 2f 6f 6e 65 2d 72 6f 77 00 00 00 |host:/one-row...|\n"
+        "2026-08-14 [I] fujibus: send: dev=0xFE status=5 cmd=0x02 payload=0\n"
+    )
+    found, _ = scan_completion_log_chunk(chunk, "host:/one-row")
+    assert found is False
+
+
 def test_requester_before_marker_is_immediate_failure():
     action, reason = evaluate_monitor_state(MonitorSnapshot(
         completion_seen=False,
