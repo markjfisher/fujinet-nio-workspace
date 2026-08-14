@@ -41,7 +41,7 @@ progression are specified in the associated
 - [x] Move the required resident-device interface into a shared, versioned
       Amiga platform header/library boundary that `nio-core-apps` can consume.
       Treat this as a normal cross-repository build dependency.
-- [ ] Stop installing or documenting `fujinet-mount` as a second mounting
+- [x] Stop installing or documenting `fujinet-mount` as a second mounting
       application once `FMOUNT`/`FUMOUNT` cover its supported operations.
       Preserve only narrowly named driver diagnostics that are not duplicate
       end-user functions.
