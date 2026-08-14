@@ -56,6 +56,13 @@ class MonitorSnapshot:
     debugger_paused: bool = False
 
 
+@dataclass(frozen=True)
+class CompletionLogState:
+    pending_line: str = ""
+    current_payload: bytes = b""
+    current_marker_match: bool = False
+
+
 def evaluate_monitor_state(snapshot: MonitorSnapshot) -> tuple[str, str | None]:
     if snapshot.requester_seen:
         return ("failure", "requester")
@@ -76,38 +83,76 @@ def read_log_text(path: Path) -> str:
         return ""
 
 
-def completion_log_seen(log_text: str, marker: str) -> bool:
-    receive_re = re.compile(r"fujibus: receive: id=(\d+) dev=(0x[0-9A-Fa-f]+) cmd=(0x[0-9A-Fa-f]+)")
-    send_re = re.compile(r"fujibus: send: dev=(0x[0-9A-Fa-f]+) status=(\d+) cmd=(0x[0-9A-Fa-f]+)")
-    hex_re = re.compile(r"fujibus:\s+[0-9a-f]{4}:\s+([0-9a-f ]+)\|", re.IGNORECASE)
+def append_monitor_trace(path: Path, line: str) -> None:
+    try:
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(line + "\n")
+    except OSError:
+        pass
 
-    current_marker_match = False
-    collecting_payload = False
-    payload_bytes = bytearray()
 
-    for line in log_text.splitlines():
-        receive_match = receive_re.search(line)
-        if receive_match:
+_FUJIBUS_RECEIVE_RE = re.compile(r"fujibus: receive: id=(\d+) dev=(0x[0-9A-Fa-f]+) cmd=(0x[0-9A-Fa-f]+)")
+_FUJIBUS_SEND_RE = re.compile(r"fujibus: send: dev=(0x[0-9A-Fa-f]+) status=(\d+) cmd=(0x[0-9A-Fa-f]+)")
+_FUJIBUS_HEX_RE = re.compile(r"fujibus:\s+[0-9a-f]{4}:\s+([0-9a-f ]+)\|", re.IGNORECASE)
+
+
+def _completion_state_with_payload_finalized(state: CompletionLogState, marker_bytes: bytes) -> CompletionLogState:
+    if not state.current_payload:
+        return state
+    return CompletionLogState(
+        pending_line=state.pending_line,
+        current_payload=state.current_payload,
+        current_marker_match=marker_bytes in state.current_payload,
+    )
+
+
+def scan_completion_log_chunk(chunk: str, marker: str,
+                              state: CompletionLogState | None = None) -> tuple[bool, CompletionLogState]:
+    state = state or CompletionLogState()
+    marker_bytes = marker.encode("latin-1", errors="ignore")
+    text = state.pending_line + chunk
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        pending_line = lines.pop()
+    else:
+        pending_line = ""
+
+    current_payload = bytearray(state.current_payload)
+    current_marker_match = state.current_marker_match
+
+    for raw_line in lines:
+        line = raw_line.rstrip("\r\n")
+
+        if _FUJIBUS_RECEIVE_RE.search(line):
+            current_payload = bytearray()
             current_marker_match = False
-            collecting_payload = True
-            payload_bytes = bytearray()
             continue
 
-        if collecting_payload:
-            hex_match = hex_re.search(line)
-            if hex_match:
-                payload_bytes.extend(bytes.fromhex(hex_match.group(1)))
-                continue
-            decoded = payload_bytes.decode("latin-1", errors="ignore")
-            if marker in decoded:
-                current_marker_match = True
-            collecting_payload = False
+        hex_match = _FUJIBUS_HEX_RE.search(line)
+        if hex_match:
+            current_payload.extend(bytes.fromhex(hex_match.group(1)))
+            continue
 
-        send_match = send_re.search(line)
+        if current_payload:
+            current_marker_match = marker_bytes in current_payload
+
+        send_match = _FUJIBUS_SEND_RE.search(line)
         if send_match and current_marker_match:
-            return send_match.group(2) == "0"
+            return (send_match.group(2) == "0", CompletionLogState(
+                pending_line=pending_line,
+                current_payload=bytes(current_payload),
+                current_marker_match=current_marker_match,
+            ))
 
-    return False
+    next_state = _completion_state_with_payload_finalized(
+        CompletionLogState(
+            pending_line=pending_line,
+            current_payload=bytes(current_payload),
+            current_marker_match=current_marker_match,
+        ),
+        marker_bytes,
+    )
+    return (False, next_state)
 
 
 def scan_ordered_results(environment: dict[str, str], image: Path,
@@ -678,12 +723,16 @@ def run_amiga_case(amiga_environment: dict[str, str],
             nio_log = run_dir / "fujinet-nio.log"
             shots_dir = run_dir / "screenshots"
             shots_dir.mkdir(exist_ok=True)
+            monitor_trace = run_dir / "completion-monitor.trace"
+            monitor_trace.unlink(missing_ok=True)
 
             saw_activity = False
             last_activity_at: float | None = None
             last_nio_receive_count = 0
             last_serial_line_count = 0
             last_serial_activity_at: float | None = None
+            last_nio_read_offset = 0
+            completion_log_state = CompletionLogState()
             prev_shot: Path | None = None
             screen_quiet_since: float | None = None
             screen_ever_changed = False
@@ -719,6 +768,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
 
                 # NIO log — check for any FujiBus traffic (evidence only).
                 if nio_log.is_file():
+                    try:
+                        current_nio_log_size = nio_log.stat().st_size
+                    except OSError:
+                        current_nio_log_size = 0
                     nio_text = read_log_text(nio_log)
                     receive_count = nio_text.count("fujibus: receive:")
                     if receive_count:
@@ -726,8 +779,25 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         if receive_count != last_nio_receive_count:
                             last_activity_at = now
                             last_nio_receive_count = receive_count
-                    if completion_log and completion_log_seen(nio_text, completion_log):
-                        completion_seen = True
+                    if completion_log:
+                        chunk = nio_text[last_nio_read_offset:]
+                        found_marker, completion_log_state = scan_completion_log_chunk(
+                            chunk, completion_log, completion_log_state
+                        )
+                        if found_marker:
+                            completion_seen = True
+                    new_bytes = max(0, current_nio_log_size - last_nio_read_offset)
+                    new_lines = nio_text[last_nio_read_offset:].count("\n") if last_nio_read_offset <= len(nio_text) else 0
+                    append_monitor_trace(
+                        monitor_trace,
+                        f"t={now:.3f} size={current_nio_log_size} offset={last_nio_read_offset} new_bytes={new_bytes} new_lines={new_lines} marker_found={'yes' if completion_seen else 'no'}"
+                    )
+                    last_nio_read_offset = len(nio_text)
+                else:
+                    append_monitor_trace(
+                        monitor_trace,
+                        f"t={now:.3f} size=0 offset={last_nio_read_offset} new_bytes=0 new_lines=0 marker_found={'yes' if completion_seen else 'no'}"
+                    )
 
                 amiberry_log_text = read_log_text(run_dir / "amiberry.log")
                 serial_line_count = amiberry_log_text.count("SERIAL:")
