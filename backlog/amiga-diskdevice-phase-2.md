@@ -20,7 +20,10 @@ progression are specified in the associated
 
 ## Dependencies
 
-- Stage 8 writable, multi-unit DiskDevice behavior is complete and reviewed.
+- [x] Stage 8 writable, multi-unit DiskDevice behavior is complete and
+      reviewed. The historical writable-DN2 requester failure was traced to
+      deferred IORequests entering the private FIFO without `NT_MESSAGE` and
+      is covered by an explicit native Exec-boundary regression.
 - NIO DiskDevice Info continues to report authoritative sector size and sector
   count inferred by the mounted image handler.
 
@@ -44,7 +47,8 @@ progression are specified in the associated
       end-user functions.
 - [ ] Add tests proving the standard tools cannot bypass or desynchronise the
       resident driver's media state, change counter, protection state, flush,
-      or replacement behavior. (Amiberry integration test in progress.)
+      or replacement behavior. Existing `diskdevice-adf` proves the resident
+      baseline; extend the standard-tool (`FMOUNT`/`FUMOUNT`) path specifically.
 - [ ] Coordinate replacement with the existing AmigaDOS filesystem handler so
       `FMOUNT` can retire the old volume and rescan the inserted one without a
       `You MUST replace volume`, `Not a DOS disk`, or invalid-block requester.
@@ -85,8 +89,9 @@ progression are specified in the associated
       calls.
 - [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
-      `FUMOUNT`, and remounting persisted assignments. (HD test complete;
-      fmount/fumount DD test in progress.)
+      `FUMOUNT`, and remounting persisted assignments. (Direct HD and
+      read-only `FMOUNT`/`FUMOUNT` coverage exists; writable replacement and
+      persisted standard-tool remount coverage remain.)
 - [ ] Preserve Stage 8 writable durability, replacement, concurrent access,
       and change-notification regressions for every supported geometry.
 - [ ] Document the exact supported media families and distinguish current
@@ -98,3 +103,15 @@ Users mount and eject supported Amiga disk images with the standard
 `FMOUNT`/`FUMOUNT` tools. Catalogue selection, device-unit state, persistence,
 geometry, and AmigaDOS mounting remain consistent without a competing mount
 utility or a hidden 1760-sector fallback.
+
+## Validated Baseline
+
+- [x] The current production driver passes the unchanged foreground
+      `diskdevice-adf` workflow at the default harness timeout in five of five
+      runs. Each run reaches `disk-copy-rw.result`, `disk-update.result`,
+      `disk-remount-rw.result`, `disk-dos-remount-2.result`,
+      `disk-persist.result`, and the final redirected status checkpoint.
+- [x] Historical A/B isolates the first stable fix: pre-fix driver `53716d3c`
+      failed three of five normal runs; `6c9bf6af`, whose only relevant
+      production change is setting queued request `ln_Type = NT_MESSAGE`,
+      passed three of three. See `amiga-diskdevice-phase-2-findings.md`.
