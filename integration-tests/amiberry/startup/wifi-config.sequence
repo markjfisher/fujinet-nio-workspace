@@ -1,3 +1,4 @@
 C:Assign T: RAM:
 C:wificonfigtest >DH0:wificonfigtest.result
+C:FLS host:/amiga-e2e-complete/wifi-config >NIL:
 C:Type DH0:wificonfigtest.result

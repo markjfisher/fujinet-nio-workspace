@@ -6,4 +6,5 @@ C:Echo "DIR RC=$RC" >DH0:df0-dir-rc.result
 C:Type DF0:KNOWN.TXT >DH0:df0-type.result
 C:Copy DH0:df0-persist-source.txt TO DF0:PERSIST.TXT
 C:Echo "COPY RC=$RC" >DH0:df0-copy.result
+C:FLS host:/amiga-e2e-complete/diskdevice-adf-native-floppy >NIL:
 C:Echo "E2E COMPLETE"

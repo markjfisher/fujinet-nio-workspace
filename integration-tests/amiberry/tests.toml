@@ -5,6 +5,7 @@ name = "wifi-config"
 project = "apps"
 app = "wificonfigtest"
 startup = "startup/wifi-config.sequence"
+completion_log = "host:/amiga-e2e-complete/wifi-config"
 results = ["wificonfigtest.result"]
 
 [[test]]
@@ -12,6 +13,7 @@ name = "cli-stateful"
 project = "apps"
 app = "wifitest"
 startup = "startup/cli-stateful.sequence"
+completion_log = "host:/amiga-e2e-complete/cli-stateful"
 results = [
   "cli-fhost-set.result",
   "cli-fhost-get.result",
@@ -33,6 +35,7 @@ no_activity_timeout = 30
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-adf"
 results = [
   "disk-load.result",
   "disk-exec-boundary.result",
@@ -73,9 +76,10 @@ app = "wifitest"
 driver = true
 timeout = 60
 activity_timeout = 45
-screenshot_quiet = 5
+screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-hd-adf.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-hd-adf"
 results = [
   "hd-load.result",
   "hd-mount.result",
@@ -91,17 +95,24 @@ project = "apps"
 app = "wifitest"
 driver = true
 timeout = 75
-activity_timeout = 45
-screenshot_quiet = 5
+activity_timeout = 60
+screenshot_quiet = 15
 screenshot_interval = 1.0
-no_activity_timeout = 25
+no_activity_timeout = 30
 startup = "startup/diskdevice-fmount.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-fmount"
 results = [
   "fmount-load.result",
   "fmount-mount.result",
   "fmount-status.result",
   "fmount-dir.result",
   "fmount-type.result",
+  "fmount-rw-mount.result",
+  "fmount-rw-dos-mount.result",
+  "fmount-rw-copy.result",
+  "fmount-rw-remount.result",
+  "fmount-rw-persist.result",
+  "fmount-rw-status.result",
   "fumount-eject.result",
   "fumount-status.result",
 ]
@@ -114,9 +125,10 @@ driver = true
 mapping_readonly = true
 timeout = 45
 activity_timeout = 35
-screenshot_quiet = 2
+screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-mapping-failure.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-mapping-failure"
 results = [
   "map-load.result",
   "map-direct.result",
@@ -136,9 +148,10 @@ silent_peer = true
 # not leave behind a successful mount result artifact.
 timeout = 40
 activity_timeout = 25
-screenshot_quiet = 0.2
+screenshot_quiet = 2
 screenshot_interval = 0.5
 startup = "startup/diskdevice-silent-timeout.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-stalled-external-peer"
 results = ["fmount.result", "stalled-peer-timeout.result"]
 
 [[test]]
@@ -152,6 +165,7 @@ no_activity_timeout = 20
 screenshot_quiet = 15
 screenshot_interval = 1.0
 startup = "startup/diskdevice-adf-native-floppy.sequence"
+completion_log = "host:/amiga-e2e-complete/diskdevice-adf-native-floppy"
 results = [
   "df0-dir.result",
   "df0-dir-rc.result",

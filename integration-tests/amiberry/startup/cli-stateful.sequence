@@ -7,6 +7,7 @@ C:FAPP PUT nio.e2e value hello >DH0:cli-fapp-put.result
 C:FAPP GET nio.e2e value >DH0:cli-fapp-get.result
 C:FAPP LIST nio.e2e >DH0:cli-fapp-list.result
 C:FAPP DEL nio.e2e value >DH0:cli-fapp-delete.result
+C:FLS host:/amiga-e2e-complete/cli-stateful >NIL:
 C:Type DH0:cli-fhost-set.result
 C:Type DH0:cli-fhost-get.result
 C:Type DH0:cli-fls.result

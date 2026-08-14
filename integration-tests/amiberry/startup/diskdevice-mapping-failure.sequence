@@ -7,6 +7,7 @@ C:fujinet-mount 12 0 RO >NIL:
 C:Echo "MAPPING FAILURE RC=$RC" >DH0:map-failure.result
 C:Failat 10
 C:fujinet-mount --status 0 >DH0:map-status.result
+C:FLS host:/amiga-e2e-complete/diskdevice-mapping-failure >NIL:
 C:Type DH0:map-load.result
 C:Type DH0:map-direct.result
 C:Type DH0:map-failure.result

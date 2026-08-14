@@ -9,6 +9,7 @@ C:Dir DN0HD: >DH0:hd-dir.result
 C:Echo "DIR RC=$RC" >>DH0:hd-dir.result
 C:Type DN0HD:HD.TXT >DH0:hd-type.result
 C:fujinet-mount --status 0 >DH0:hd-status.result
+C:FLS host:/amiga-e2e-complete/diskdevice-hd-adf >NIL:
 C:Type DH0:hd-load.result
 C:Type DH0:hd-mount.result
 C:Type DH0:hd-geometry.result

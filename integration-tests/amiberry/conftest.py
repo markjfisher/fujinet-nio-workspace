@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import socket
@@ -9,6 +10,7 @@ import sys
 import tempfile
 import time
 import tomllib
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +43,117 @@ def xdf_command(environment: dict[str, str]) -> list[str]:
     if shutil.which("uvx", path=environment.get("PATH")):
         return ["uvx", "--from", "amitools", "xdftool"]
     raise RuntimeError("xdftool or uvx is required")
+
+
+@dataclass(frozen=True)
+class MonitorSnapshot:
+    completion_seen: bool
+    requester_seen: bool
+    runner_returncode: int | None
+    now: float
+    deadline: float
+    debugger_mode: bool = False
+    debugger_paused: bool = False
+
+
+def evaluate_monitor_state(snapshot: MonitorSnapshot) -> tuple[str, str | None]:
+    if snapshot.requester_seen:
+        return ("failure", "requester")
+    if snapshot.runner_returncode is not None:
+        return ("failure", "runner_exit")
+    if snapshot.completion_seen:
+        return ("success", "completion_log")
+    if (not snapshot.debugger_mode and not snapshot.debugger_paused and
+            snapshot.now >= snapshot.deadline):
+        return ("failure", "timeout")
+    return ("continue", None)
+
+
+def read_log_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+    except OSError:
+        return ""
+
+
+def completion_log_seen(log_text: str, marker: str) -> bool:
+    receive_re = re.compile(r"fujibus: receive: id=(\d+) dev=(0x[0-9A-Fa-f]+) cmd=(0x[0-9A-Fa-f]+)")
+    send_re = re.compile(r"fujibus: send: dev=(0x[0-9A-Fa-f]+) status=(\d+) cmd=(0x[0-9A-Fa-f]+)")
+    hex_re = re.compile(r"fujibus:\s+[0-9a-f]{4}:\s+([0-9a-f ]+)\|", re.IGNORECASE)
+
+    current_marker_match = False
+    collecting_payload = False
+    payload_bytes = bytearray()
+
+    for line in log_text.splitlines():
+        receive_match = receive_re.search(line)
+        if receive_match:
+            current_marker_match = False
+            collecting_payload = True
+            payload_bytes = bytearray()
+            continue
+
+        if collecting_payload:
+            hex_match = hex_re.search(line)
+            if hex_match:
+                payload_bytes.extend(bytes.fromhex(hex_match.group(1)))
+                continue
+            decoded = payload_bytes.decode("latin-1", errors="ignore")
+            if marker in decoded:
+                current_marker_match = True
+            collecting_payload = False
+
+        send_match = send_re.search(line)
+        if send_match and current_marker_match:
+            return send_match.group(2) == "0"
+
+    return False
+
+
+def scan_ordered_results(environment: dict[str, str], image: Path,
+                         ordered_results: list[str]) -> list[str]:
+    present: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="amiga-progress-") as result_dir:
+        for result_name in ordered_results:
+            destination = Path(result_dir) / result_name.replace("/", "_")
+            extracted = subprocess.run(
+                [*xdf_command(environment), str(image), "read", result_name, str(destination)],
+                cwd=ROOT,
+                env=environment,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if extracted.returncode != 0:
+                break
+            present.append(result_name)
+    return present
+
+
+def checkpoint_progress(ordered_results: list[str], present_results: list[str]) -> tuple[str, str]:
+    last_present = present_results[-1] if present_results else "<none>"
+    if len(present_results) < len(ordered_results):
+        first_missing = ordered_results[len(present_results)]
+    else:
+        first_missing = "<none>"
+    return last_present, first_missing
+
+
+def build_failure_report(*, case_name: str, termination_reason: str,
+                         ordered_results: list[str], present_results: list[str],
+                         requester_seen: bool, recent_activity: bool,
+                         runner_exit_state: str) -> str:
+    last_present, first_missing = checkpoint_progress(ordered_results, present_results)
+    return (
+        f"Amiberry case '{case_name}' did not reach its completion condition. "
+        f"termination reason: {termination_reason}; "
+        f"last checkpoint present: {last_present}; "
+        f"first checkpoint missing: {first_missing}; "
+        f"requester seen: {'yes' if requester_seen else 'no'}; "
+        f"recent NIO/serial activity: {'yes' if recent_activity else 'no'}; "
+        f"runner exit state: {runner_exit_state}"
+    )
 
 
 def load_workspace_env() -> dict[str, str]:
@@ -390,6 +503,12 @@ def run_amiga_case(amiga_environment: dict[str, str],
                    amiga_evidence_root: Path) -> Any:
     def run(name: str) -> dict[str, str]:
         case = amiga_cases[name]
+        ordered_results = list(case.get("results", []))
+        completion_log = case.get("completion_log")
+        if ordered_results and not completion_log:
+            raise AssertionError(
+                f"Amiberry case '{name}' declares result artifacts but no completion_log"
+            )
         app_dir = ROOT / "repos" / ("nio-apps" if case["project"] == "apps" else "nio-core-apps") / "build" / "amiga" / "bin"
         app = app_dir / case["app"]
         if not app.is_file():
@@ -411,6 +530,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 stale_catalog_dir.chmod(0o755)
             shutil.rmtree(host_root, ignore_errors=True)
             host_root.mkdir(parents=True, exist_ok=True)
+            (host_root / "amiga-e2e-complete" / name).mkdir(parents=True, exist_ok=True)
             create_standard_adf(amiga_environment, host_root / "standard.adf")
             create_standard_adf(amiga_environment, host_root / "second.adf",
                                 "SECOND.TXT", "FUJINET SECOND DRIVE PASSED\n")
@@ -462,8 +582,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
         test_env["FUJINET_NIO_PORT"] = str(65510 + case_index)
         test_env["AMIBERRY_PORT"] = str(23470 + case_index)
 
-        # Timing parameters — screen-quiet is now the primary completion signal.
-        screenshot_quiet = float(case.get("screenshot_quiet", 3))
+        # Timing parameters — screen-quiet is for screenshot/evidence cadence only.
+        screenshot_quiet = float(case.get("screenshot_quiet", 15))
         activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
         debugger_mode = test_env.get("AMIGA_E2E_DEBUGGER", "0") == "1"
         screenshot_interval = float(case.get("screenshot_interval", 1.0))
@@ -510,6 +630,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
 
         ipc_sock: Path | None = None
         quit_sent = False
+        requester_seen = False
+        termination_reason: str | None = None
+        recent_activity = False
+        runner_returncode: int | None = None
 
         try:
             # ---------------------------------------------------------------
@@ -558,6 +682,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
             saw_activity = False
             last_activity_at: float | None = None
             last_nio_receive_count = 0
+            last_serial_line_count = 0
+            last_serial_activity_at: float | None = None
             prev_shot: Path | None = None
             screen_quiet_since: float | None = None
             screen_ever_changed = False
@@ -566,6 +692,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
             debugger_paused = False
             boot_time = time.monotonic()
             activity_deadline = boot_time + activity_timeout
+            completion_seen = False
             if debugger_mode:
                 # The external controller owns the debugger session duration;
                 # retain the normal deadline as a fallback after it resumes.
@@ -592,16 +719,23 @@ def run_amiga_case(amiga_environment: dict[str, str],
 
                 # NIO log — check for any FujiBus traffic (evidence only).
                 if nio_log.is_file():
-                    try:
-                        nio_text = nio_log.read_text(encoding="utf-8", errors="replace")
-                        receive_count = nio_text.count("fujibus: receive:")
-                        if receive_count:
-                            saw_activity = True
-                            if receive_count != last_nio_receive_count:
-                                last_activity_at = now
-                                last_nio_receive_count = receive_count
-                    except OSError:
-                        pass
+                    nio_text = read_log_text(nio_log)
+                    receive_count = nio_text.count("fujibus: receive:")
+                    if receive_count:
+                        saw_activity = True
+                        if receive_count != last_nio_receive_count:
+                            last_activity_at = now
+                            last_nio_receive_count = receive_count
+                    if completion_log and completion_log_seen(nio_text, completion_log):
+                        completion_seen = True
+
+                amiberry_log_text = read_log_text(run_dir / "amiberry.log")
+                serial_line_count = amiberry_log_text.count("SERIAL:")
+                if serial_line_count != last_serial_line_count:
+                    last_serial_activity_at = now
+                    last_serial_line_count = serial_line_count
+
+                runner_returncode = runner.poll()
 
                 # Periodic screenshot.
                 if now - last_shot_at >= screenshot_interval:
@@ -613,11 +747,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     if shot.is_file():
                         # Requester detection — fail immediately.
                         if _has_requester(shot):
+                            requester_seen = True
                             shutil.copy2(shot, run_dir / "amiberry-screen.png")
-                            raise AssertionError(
-                                f"AmigaOS system requester detected (screenshot {shot_index - 1}). "
-                                f"A dialog is blocking the startup sequence. See {shot.name}"
-                            )
+                            termination_reason = "requester"
+                            break
 
                         # Screen-change detection.
                         # Only count a change as meaningful when the screenshot
@@ -632,22 +765,21 @@ def run_amiga_case(amiga_environment: dict[str, str],
                                 screen_quiet_since = now
                         prev_shot = shot
 
-                # Screen quiet for long enough and FujiBus traffic has also
-                # gone quiet -> sequence finished. This avoids cutting off
-                # longer runs that keep a static Workbench frame while guest
-                # commands continue in the background.
-                if (not debugger_mode and not debugger_paused and screen_quiet_since is not None and
-                        (now - screen_quiet_since) >= screenshot_quiet):
-                    if external_activity_evidence:
-                        break
-                    if last_activity_at is None or (now - last_activity_at) >= screenshot_quiet:
-                        break
-
-                # Fast-fail: booted but screen has never moved for no_activity_timeout.
-                if (not debugger_mode and prev_shot and not screen_ever_changed and
-                        not external_activity_evidence):
-                    if (now - boot_time) > no_activity_timeout:
-                        break
+                action, reason = evaluate_monitor_state(MonitorSnapshot(
+                    completion_seen=completion_seen,
+                    requester_seen=requester_seen,
+                    runner_returncode=runner_returncode,
+                    now=now,
+                    deadline=activity_deadline,
+                    debugger_mode=debugger_mode,
+                    debugger_paused=debugger_paused,
+                ))
+                if action == "success":
+                    termination_reason = reason
+                    break
+                if action == "failure":
+                    termination_reason = reason
+                    break
 
                 time.sleep(0.2)
 
@@ -662,25 +794,21 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         shutil.copy2(candidate, run_dir / "amiberry-screen.png")
                         break
 
-            # If the screen never changed and there was no FujiBus activity at
-            # all, the Amiga likely never reached the startup script. Some
-            # successful cases keep a visually static Workbench frame while the
-            # app still runs to completion, so activity is the stronger signal.
-            if not screen_ever_changed and not saw_activity and not external_activity_evidence:
-                raise AssertionError(
-                    "Amiberry booted but the screen never changed — "
-                    "the Amiga may have crashed or the startup sequence did not run"
-                )
+            recent_activity = any(
+                stamp is not None and (time.monotonic() - stamp) <= 2.0
+                for stamp in (last_activity_at, last_serial_activity_at)
+            )
 
             # ---------------------------------------------------------------
             # Phase 3: Quit Amiberry cleanly, wait for runner.
             # ---------------------------------------------------------------
-            if ipc_sock is not None and time.monotonic() >= activity_deadline:
+            if ipc_sock is not None and termination_reason == "timeout":
                 _capture_debug_snapshot(ipc_sock, run_dir / "amiberry-timeout-debug.log")
             quit_sent = _ipc_quit(ipc_sock)
-            return_code = runner.wait(timeout=10)
-            if return_code and not (quit_sent and return_code == 250):
-                raise subprocess.CalledProcessError(return_code, runner.args)
+            runner_returncode = runner.wait(timeout=10)
+            if (termination_reason == "completion_log" and runner_returncode and
+                    not (quit_sent and runner_returncode == 250)):
+                raise subprocess.CalledProcessError(runner_returncode, runner.args)
 
         finally:
             # Always ensure Amiberry and the runner are gone.
@@ -693,12 +821,28 @@ def run_amiga_case(amiga_environment: dict[str, str],
             if readonly_catalog_dir is not None and readonly_catalog_dir.is_dir():
                 readonly_catalog_dir.chmod(0o755)
 
+        if termination_reason != "completion_log":
+            present_results = scan_ordered_results(test_env, image, ordered_results)
+            runner_exit_state = (
+                "not-started" if runner_returncode is None else
+                ("ipc-quit-250" if quit_sent and runner_returncode == 250 else str(runner_returncode))
+            )
+            raise AssertionError(build_failure_report(
+                case_name=name,
+                termination_reason=termination_reason or "timeout",
+                ordered_results=ordered_results,
+                present_results=present_results,
+                requester_seen=requester_seen,
+                recent_activity=recent_activity,
+                runner_exit_state=runner_exit_state,
+            ))
+
         # -------------------------------------------------------------------
         # Collect result files from the HDF image.
         # -------------------------------------------------------------------
         results: dict[str, str] = {}
         with tempfile.TemporaryDirectory(prefix="amiga-results-") as result_dir:
-            for result_name in case["results"]:
+            for result_name in ordered_results:
                 destination = Path(result_dir) / result_name.replace("/", "_")
                 subprocess.run(
                     [*xdf_command(test_env), str(image), "read", result_name, str(destination)],
