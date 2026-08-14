@@ -3,6 +3,28 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Progress 2026-08-14 00:52
+
+- Returned to the normal foreground harness path: no `AMIGA_E2E_DEBUGGER`, controller, breakpoint, task snapshot, packet-trace, or full-payload logging environment was active. The host-side diagnostic tools remain opt-in only. The normal timeout path import was repaired so a timeout can write passive evidence without a `NameError`.
+- Five clean repetitions of `test_standard_adf_mount_info_read_dir_and_type` passed: evidence directories `amiberry-20260814-004732`, `004843`, `004958`, `005111`, and `005223`. Each run took about 65 seconds and passed all pytest assertions.
+- Every repetition produced the key writable checkpoints: `COPY RC=0`, successful update, writable remount, `DOS REMOUNT 2 RC=0`, and `FUJINET WRITE PERSISTED`. The fifth run also has every later asserted checkpoint through malformed replacement rejection, direct mount, drive-7 status, drive-3 eject, and final drive-3 status.
+- `E2E COMPLETE` is an unredirected final console echo. The normal quiet-screen harness does not retain console text in `amiberry.log`, so its literal marker cannot be independently proven from these run directories; however, the later redirected checkpoints that precede it all exist and the test passed. No run failed or diverged.
+- The original writable-DN2 failure is not reproducible across these five non-debugger foreground repetitions with the current production correctness fixes. Treat the prior failure as fixed or timing-sensitive until a normal-mode regression reproduces it.
+
+## Progress 2026-08-14 00:36
+
+- Host-only DOS handler identity evidence is `test-evidence/amiberry-20260814-003615/diskdevice-adf/dn2-handler-trace.log`. Exact NDK/cross-compiler offsets were used to resolve `dos.library` from Exec's LibList, then `RootNode.rn_Info` (BPTR), `DosInfo.di_DevInfo`, and the `DN2` DeviceNode.
+- Before the new DN2 process appears, the old handler is process `0xc58b90`, embedded port `0xc58bec`. The new DN2 process is `0xc62e60`, embedded port `0xc62ebc`. Once both exist, the live DOS `DN2:` DeviceNode's `dn_Task` is exactly `0xc62ebc`, the new process's port, not the old port.
+- The same trace run completed Copy, update, writable remount, DOS remount, and `disk-persist.result` (`FUJINET WRITE PERSISTED`). Thus the final `Type DN2:PERSIST.TXT` is routed through the current `DN2:` DeviceNode to the newer handler, not to the stale pre-remount process.
+- A transient Exec PutMsg breakpoint did not yield packet-level event records because this Kickstart's PutMsg vector is not directly resolved by the existing simple trampoline decoder. This does not weaken the authoritative DOS DeviceNode routing result, but if per-packet handler internals are needed next, resolve that Exec vector form rather than returning to block I/O.
+
+## Progress 2026-08-14 00:13
+
+- Focused live read-path evidence is `test-evidence/amiberry-20260814-001230/diskdevice-adf`. The POSIX `fujinet-nio` debug binary was rebuilt after adding the diagnostic-only `FUJINET_FULL_PACKET_LOG=1` override; its full `cmd=0x03` responses retain all 523 response bytes (11-byte protocol header plus complete 512-byte sector).
+- Host-only `CMD_READ` tracing captures BeginIO and common completion for LBA 880-883. Every target read completes with `io_Actual=512` and `io_Error=0`; the final Type path specifically reads LBA 880 (request `0xc29788`), then 882 and 883, all synchronously successful.
+- Full NIO response vs final backing ADF SHA-256 comparisons are exact: LBA 880 request id 83, LBA 881 id 82, LBA 882 id 84, and LBA 883 id 85 each have `equal=True` across all 512 returned bytes. NIO is not returning stale/different data during `Type DN2:PERSIST.TXT`.
+- This selects the block-device-success branch: persistence and live reads are correct through the affected file header/data sectors. Continue investigation above the block device, in the DOS/OFS mount or handler state; do not return to write-persistence or general disk command sequencing without new contradictory evidence.
+
 ## Progress 2026-08-14 00:00
 
 - Current fresh evidence (`test-evidence/amiberry-20260813-232447/diskdevice-adf/fujinet-data/writable.adf`) does **not** reproduce the older malformed-file state. `xdftool` lists `PERSIST.TXT` at 24 bytes; raw LBA 882 is its OFS file header (data block pointer `883`, byte count `24`) and LBA 883 contains `FUJINET WRITE PERSISTED\n`. LBA 881 is a valid bitmap block. Do not carry forward the historical FileData Block Count Mismatch as a current result without re-verifying it.

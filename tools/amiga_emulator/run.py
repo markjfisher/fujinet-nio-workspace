@@ -338,6 +338,22 @@ class AmigaRunner:
                      "--output-dir", str(self.run_dir)],
                     self.run_dir / "write-buffer-controller.log", cwd=ROOT,
                 )
+            elif os.environ.get("AMIGA_E2E_READ_PATH_CAPTURE") == "1":
+                ipc.request(self.ipc_socket, "DEBUG_ACTIVATE")
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.read_path_capture",
+                     "--socket", str(self.ipc_socket),
+                     "--output-dir", str(self.run_dir)],
+                    self.run_dir / "read-path-controller.log", cwd=ROOT,
+                )
+            elif os.environ.get("AMIGA_E2E_DN2_HANDLER_TRACE") == "1":
+                ipc.request(self.ipc_socket, "DEBUG_ACTIVATE")
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.dn2_handler_trace",
+                     "--socket", str(self.ipc_socket),
+                     "--output-dir", str(self.run_dir)],
+                    self.run_dir / "dn2-handler-controller.log", cwd=ROOT,
+                )
         except (FileNotFoundError, OSError):
             # IPC is optional in Amiberry builds; serial testing must still work.
             pass

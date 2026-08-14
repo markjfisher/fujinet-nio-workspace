@@ -32,6 +32,7 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 from amiga_emulator import ipc as _amiberry_ipc  # noqa: E402
+from amiga_emulator.debug_snapshot import capture_debug_snapshot as _capture_debug_snapshot  # noqa: E402
 
 
 def xdf_command(environment: dict[str, str]) -> list[str]:

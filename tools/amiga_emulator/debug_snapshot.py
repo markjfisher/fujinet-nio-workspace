@@ -24,6 +24,7 @@ IOREQUEST_FIELDS = {
 EXEC_THIS_TASK = 0x114
 EXEC_TASK_READY = 0x196
 EXEC_TASK_WAIT = 0x1A4
+EXEC_LIB_LIST = 0x17A
 NODE_SUCC = 0
 NODE_TYPE = 8
 NODE_NAME = 10
@@ -60,6 +61,13 @@ TASK_STATES = {
     0: "INVALID", 1: "ADDED", 2: "RUN", 3: "READY", 4: "WAIT",
     5: "EXCEPT", 6: "REMOVED",
 }
+
+DOS_LIBRARY_ROOT = 0x22
+ROOT_DOS_INFO = 0x18
+DOS_INFO_DEV_INFO = 0x04
+DEVICE_NODE_NEXT = 0x00
+DEVICE_NODE_TASK = 0x08
+DEVICE_NODE_NAME = 0x28
 
 
 def read_memory(socket_path: Path, address: int, width: int) -> int:
@@ -233,6 +241,58 @@ def capture_task_snapshot(socket_path: Path, destination: Path) -> list[dict[str
     return tasks
 
 
+def live_dn2_processes(socket_path: Path) -> list[dict[str, int | str]]:
+    """Return all currently runnable/waiting processes named DN2 with ports."""
+    exec_base = read_memory(socket_path, 4, 4)
+    current = read_memory(socket_path, exec_base + EXEC_THIS_TASK, 4)
+    tasks = [read_task(socket_path, current, "CURRENT")]
+    tasks.extend(walk_task_list(socket_path, exec_base + EXEC_TASK_READY, "READY"))
+    tasks.extend(walk_task_list(socket_path, exec_base + EXEC_TASK_WAIT, "WAIT"))
+    result: list[dict[str, int | str]] = []
+    seen: set[int] = set()
+    for task in tasks:
+        address = int(task["address"])
+        if address in seen or task["type"] != 13 or task["name"] != "DN2":
+            continue
+        seen.add(address)
+        port = read_process_port(socket_path, address)
+        task["port"] = int(port["address"])
+        task["port_sigbit"] = int(port["sigbit"])
+        result.append(task)
+    return result
+
+
+def resolve_dos_library(socket_path: Path) -> int:
+    exec_base = read_memory(socket_path, 4, 4)
+    lib_list = exec_base + EXEC_LIB_LIST
+    node = read_memory(socket_path, lib_list, 4)
+    tail = lib_list + 4
+    seen: set[int] = set()
+    while node not in {0, EXEC_LIST_TAIL, tail} and node not in seen:
+        seen.add(node)
+        if read_c_string(socket_path, read_memory(socket_path, node + NODE_NAME, 4)) == "dos.library":
+            return node
+        node = read_memory(socket_path, node + NODE_SUCC, 4)
+    raise LookupError("dos.library was not found in Exec LibList")
+
+
+def resolve_dos_device_task(socket_path: Path, device_name: str) -> int:
+    """Resolve the current DOS DeviceNode task port by its BCPL name."""
+    dos_library = resolve_dos_library(socket_path)
+    root = read_memory(socket_path, dos_library + DOS_LIBRARY_ROOT, 4)
+    info = read_memory(socket_path, root + ROOT_DOS_INFO, 4) << 2
+    node_bptr = read_memory(socket_path, info + DOS_INFO_DEV_INFO, 4)
+    seen: set[int] = set()
+    while node_bptr and node_bptr not in seen:
+        seen.add(node_bptr)
+        node = node_bptr << 2
+        name = read_b_string(socket_path, read_memory(socket_path, node + DEVICE_NODE_NAME, 4))
+        if name.rstrip(":").upper() == device_name.rstrip(":").upper():
+            return read_memory(socket_path, node + DEVICE_NODE_TASK, 4)
+        node_bptr = read_memory(socket_path, node + DEVICE_NODE_NEXT, 4)
+    raise LookupError(f"DOS device {device_name!r} was not found")
+
+
 def wait_for_breakpoint(socket_path: Path, timeout: float = 60.0) -> str:
     """Require running-then-paused, avoiding the controller's initial pause."""
     import time
@@ -297,5 +357,29 @@ def capture_breakpoint(socket_path: Path, destination: Path) -> dict[str, int]:
     for name, (offset, width) in fields.items():
         response = ipc.request(socket_path, "READ_MEM", hex(a1 + offset), str(width))
         lines.append(f"{name} {response}")
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return registers
+
+
+def capture_debug_snapshot(socket_path: Path, destination: Path) -> dict[str, int]:
+    """Best-effort passive timeout evidence for the normal harness path."""
+    registers_response = ipc.request(socket_path, "GET_CPU_REGS")
+    registers = parse_registers(registers_response)
+    pc = registers["PC"]
+    lines = [
+        "GET_STATUS " + ipc.request(socket_path, "GET_STATUS"),
+        "GET_CPU_REGS " + registers_response,
+        "DISASSEMBLE " + ipc.request(socket_path, "DISASSEMBLE", hex(pc), "8"),
+        f"PC {pc:#x}", f"A1 {registers['A1']:#x}",
+        f"A6 {registers['A6']:#x}", f"A7 {registers['A7']:#x}",
+    ]
+    for index in range(8):
+        address = registers["A7"] + index * 4
+        try:
+            value = read_memory(socket_path, address, 4)
+        except Exception as error:
+            lines.append(f"STACK {address:#x} ERROR {error}")
+            break
+        lines.append(f"STACK {address:#x} {value:#x}")
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return registers
