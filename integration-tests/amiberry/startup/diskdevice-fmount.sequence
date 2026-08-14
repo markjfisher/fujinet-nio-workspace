@@ -12,6 +12,11 @@ C:fujinet-mount --status 0 >DH0:fmount-status.result
 C:Dir DN0: >DH0:fmount-dir.result
 C:Echo "DIR RC=$RC" >>DH0:fmount-dir.result
 C:Type DN0:KNOWN.TXT >DH0:fmount-type.result
+C:Assign DN0: DISMOUNT
+C:FUMOUNT DN0: >DH0:fmount-replace-eject.result
+C:FMOUNT 12 DN0: RO >DH0:fmount-replace-mount.result
+C:Mount DN0: FROM DEVS:DN0
+C:Type DN0:SECOND.TXT >DH0:fmount-replace-type.result
 C:fmount 13 2 RW >DH0:fmount-rw-mount.result
 C:Echo "FMOUNT RW RC=$RC" >>DH0:fmount-rw-mount.result
 C:If NOT ERROR
@@ -19,11 +24,15 @@ C:Mount DN2: FROM DEVS:DN2
 C:Echo "DOS MOUNT 2 RC=$RC" >DH0:fmount-rw-dos-mount.result
 C:Copy DH0:persist-source.txt TO DN2:PERSIST.TXT
 C:Echo "COPY RC=$RC" >DH0:fmount-rw-copy.result
-C:Assign DN2: DISMOUNT
-C:Mount DN2: FROM DEVS:DN2
-C:Echo "DOS REMOUNT 2 RC=$RC" >DH0:fmount-rw-remount.result
-C:Type DN2:PERSIST.TXT >DH0:fmount-rw-persist.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-status.result
+C:Assign DN2: DISMOUNT
+C:FUMOUNT DN2: >DH0:fmount-rw-fumount.result
+C:Echo "FUMOUNT RW RC=$RC" >>DH0:fmount-rw-fumount.result
+C:FMOUNT 13 DN2: RW >DH0:fmount-rw-remount.result
+C:Echo "FMOUNT RW REMOUNT RC=$RC" >>DH0:fmount-rw-remount.result
+C:Mount DN2: FROM DEVS:DN2
+C:Echo "DOS REMOUNT 2 RC=$RC" >>DH0:fmount-rw-remount.result
+C:Type DN2:PERSIST.TXT >DH0:fmount-rw-persist.result
 C:EndIf
 C:fumount DN0: >DH0:fumount-eject.result
 C:Echo "FUMOUNT RC=$RC" >>DH0:fumount-eject.result
@@ -35,9 +44,13 @@ C:Type DH0:fmount-mount.result
 C:Type DH0:fmount-status.result
 C:Type DH0:fmount-dir.result
 C:Type DH0:fmount-type.result
+C:Type DH0:fmount-replace-eject.result
+C:Type DH0:fmount-replace-mount.result
+C:Type DH0:fmount-replace-type.result
 C:Type DH0:fmount-rw-mount.result
 C:Type DH0:fmount-rw-dos-mount.result
 C:Type DH0:fmount-rw-copy.result
+C:Type DH0:fmount-rw-fumount.result
 C:Type DH0:fmount-rw-remount.result
 C:Type DH0:fmount-rw-persist.result
 C:Type DH0:fmount-rw-status.result

@@ -45,7 +45,7 @@ progression are specified in the associated
       application once `FMOUNT`/`FUMOUNT` cover its supported operations.
       Preserve only narrowly named driver diagnostics that are not duplicate
       end-user functions.
-- [ ] Add tests proving the standard tools cannot bypass or desynchronise the
+- [x] Add tests proving the standard tools cannot bypass or desynchronise the
       resident driver's media state, change counter, protection state, flush,
       or replacement behavior. Existing `diskdevice-adf` proves the resident
       baseline; extend the standard-tool (`FMOUNT`/`FUMOUNT`) path specifically.
