@@ -1,0 +1,285 @@
+# `amiga_emulator`
+
+Host-side utilities for running and diagnosing AmigaOS guest tests in
+Amiberry. The module starts Amiberry and the FujiBus bridge, talks to
+Amiberry's Unix IPC socket, resolves live Exec objects, and writes diagnostic
+evidence into an individual test run directory.
+
+The normal test path does not use a debugger controller. Controllers are
+opt-in diagnostics: they can pause or slow the emulator and must not be used
+as routine regression evidence.
+
+## Prerequisites
+
+Source the workspace environment before building Amiga code or invoking the
+module directly:
+
+```sh
+source "$NIO_WORKSPACE/scripts/env.sh"
+export PYTHONPATH="$NIO_WORKSPACE/tools"
+```
+
+Amiberry must be built with IPC socket support. A test run writes its exact
+socket path to:
+
+```text
+test-evidence/amiberry-YYYYMMDD-HHMMSS/<case>/amiberry.sock.path
+```
+
+Use that path rather than guessing a shared `/tmp/amiberry.sock` endpoint.
+
+## Normal Use
+
+Run the focused writable DiskDevice baseline without debugger perturbation:
+
+```sh
+pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+Run the standard-tool mount/eject case:
+
+```sh
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+```
+
+The test harness imports `run.py`, which:
+
+1. starts POSIX `fujinet-nio` and Amiberry;
+2. waits for the Amiberry IPC socket reported by that exact process;
+3. writes `amiberry.sock.path` in the evidence directory;
+4. opens the TCP-to-TCP `socat` serial bridge; and
+5. retains logs, screenshots, HDF images, and result files in the evidence
+   directory.
+
+## Module Map
+
+| File | Purpose |
+| --- | --- |
+| `run.py` | Amiberry/NIO/serial bridge runner used by integration tests. |
+| `ipc.py` | Small client for the Amiberry Unix IPC text protocol. |
+| `device_debug.py` | Resolves a loaded Exec device and its live vectors. |
+| `debug_snapshot.py` | Decodes registers, IORequests, timeout snapshots, Exec/DOS objects. |
+| `beginio_trace.py` | Bounded Copy/write/flush completion trace for `fujinet-disk.device`. |
+| `read_path_capture.py` | Bounded `CMD_READ` entry/completion trace for target LBAs. |
+| `write_buffer_capture.py` | Captures live write buffers at `fujinet_disk_write()` entry. |
+| `task_snapshot.py` | Captures current/ready/wait Exec task and process state. |
+| `dn2_handler_trace.py` | Tracks DN2 processes and DOS DeviceNode handler selection. |
+| `disk_read_compare.py` | Compares full NIO read responses with backing ADF sectors. |
+| `disk_write_compare.py` | Compares logged NIO write payloads with backing ADF sectors. |
+
+## IPC Client
+
+Invoke the IPC client directly with an explicit socket:
+
+```sh
+python -m amiga_emulator.ipc \
+  --socket "$(<test-evidence/amiberry-YYYYMMDD-HHMMSS/diskdevice-adf/amiberry.sock.path)" \
+  GET_CPU_REGS
+```
+
+Useful commands:
+
+```sh
+python -m amiga_emulator.ipc --socket "$SOCKET" GET_STATUS
+python -m amiga_emulator.ipc --socket "$SOCKET" GET_CPU_REGS
+python -m amiga_emulator.ipc --socket "$SOCKET" DISASSEMBLE 0xc3111e 8
+python -m amiga_emulator.ipc --socket "$SOCKET" READ_MEM 0x00c00000 4
+python -m amiga_emulator.ipc --socket "$SOCKET" SCREENSHOT /tmp/amiberry.png
+```
+
+Debugger commands pause normal guest execution:
+
+```sh
+python -m amiga_emulator.ipc --socket "$SOCKET" DEBUG_ACTIVATE
+python -m amiga_emulator.ipc --socket "$SOCKET" SET_BREAKPOINT 0xc3111e
+python -m amiga_emulator.ipc --socket "$SOCKET" DEBUG_CONTINUE
+```
+
+Always issue `DEBUG_CONTINUE` after a manual breakpoint hit, or `QUIT` when
+ending the diagnostic run.
+
+## Resolve A Live Resident Device
+
+`device_debug.py` does not rely on a fixed resident base. It reads the ExecBase
+pointer from address `4`, walks `ExecBase.DeviceList`, finds
+`fujinet-disk.device`, and decodes its public library vectors.
+
+```python
+from pathlib import Path
+from amiga_emulator import device_debug
+
+socket = Path("/run/user/1000/amiberry.sock")
+exec_base, vectors, names = device_debug.resolve_device(socket)
+print(hex(exec_base), hex(vectors.begin_io), names)
+```
+
+For internal symbols, use the driver map and prove relocation with all three
+known vectors:
+
+```python
+from pathlib import Path
+from amiga_emulator import device_debug
+
+link_offsets = {
+    "begin_io": 0x110e,
+    "close": 0x10c0,
+    "abort_io": 0x10f0,
+}
+device_debug.write_resolution_log(
+    Path("/run/user/1000/amiberry.sock"),
+    Path("/tmp/device-resolution.log"),
+    link_offsets,
+)
+```
+
+Do not set a breakpoint at a link-time map address. Resident code is relocated.
+
+## Decode an IORequest
+
+At `device_begin_io()`, `A1` is the request pointer. Use
+`debug_snapshot.read_io_request()` after stopping at the live `BeginIO` vector:
+
+```python
+from pathlib import Path
+from amiga_emulator import debug_snapshot, ipc
+
+socket = Path("/run/user/1000/amiberry.sock")
+registers = debug_snapshot.parse_registers(ipc.request(socket, "GET_CPU_REGS"))
+request = debug_snapshot.read_io_request(socket, registers["A1"])
+print(request)
+print("LBA", request["io_Offset"] // 512)
+```
+
+The m68k `IORequest` fields used by the module are:
+
+```text
+io_Unit    +24   io_Command +28   io_Flags +30   io_Error +31
+io_Actual  +32   io_Length  +36   io_Data  +40    io_Offset +44
+```
+
+`io_Offset` is `+44`, not `+40`.
+
+## Controllers
+
+Controllers are checked-in Python programs that write diagnostics into the
+current run directory. They are enabled only by explicit environment flags in
+`run.py`. The runner writes `amiberry.sock.path`, optionally pauses Amiberry
+with `DEBUG_ACTIVATE`, starts the selected controller, then opens the serial
+bridge. This avoids missing startup-sensitive breakpoints.
+
+### BeginIO/Copy Completion Trace
+
+```sh
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_BEGINIO_TRACE=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+`beginio_trace.py` waits for `LoadModule` to register the device, resolves the
+live vector, traces the Copy write sequence, and can follow write/flush/reply
+boundaries. Typical artifacts are:
+
+```text
+beginio-controller.log
+beginio-command-stream.log
+beginio-timeout.log
+device-resolution.log
+```
+
+### Task/Process Timeout Snapshot
+
+```sh
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_TASK_SNAPSHOT=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+This writes `task-timeout-snapshot.log`, including current/ready/wait tasks,
+process ports, CLI fields, and selected DOS message queues. Guest layouts are
+explicit m68k NDK offsets; do not use host ABI layouts to interpret this file.
+
+### Read and Write Capture
+
+```sh
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_READ_PATH_CAPTURE=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_WRITE_BUFFER_CAPTURE=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+`read_path_capture.py` records `CMD_READ` entry/completion for LBAs 880-883.
+`write_buffer_capture.py` reads the exact 512-byte guest buffer at write-helper
+entry for those LBAs. These are diagnostic runs; rerun normally before accepting
+a production conclusion.
+
+### DN2 Handler Identity
+
+```sh
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_DN2_HANDLER_TRACE=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+`dn2_handler_trace.py` records live DN2 processes and their embedded ports. It
+also resolves the DOS `DN2:` DeviceNode through `dos.library` so the active
+handler is identified by `dn_Task`, not by an ambiguous process name.
+
+## Compare NIO Traffic With Backing Media
+
+For a full read-response comparison, rebuild the POSIX debug service with the
+diagnostic full-payload log switch enabled:
+
+```sh
+source "$NIO_WORKSPACE/scripts/env.sh"
+cmake --build --preset fujibus-tcp-debug-build \
+  --directory repos/fujinet-nio
+
+FUJINET_FULL_PACKET_LOG=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+Then compare the run's NIO log with its ADF:
+
+```sh
+python -m amiga_emulator.disk_read_compare \
+  --log test-evidence/amiberry-YYYYMMDD-HHMMSS/diskdevice-adf/fujinet-nio.log \
+  --adf test-evidence/amiberry-YYYYMMDD-HHMMSS/diskdevice-adf/fujinet-data/writable.adf
+```
+
+Use `disk_write_compare` similarly for write payloads. Historical normal NIO
+logs retain only a sector prefix for writes; do not claim full 512-byte equality
+from a truncated log.
+
+## Inspect and Modify ADF/HDF Images
+
+The harness uses `xdftool` from `amitools` through `uvx`:
+
+```sh
+# List an ADF/HDF filesystem
+uvx --from amitools xdftool writable.adf list
+
+# Read a guest file from an image
+uvx --from amitools xdftool writable.adf read PERSIST.TXT /tmp/PERSIST.TXT
+
+# Write a host file into an image
+uvx --from amitools xdftool writable.adf write /tmp/PERSIST.TXT PERSIST.TXT
+
+# Create and format an OFS image
+uvx --from amitools xdftool new output.adf format OFS
+```
+
+## Safety Rules
+
+- Use the normal controller-free test as the pass/fail baseline.
+- Preserve the full evidence directory before changing a hypothesis.
+- Use NDK-derived offsets and live vector resolution; never guess addresses.
+- Keep controller timeouts bounded and always restore altered CPU speed.
+- On a timeout, record registers, disassembly, stack, and screenshot before
+  quitting.
+- Do not modify resident code, guest startup, or guest memory solely to make a
+  diagnostic easier.

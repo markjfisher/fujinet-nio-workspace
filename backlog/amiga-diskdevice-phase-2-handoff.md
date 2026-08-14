@@ -25,6 +25,17 @@ persisted `PERSIST.TXT`, malformed replacement rejection, and eject/status
 checks. Use it as the regression baseline, with no debugger environment flags
 or timeout overrides.
 
+## Start Here
+
+1. Read this handoff.
+2. Read `amiga-diskdevice-phase-2.md` for the authoritative unchecked work.
+3. Consult `amiga-diskdevice-phase-2-findings.md` only when historical context is needed.
+4. Use `docs/amiberry-testing.md` only when normal-mode evidence requires debugger escalation.
+5. Before editing, run the existing focused standard-tool baseline and inspect the current implementations.
+
+The backlog is authoritative for scope; the handoff is authoritative for recommended ordering;
+findings are historical evidence, not current work instructions.
+
 ## Do Not Repeat
 
 - Do not re-investigate Copy completion, `CMD_WRITE`, Flush, retained change
@@ -40,8 +51,9 @@ or timeout overrides.
 
 ## Priority 1: Standard Tool Ownership
 
-Complete the user-facing `FMOUNT`/`FUMOUNT` path so it owns the same media
-state transitions already proven with the diagnostic mount utility.
+The basic FMOUNT/FUMOUNT implementations already exist and are not the task.
+Extend their integration coverage until they prove the same writable/persistent
+lifecycle already demonstrated by diskdevice-adf.
 
 1. Inspect the current Amiga `FMOUNT` and `FUMOUNT` implementations in
    `repos/nio-core-apps` and their platform interface to
@@ -56,6 +68,11 @@ state transitions already proven with the diagnostic mount utility.
 
 Success criterion: standard tools perform the complete catalogue-to-DNx
 workflow without requiring a user to run `fujinet-mount`.
+
+Priority 1 covers:
+- standard-tool desynchronisation regression
+- remaining writable/persisted FMOUNT/FUMOUNT coverage
+- eventual retirement of fujinet-mount as a user tool
 
 ## Priority 2: Handler-Safe Replacement
 
@@ -72,6 +89,9 @@ replacement attempt was rejected by emulator evidence.
 
 Success criterion: replacement is deterministic through the standard tools and
 does not leave an old DOS handler owning the device name.
+
+Priority 2 covers:
+- handler-safe replacement / rescan
 
 ## Priority 3: Variable Geometry and Media Families
 
@@ -91,6 +111,12 @@ story is not complete while static DD MountLists remain universal.
 
 Success criterion: no hidden 1760-sector fallback and no static MountList is
 presented as a universal media solution.
+
+Priority 3 covers:
+- media families
+- DosEnvec strategy
+- variable geometry
+- DD/HD integration coverage
 
 ## Useful Commands
 

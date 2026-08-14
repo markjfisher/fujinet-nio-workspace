@@ -208,6 +208,9 @@ for command and key-code details.
 
 ### Debugger IPC
 
+You must be running at least amiberry 8.3.0 for the debugger fixes that correct breakpoint and stepping issues
+that were in previous releases.
+
 The existing `scripts/amiberry-ipc` helper passes debugger commands directly
 to Amiberry:
 
@@ -224,6 +227,14 @@ to Amiberry:
 Breakpoint hits leave the emulator paused. Capture registers, disassembly,
 and request memory with the same helper before issuing `DEBUG_CONTINUE`.
 `READ_MEM` accepts widths 1, 2, or 4 bytes.
+
+PAUSE/RESUME is emulator pause control.
+
+DEBUG_CONTINUE is debugger-stop control and should be used once Amiberry
+reports the debugger as internally stopped (stopped=1), e.g. after a
+breakpoint.
+
+Do not substitute DEBUG_CONTINUE for RESUME after a generic IPC PAUSE.
 
 ### Debugging Playbook
 

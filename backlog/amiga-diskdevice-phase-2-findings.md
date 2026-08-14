@@ -58,6 +58,9 @@ Ensure additions are short but relevant to indicate areas attempted, and finding
 - A host-only Exec task snapshot was captured at the bounded reproduction timeout: `test-evidence/amiberry-20260813-230029/diskdevice-adf/task-timeout-snapshot.log`. It uses NDK-derived `ThisTask`, `TaskReady`, `TaskWait`, Node, and Task offsets; Process extension offsets have subsequently been verified with `m68k-amigaos-gcc` as `pr_FileSystemTask=0xa8` and `pr_CLI=0xac`.
 - The snapshot current task is the `DN2` filesystem handler (`NT_PROCESS`, `TS_WAIT`), waiting on signals `0x10000000` with received `0x08000100`. The handler also appears in Exec's wait list. It is not currently running or ready, so the timeout snapshot is not a CPU spin in the driver/handler.
 - No task/process named `Copy` appears in current, ready, or wait task lists at capture time. This rules out the narrow interpretation that foreground Copy is still blocked waiting for the device or DN2 handler at timeout; it has already exited or is no longer represented under that task name before the checkpoint failure.
+[Later superseded: absence of a task named Copy did not itself prove command
+completion; subsequent CLI/checkpoint evidence established Copy had completed.]
+
 - Other filesystem handlers (`DN0`, `DN1`, `DF0`, `DF1`, `RAM`, `DH0`) are likewise waiting normally. The current PC is in Amiberry/ROM-side scheduling code (`0xfc983e`), not resident disk-device code. Do not add more disk breakpoints from this evidence; investigate checkpoint/process-sequencing state next.
 
 ## Progress 2026-08-13 22:51
