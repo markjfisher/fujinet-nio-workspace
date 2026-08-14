@@ -225,6 +225,389 @@ Breakpoint hits leave the emulator paused. Capture registers, disassembly,
 and request memory with the same helper before issuing `DEBUG_CONTINUE`.
 `READ_MEM` accepts widths 1, 2, or 4 bytes.
 
+### Debugging Playbook
+
+This is a host-side manual for diagnosing an Amiga guest failure. Preserve a
+normal, controller-free reproduction first. Debugger controllers pause or slow
+the guest and can change timing; diagnostic success is not a regression pass.
+
+#### Capture Passive Timeout Evidence
+
+Before adding a breakpoint, collect the failure boundary:
+
+```sh
+./scripts/amiberry-ipc GET_STATUS
+./scripts/amiberry-ipc GET_CPU_REGS
+./scripts/amiberry-ipc DISASSEMBLE 0x00f80000 16
+./scripts/amiberry-ipc SCREENSHOT test-evidence/manual-screen.png
+```
+
+Replace the disassembly address with `PC` from `GET_CPU_REGS`. Retain status,
+registers, disassembly around `PC`, a small longword window from `A7`, and the
+framebuffer. This distinguishes a requester, a paused debugger, a handler
+wait, a ROM idle loop, and resident-device code before making a theory.
+
+#### Derive Guest Layouts From the NDK
+
+Never decode guest memory with host ABI layouts or guessed offsets. Generate
+them against the installed m68k NDK:
+
+```sh
+source "$NIO_WORKSPACE/scripts/env.sh"
+printf '%s\n' \
+  '#include <stddef.h>' \
+  '#include <exec/tasks.h>' \
+  '#include <dos/dosextens.h>' \
+  'int task_state = offsetof(struct Task, tc_State);' \
+  'int process_port = offsetof(struct Process, pr_MsgPort);' \
+  | m68k-amigaos-gcc -x c -S -o /tmp/amiga-ndk-offsets.s -
+```
+
+Read the generated `.long` initializers. Repeat for `MsgPort`, `Message`,
+`DosPacket`, `CommandLineInterface`, and `DeviceNode`. A BPTR is an Amiga
+word pointer: dereference it at `BPTR << 2`.
+
+For a standard `IORequest` at `A1` in `BeginIO`, use these m68k offsets:
+
+```text
+io_Unit    +24 long       io_Command +28 word
+io_Flags   +30 byte       io_Error   +31 byte
+io_Actual  +32 long       io_Length  +36 long
+io_Data    +40 long       io_Offset  +44 long
+```
+
+The `io_Offset` offset is `+44`. Reading `+40` decodes the data pointer as a
+plausible but false disk offset and LBA.
+
+#### Resolve Relocatable Resident Vectors
+
+Do not use a map address directly as a breakpoint. Resident code is relocated
+when loaded. Obtain link-time offsets from:
+
+```text
+repos/fujinet-nio-driver/build/amiga/fujinet-disk.device.map
+```
+
+Then resolve the loaded device from Exec. `tools/amiga_emulator/device_debug.py`
+reads ExecBase from address `4`, walks `ExecBase.DeviceList`, matches
+`fujinet-disk.device`, and decodes standard library vectors:
+
+```text
+Open=-6 Close=-12 Expunge=-18 BeginIO=-30 AbortIO=-36
+```
+
+Validate that `BeginIO`, `Close`, and `AbortIO` yield the same relocation delta
+before deriving an internal breakpoint. Fail closed if the deltas differ.
+
+Example:
+
+```python
+from pathlib import Path
+from amiga_emulator import device_debug
+
+offsets = {"begin_io": 0x110e, "close": 0x10c0, "abort_io": 0x10f0}
+vectors = device_debug.write_resolution_log(
+    Path("/run/user/1000/amiberry.sock"),
+    Path("test-evidence/device-resolution.log"), offsets,
+)
+print(hex(vectors.begin_io))
+```
+
+#### Capture a Bounded BeginIO Stream
+
+At `device_begin_io()`, `A1` is the live `IORequest *` and `A6` is the device
+base. Set one breakpoint, record request fields, then continue immediately:
+
+```sh
+./scripts/amiberry-ipc DEBUG_ACTIVATE
+./scripts/amiberry-ipc SET_BREAKPOINT 0xRUNTIME_BEGINIO
+./scripts/amiberry-ipc DEBUG_CONTINUE
+# after the hit:
+./scripts/amiberry-ipc GET_CPU_REGS
+./scripts/amiberry-ipc READ_MEM 0xREQUEST_PLUS_28 2
+./scripts/amiberry-ipc READ_MEM 0xREQUEST_PLUS_44 4
+./scripts/amiberry-ipc DEBUG_CONTINUE
+```
+
+For aligned 512-byte operations, calculate `LBA = io_Offset / 512`. Persist a
+short record containing PC, request pointer, command, flags, error, actual,
+length, offset, and LBA. Do not single-step ordinary execution.
+`tools/amiga_emulator/debug_snapshot.py` supplies reusable request readers;
+`tools/amiga_emulator/beginio_trace.py` is a bounded controller example.
+
+#### Find Call Return and Completion Sites
+
+Use disassembly to break after a helper returns, not only at helper entry:
+
+```sh
+source "$NIO_WORKSPACE/scripts/env.sh"
+m68k-amigaos-objdump -d \
+  repos/fujinet-nio-driver/build/amiga/fujinet-disk.device
+```
+
+Find the linked `jsr`/`bsr`, use the instruction immediately following it as
+the return breakpoint, and add the verified relocation delta to both addresses.
+At helper entry record input fields; at return record `D0 & 0xff`,
+`io_Actual`, and `io_Error`; at the common completion point record final
+request fields immediately before `ReplyMsg` or the quick-return path.
+
+`IOF_QUICK` requests complete synchronously from `BeginIO`; absence of
+`ReplyMsg` is expected. A successful quick command keeps `IOF_QUICK`, has
+`io_Error == 0`, and is followed by normal guest progress.
+
+#### Bounded Controllers
+
+A controller is a host Python diagnostic program, not guest/resident code and
+not Sidecar, serial-bridge, or protocol validation:
+
+```text
+runner starts Amiberry -> obtains exact IPC socket
+  -> optional controller resolves live state and arms breakpoints
+  -> serial bridge releases unchanged guest startup
+  -> controller records bounded evidence and cleans up
+```
+
+Controllers prevent the race where a separate terminal notices the socket only
+after guest startup has passed the target. A startup-sensitive controller may
+pause Amiberry before the serial bridge is opened, arm a breakpoint, then
+continue. If `LoadModule` registers the resident later, allow the guest to run
+only until the device appears in the live DeviceList, pause, resolve, arm, and
+continue.
+
+##### Checked-In Runner Hook
+
+The checked-in implementation is in `tools/amiga_emulator/run.py`. Its order
+is important: the socket is written first; an opt-in controller activates the
+debugger and starts; only then does `start_amiberry()` reach the TCP `socat`
+bridge code that lets the guest startup sequence run.
+
+The relevant code is deliberately ordinary Python, not hidden runner magic:
+
+```python
+# tools/amiga_emulator/run.py, inside start_amiberry()
+self.ipc_socket = logged_socket
+(self.run_dir / "amiberry.sock.path").write_text(
+    str(self.ipc_socket) + "\n", encoding="utf-8"
+)
+
+if os.environ.get("AMIGA_E2E_BEGINIO_TRACE") == "1":
+    # The guest cannot run through the serial startup path while paused.
+    ipc.request(self.ipc_socket, "DEBUG_ACTIVATE")
+    self.debugger_controller = self.start_process(
+        [sys.executable, "-m", "amiga_emulator.beginio_trace",
+         "--socket", str(self.ipc_socket),
+         "--output-dir", str(self.run_dir)],
+        self.run_dir / "beginio-controller.log", cwd=ROOT,
+    )
+
+# This is later in the same method. Opening socat releases guest serial I/O.
+self.bridge = self.start_process(
+    ["socat", "-d", "-d",
+     f"TCP:{self.host}:{self.amiga_port}",
+     f"TCP:{self.nio_host}:{self.nio_port}"],
+    self.bridge_log,
+)
+```
+
+The matching checked-in controller is:
+
+```text
+tools/amiga_emulator/beginio_trace.py
+```
+
+It begins by releasing the initial pause just long enough for the unchanged
+startup `LoadModule` command to register `fujinet-disk.device`, then pauses,
+resolves the live vector, installs the breakpoint, and resumes:
+
+```python
+# tools/amiga_emulator/beginio_trace.py
+ipc.request(socket_path, "DEBUG_CONTINUE")
+exec_base, vectors, names = wait_for_device(socket_path, args.device_timeout)
+ipc.request(socket_path, "DEBUG_ACTIVATE")
+exec_base, vectors, names = device_debug.resolve_device(socket_path)
+ipc.request(socket_path, "SET_BREAKPOINT", hex(vectors.begin_io))
+ipc.request(socket_path, "DEBUG_CONTINUE")
+```
+
+Run that checked-in path, rather than copying a controller into a shell, with:
+
+```sh
+AMIGA_E2E_DEBUGGER=1 AMIGA_E2E_BEGINIO_TRACE=1 \
+  pytest integration-tests/amiberry/test_diskdevice_adf.py \
+  -q --run-amiga -k test_standard_adf
+```
+
+Artifacts are written in that run's evidence directory:
+
+```text
+beginio-controller.log
+beginio-command-stream.log
+beginio-timeout.log
+device-resolution.log
+beginio-0000.log
+```
+
+The current checked-in runner also has named hooks for task snapshots, write
+buffer capture, read-path capture, and DN2 handler tracing. They follow the
+same socket/output-dir contract and must remain opt-in.
+
+Controller rules:
+
+- Accept explicit `--socket` and `--output-dir` arguments.
+- Use a fixed total deadline and short per-hit timeout.
+- Start with the minimum breakpoints needed for one claim.
+- Write evidence before every `DEBUG_CONTINUE`.
+- On timeout capture registers, PC disassembly, and stack evidence.
+- Restore CPU speed with `SET_CPU_SPEED -1` if changed.
+- Clean up in `finally`; never leave a visible paused emulator.
+- Never change guest binaries, resident code, guest memory, or startup merely
+  to make tracing easier.
+
+##### Complete Controller Example: Bounded BeginIO Capture
+
+The following is a complete, typable host-side controller. Save it outside the
+repository, for example as `/tmp/capture_beginio.py`. It resolves the live
+`fujinet-disk.device` through Exec, installs one breakpoint on its actual
+`BeginIO` vector, records every hit for up to 30 seconds, and always releases
+the emulator. It does not require a link map because it breaks on the live
+public vector.
+
+```python
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import time
+from pathlib import Path
+
+from amiga_emulator import device_debug, ipc
+from amiga_emulator.debug_snapshot import parse_registers, read_io_request
+
+
+def wait_for_pc(socket_path: Path, address: int, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        registers = parse_registers(ipc.request(socket_path, "GET_CPU_REGS"))
+        if registers["PC"] == address:
+            return
+        time.sleep(0.05)
+    raise TimeoutError(f"breakpoint {address:#x} was not observed")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--socket", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--seconds", type=float, default=30.0)
+    args = parser.parse_args()
+
+    socket_path = Path(args.socket)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_path = output_dir / "manual-beginio.log"
+    deadline = time.monotonic() + args.seconds
+
+    try:
+        # This returns the live, relocated public device vectors.
+        _, vectors, _ = device_debug.resolve_device(socket_path)
+        ipc.request(socket_path, "DEBUG_ACTIVATE")
+        ipc.request(socket_path, "SET_BREAKPOINT", hex(vectors.begin_io))
+        ipc.request(socket_path, "DEBUG_CONTINUE")
+
+        with log_path.open("w", encoding="ascii") as log:
+            log.write(f"BEGIN_IO {vectors.begin_io:#x}\n")
+            index = 0
+            while time.monotonic() < deadline:
+                try:
+                    wait_for_pc(socket_path, vectors.begin_io, 2.0)
+                except TimeoutError:
+                    continue
+
+                registers = parse_registers(
+                    ipc.request(socket_path, "GET_CPU_REGS")
+                )
+                request = read_io_request(socket_path, registers["A1"])
+                offset = request["io_Offset"]
+                lba = offset // 512 if offset % 512 == 0 else -1
+                log.write(
+                    f"index={index} pc={registers['PC']:#x} "
+                    f"request={registers['A1']:#x} "
+                    f"command={request['io_Command']} "
+                    f"flags={request['io_Flags']:#x} "
+                    f"error={request['io_Error']:#x} "
+                    f"actual={request['io_Actual']} "
+                    f"length={request['io_Length']} "
+                    f"offset={offset} lba={lba}\n"
+                )
+                log.flush()
+                index += 1
+                ipc.request(socket_path, "DEBUG_CONTINUE")
+    finally:
+        # Never leave a manually launched controller holding the emulator.
+        try:
+            ipc.request(socket_path, "QUIT")
+        except Exception:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+Run it against the socket path created by the exact test run:
+
+```sh
+PYTHONPATH="$NIO_WORKSPACE/tools" \
+  python /tmp/capture_beginio.py \
+  --socket "$(<test-evidence/amiberry-YYYYMMDD-HHMMSS/diskdevice-adf/amiberry.sock.path)" \
+  --output-dir test-evidence/manual-beginio \
+  --seconds 30
+```
+
+For a startup race, do not launch this after the normal guest sequence is
+already running. Have the runner pause Amiberry after writing
+`amiberry.sock.path` and before opening the serial bridge; start the controller,
+then issue its first `DEBUG_CONTINUE`. For a device loaded by `LoadModule`, add
+a short polling loop around `device_debug.resolve_device()` before arming the
+breakpoint. This is the practical reason controller integration exists.
+
+The existing named controller pattern is intentionally restrictive. A future
+safe extension is an allowlisted controller registry with a structured
+per-run JSON configuration, for example `AMIGA_E2E_CONTROLLER=beginio-trace`.
+Do not add arbitrary shell-command execution through an environment variable.
+
+Controllers do not validate an emulator Sidecar, the serial bridge, or the
+NIO protocol. Normal end-to-end tests validate those systems. Controllers
+validate a specific live-memory or register claim at a controlled point.
+
+#### CPU Speed, Tasks, DOS, and Media Correlation
+
+Use `GET_CPU_SPEED` and `SET_CPU_SPEED 10` only after a target breakpoint is
+armed; slowing boot can prevent the guest reaching `LoadModule` or the test
+phase before the controller deadline. Always restore with `SET_CPU_SPEED -1`.
+
+If requests continue but a CLI checkpoint is absent, inspect Exec state using
+NDK-derived offsets: `ThisTask`, `TaskReady`, `TaskWait`, task state/signals,
+`Process.pr_MsgPort`, `pr_CLI`, `MsgPort` signal fields and queue, and attached
+`DosPacket` fields. Two filesystem processes can share a name after remount;
+resolve DOS `DeviceNode.dn_Task` through `dos.library` and match it to each
+process's embedded message port. Do not infer active handler identity from a
+task name alone.
+
+For a disk claim, correlate every layer:
+
+```text
+BeginIO request -> LBA -> NIO request -> NIO response -> completion -> ADF
+```
+
+Use full packet logging only in a diagnostic trace run when comparing sectors.
+Do not claim 512-byte equality from a payload log that truncates the final
+bytes. Retain source revisions, environment flags, breakpoint addresses,
+relocation evidence, full/truncated observation scope, and cleanup result.
+After diagnosis, rerun the original foreground test with no controller,
+debugger flag, packet trace, or timeout override.
+
 The Amiga driver link writes a symbol map beside the resident binary:
 
 ```text
@@ -251,20 +634,6 @@ in `A6`. Use `READ_MEM` against `A1` to inspect the standard request fields:
 command, flags, error, actual, length, offset, and unit. On a timeout, capture
 `GET_CPU_REGS`, `DISASSEMBLE` around `PC`, and a small `READ_MEM` window around
 `A7` before issuing the normal `QUIT`.
-
-On a native Wayland desktop such as Hyprland, `wtype` and `grim` remain useful
-fallbacks when IPC is unavailable. `grim` captures the whole desktop for test
-evidence:
-
-```sh
-AMIBERRY_WINDOW=$(hyprctl clients -j | jq -r '.[] | select(.class == "amiberry") | .address' | head -1)
-hyprctl dispatch focuswindow "address:$AMIBERRY_WINDOW"
-wtype 'wifitest'
-grim build/amiga-e2e/screen.png
-```
-
-`xdotool` is only useful if Amiberry is running through XWayland; the normal
-SDL3 build is a native Wayland client.
 
 If your NIO listens on another host or port, add `--nio-port PORT` and set
 `FUJINET_HOST=HOST` as appropriate. The Amiberry-side TCP listener defaults
