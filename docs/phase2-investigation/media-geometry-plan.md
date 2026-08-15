@@ -884,3 +884,401 @@ All Amiga Exec boundary contract tests passed
 ```
 
 Commit: 881a7a3e in fujinet-nio-driver
+
+# Second part ask
+
+Proceed to the next Media Geometry segment.
+
+The DD/HD geometry classifier is complete and must remain geometry-only.
+
+The next task is to establish and implement a small, testable Amiga filesystem/DosType classifier for standard ADF media, so the later dynamic DosEnvec builder has two independent inputs:
+
+fn_disk_info_t
+    ↓
+geometry classifier
+    ↓
+DD / HD geometry profile
+
+
+media contents
+    ↓
+filesystem classifier
+    ↓
+validated DosType
+
+Do not construct dynamic DOS nodes yet.
+
+Do not modify FMOUNT or handler lifecycle yet.
+
+1. Establish the source of filesystem identity
+
+Inspect the classic Amiga filesystem/boot-block format and our existing DD/HD ADF fixtures.
+
+Establish exactly how an OFS/FFS-family whole-volume ADF identifies its filesystem DosType on disk.
+
+Report:
+
+where the value is stored
+how many bytes are required to identify it
+which DosType values our existing test fixtures actually contain
+what validation is required before trusting it
+
+Do not infer filesystem type from DD/HD geometry.
+
+2. Add a pure/testable classifier
+
+Add a small API which consumes the minimum media bytes required and returns either:
+
+validated DosType
+unsupported/invalid
+
+Keep this separate from fujinet_disk_media_profile_t.
+
+At minimum test:
+
+- existing standard DD fixture;
+- existing standard HD fixture if available;
+- OFS and FFS fixtures if both already exist or can be safely generated test-only;
+- invalid boot signature;
+- unsupported DosType;
+- truncated input.
+
+Do not silently default invalid/unknown media to DOS\0.
+
+3. Define the future combined contract
+
+Show how the later DosEnvec builder will consume:
+
+fujinet_disk_media_profile_t geometry
++
+validated filesystem DosType
+
+and produce the exact DD/HD DosEnvec.
+
+Remember that:
+
+profile.block_size = 512 bytes
+de_SizeBlock = 128 longwords
+
+Do not implement MakeDosNode() / AddDosNode() yet.
+
+Deliverable
+
+Return:
+
+a. filesystem-identification evidence;
+b. classifier API;
+c. supported/rejected DosType policy;
+d. tests and results;
+e. exact proposed input contract for the subsequent DosEnvec builder.
+
+Keep this segment bounded. No production lifecycle changes.
+
+# Implementation part 2
+
+## A. Filesystem Identification Evidence
+
+An Amiga whole-volume boot block stores the filesystem identity in its first four bytes as a big-endian `DosType` longword:
+
+```text
+offset 0..3: DosType
+```
+
+Examples:
+
+```text
+"DOS\x00" -> 0x444F5300 -> OFS
+"DOS\x01" -> 0x444F5301 -> FFS
+```
+
+The existing fixture generator in `integration-tests/amiberry/conftest.py` creates both DD and HD images with `xdftool` and installs a boot block. The existing standard fixtures are OFS-family images and therefore contain:
+
+```text
+DOS\x00
+```
+
+The existing HD fixture uses the same boot installation path and is also expected to contain `DOS\x00`.
+
+No existing FFS fixture was found. The FFS test vector is a test-only four-byte boot-block fixture using:
+
+```text
+DOS\x01
+```
+
+The classifier requires only the first four bytes to identify the candidate `DosType`. Full boot-block trust for mounting would additionally require later validation, including boot-block checksum and filesystem/root-block consistency. That validation is intentionally not implemented in this bounded segment.
+
+## B. Classifier API
+
+Added:
+
+`amiga/include/fujinet_disk_filesystem.h`
+
+```c
+#define FUJINET_AMIGA_DOS_OFS 0x444F5300UL
+#define FUJINET_AMIGA_DOS_FFS 0x444F5301UL
+
+#define FUJINET_AMIGA_BOOT_DOSTYPE_BYTES 4U
+
+uint8_t fujinet_disk_classify_filesystem(
+    const uint8_t *boot_block,
+    size_t boot_block_length,
+    uint32_t *dos_type);
+```
+
+Implementation:
+
+`amiga/common/fujinet_disk_filesystem.c`
+
+The classifier:
+
+- requires at least four bytes;
+- reads the DosType as big-endian;
+- requires the `DOS` signature;
+- accepts only `DOS\x00` and `DOS\x01`;
+- returns the validated DosType through `dos_type`;
+- returns `FN_ERR_INVALID` for null, truncated, malformed, or unsupported input;
+- does not default unknown media to `DOS\0`.
+
+## C. Supported Policy
+
+| Boot DosType | Policy |
+|---|---|
+| `0x444F5300` (`DOS\x00`) | Accepted as OFS |
+| `0x444F5301` (`DOS\x01`) | Accepted as FFS |
+| `0x444F5302` and above | Rejected by this first-pass policy |
+| Invalid signature | Rejected |
+| Fewer than four bytes | Rejected |
+
+The filesystem classifier is separate from `fujinet_disk_media_profile_t`. Geometry classification still consumes authoritative `fn_disk_info_t` sector size/count and does not infer filesystem type.
+
+## D. Tests
+
+Added tests for:
+
+- standard DD boot identity as OFS;
+- standard HD boot identity as OFS;
+- test-only FFS boot identity;
+- invalid boot signature;
+- unsupported DosType;
+- truncated boot-block input.
+
+The prior geometry tests remain unchanged and continue to cover:
+
+- DD and HD geometry;
+- different `BlocksPerTrack`;
+- independent per-unit classification;
+- 1680-sector rejection;
+- large/unrecognized raw-media rejection;
+- non-512-byte rejection.
+
+Validation passed:
+
+```text
+make -C repos/fujinet-nio-driver/amiga/tests test
+```
+
+Results:
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+`git diff --check` passed.
+
+## E. Future DosEnvec Input Contract
+
+The later DosEnvec builder should receive two independent validated inputs:
+
+```text
+fn_disk_info_t
+    -> fujinet_disk_media_profile_t
+       geometry fields only
+
+boot-block bytes
+    -> validated uint32_t dos_type
+       filesystem identity only
+```
+
+For the subsequent DD/HD builder:
+
+```text
+profile.block_size       = 512 bytes
+DosEnvec.de_SizeBlock    = 128 longwords
+profile.surfaces         = 2
+profile.blocks_per_track = 11 or 22
+profile.low_cylinder     = 0
+profile.high_cylinder    = 79
+profile.reserved_blocks  = 2
+profile.interleave       = 0
+dos_type                 = validated filesystem result
+```
+
+`MakeDosNode()`, `AddDosNode()`, `FMOUNT`, and handler lifecycle behavior were not changed.
+
+# Corrections to part 2
+
+Before moving on to the DosEnvec builder, I want to close out three concerns from the filesystem-classifier segment.
+
+Do not start any new Media Geometry implementation work in this turn.
+
+1. API contract language
+
+The current report says the classifier returns a “validated DosType”.
+
+That wording is too strong for what the implementation currently proves.
+
+Reading the first four boot-block bytes and recognizing:
+
+DOS\0
+DOS\1
+
+establishes that the boot block claims a recognized/supported DosType.
+
+It does not establish that the whole filesystem is valid.
+
+Full filesystem validation would require later checks such as:
+
+boot-block checksum
+root-block consistency
+filesystem structural consistency
+
+Please review the code comments, header documentation, tests, and any backlog/findings wording added in this segment.
+
+Adjust terminology so the contract is explicitly:
+
+recognize/classify a supported boot-block DosType
+
+rather than:
+
+validate the filesystem / validated DosType
+
+The API name fujinet_disk_classify_filesystem() may remain if you think it still accurately describes the narrow operation, but its documented contract must make the limitation explicit.
+
+Report the exact wording used after correction.
+
+2. DOS\2 and above
+
+The first-pass implementation accepts:
+
+DOS\0 -> OFS
+DOS\1 -> FFS
+
+and rejects DOS\2 and above.
+
+I want the policy and terminology checked carefully here.
+
+DOS\2+ should be treated as:
+
+recognized Amiga DOS-family identifiers that are unsupported by the current first-pass policy
+
+rather than:
+
+inherently malformed/corrupt input
+
+If the current low-level API still maps both malformed and unsupported inputs to FN_ERR_INVALID, that is acceptable for now if the surrounding code does not yet need a distinct error code.
+
+However, the documentation/tests must preserve the conceptual distinction:
+
+malformed boot signature
+recognized but unsupported DosType
+supported DosType
+
+Review and correct the implementation comments/tests/report wording as needed.
+
+Explicitly state whether the current API can distinguish malformed from unsupported at runtime, and whether that distinction is intentionally deferred.
+
+3. Verify the actual generated DD/HD fixtures
+
+The previous report said:
+
+the existing HD fixture uses the same boot installation path and is also expected to contain DOS\0
+
+I do not want this left as an assumption.
+
+Verify the actual generated DD and HD ADF fixtures used by the Amiberry integration tests.
+
+Inspect the first four bytes of each generated image and report them explicitly, e.g.:
+
+DD fixture: 44 4F 53 00 -> DOS\0
+HD fixture: 44 4F 53 00 -> DOS\0
+
+If either fixture differs, report the actual value and explain why.
+
+Also confirm whether the current DD/HD classifier tests consume bytes from those real/generated fixtures or only synthetic four-byte test vectors.
+
+Do not change fixture generation unless the verification exposes a genuine mismatch.
+
+Deliverable
+
+Return only:
+
+a. final API-contract wording;
+b. final policy for DOS\2+ and malformed inputs;
+c. actual first four bytes of the generated DD and HD fixtures;
+d. whether the tests use real fixture bytes or synthetic vectors;
+e. any small corrections made to close these points.
+
+Do not proceed to the DosEnvec builder yet.
+
+# Implementing corrections
+
+a. **Final API-contract wording**
+
+The classifier contract is now:
+
+> `fujinet_disk_classify_filesystem()` recognizes and classifies a supported boot-block `DosType` from the first four bytes of an Amiga boot block. A successful result means that the boot block claims a supported OFS or FFS-family identifier. It does not validate the complete filesystem. Full validation would additionally require boot-block checksum verification, root-block consistency checks, and filesystem structural validation.
+
+The header comment uses the equivalent wording:
+
+> “Returns a recognized supported `DosType` from the boot-block identifier. This does not by itself establish that the complete filesystem is valid.”
+
+The implementation and tests do not describe the result as a validated filesystem or validated `DosType`.
+
+b. **Final DOS\2+ and malformed-input policy**
+
+| Input | Conceptual classification | Current result |
+|---|---|---|
+| `DOS\0` | Supported boot-block DosType, OFS | `FN_OK`, returns `0x444F5300` |
+| `DOS\1` | Supported boot-block DosType, FFS | `FN_OK`, returns `0x444F5301` |
+| `DOS\2+` | Recognized Amiga DOS-family identifier, unsupported by this first-pass policy | `FN_ERR_INVALID` |
+| Non-`DOS` signature | Malformed/unrecognized boot-block identifier | `FN_ERR_INVALID` |
+| Fewer than four bytes | Truncated input | `FN_ERR_INVALID` |
+
+The current API cannot distinguish malformed, truncated, and recognized-but-unsupported inputs at runtime because all map to `FN_ERR_INVALID`. That distinction is intentionally deferred until the surrounding classifier API needs separate error reporting. The tests preserve the conceptual distinction with separate cases and descriptions.
+
+c. **Actual generated DD/HD fixture bytes**
+
+Generated using the existing `create_standard_adf()` and `create_hd_adf()` helpers without changing fixture generation:
+
+```text
+DD fixture: 44 4F 53 00 -> DOS\0
+HD fixture: 44 4F 53 00 -> DOS\0
+```
+
+Observed generated sizes:
+
+```text
+DD: 901120 bytes = 1760 × 512
+HD: 1802240 bytes = 3520 × 512
+```
+
+d. **Test fixture source**
+
+The current filesystem-classifier unit tests use synthetic four-byte vectors:
+
+```c
+{'D', 'O', 'S', 0}  // OFS
+{'D', 'O', 'S', 1}  // FFS
+```
+
+They do not consume bytes directly from the generated DD/HD image files.
+
+The generated DD and HD fixtures were independently inspected and both contain `DOS\0` at offset zero. No fixture-generation changes were made.
+
+e. **Corrections made**
+
+Only the API contract wording was reviewed and clarified. No DosEnvec, geometry, lifecycle, FMOUNT, MountList, or fixture-generation changes were made.
+
+Commit e0697c09 in repos/fujinet-nio-driver

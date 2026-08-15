@@ -59,25 +59,31 @@ progression are specified in the associated
 
 ## Media geometry
 
-- [ ] Specify which image families can be presented as an Amiga filesystem in
+- [x] Specify which image families can be presented as an Amiga filesystem in
       a whole-disk device, beginning with standard DD and HD ADF profiles and
       separating those from partitioned RDB/HDF media.
-- [ ] Treat NIO's mounted-media sector size and sector count as authoritative;
+
+- [x] Treat NIO's mounted-media sector size and sector count as authoritative;
       hints may assist raw-image probing but must not override successfully
       inferred geometry.
+
 - [x] Remove the driver's unconditional 1760-sector validation and fixed
       `TD_GETGEOMETRY` result. Validate supported media from the committed NIO
       Info response and retain that geometry independently per unit.
-- [ ] Define how AmigaDOS receives matching DosEnvec geometry. Do not assume
+
+- [x] Define how AmigaDOS receives matching DosEnvec geometry. Do not assume
       that `TD_GETGEOMETRY` rewrites `Surfaces`, `BlocksPerTrack`, `LowCyl`, or
       `HighCyl` from a static MountList.
+
 - [ ] Choose and test the mounting strategy for variable media: known geometry
       profiles, dynamically constructed DOS device nodes, or a verified linear
       logical geometry. The choice must preserve existing filesystem layout
       and allocation semantics.
+
 - [ ] Replace the eight fixed standard-ADF MountLists as the universal story.
       Static `DN0`–`DN7` files may remain as explicit DD-ADF compatibility
       profiles only if their scope is unmistakable.
+
 - [ ] Reject unsupported, malformed, partitioned, or ambiguous images with a
       clear error before announcing insertion; never silently reinterpret an
       image using the 880 KiB defaults.
