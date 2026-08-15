@@ -7,6 +7,7 @@ C:fujinet-mount host:/standard.adf >DH0:disk-mount.result
 C:Echo "MOUNT TOOL RC=$RC" >DH0:disk-mount-rc.result
 C:Mount DN0: FROM DEVS:DN0
 C:Echo "DOS MOUNT RC=$RC" >DH0:disk-dos-mount.result
+C:doslistdiag >DH0:disk-dos-envec.result
 C:Run >NIL: C:fujinet-mount --read 0 DH0:disk-read-a.result
 C:Run >NIL: C:fujinet-mount --read 880 DH0:disk-read-b.result
 C:Wait 2 SECS

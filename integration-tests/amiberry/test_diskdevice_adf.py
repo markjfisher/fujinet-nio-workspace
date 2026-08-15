@@ -4,6 +4,7 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "MOUNTED drive=0 slot=1 readonly=1 sectorSize=512 sectorCount=1760" in results["disk-mount.result"]
     assert "EXEC BOUNDARY PASS commands=5 notifications=4 remove=1 queue=1 multi=2 cause=3" in results["disk-exec-boundary.result"]
     assert "KNOWN.TXT" in results["disk-dir.result"].upper()
+    assert "ENV name=DN0 table=19 sizeBlock=128 secOrg=0 surfaces=2 sectorPerBlock=1 blocksPerTrack=11 reserved=2 preAlloc=0 interleave=0 lowCyl=0 highCyl=79 buffers=5 bufMemType=1 maxTransfer=7fffffff mask=fffffffe bootPri=0 dosType=444f5300 baud=1200 control=0 bootBlocks=0 stack=32768 priority=5 globVec=ffffffff" in results["disk-dos-envec.result"]
     assert "FUJINET ADF READ PASSED" in results["disk-type.result"]
     assert "READ OK lba=0 actual=512" in results["disk-read-a.result"]
     assert "READ OK lba=880 actual=512" in results["disk-read-b.result"]
