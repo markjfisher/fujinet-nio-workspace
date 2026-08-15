@@ -41,7 +41,12 @@ results = [
   "dynamic-load.result",
   "dynamic-static-mount.result",
   "dynamic-node.result",
-  "dynamic-doslist.result",
+  "dynamic-prestart.result",
+  "dynamic-dir.result",
+  "dynamic-dir-rc.result",
+  "dynamic-post-dir.result",
+  "dynamic-type.result",
+  "dynamic-type-rc.result",
 ]
 
 [[test]]

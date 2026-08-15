@@ -41,11 +41,14 @@ def test_dynamic_dd_dos_node(run_amiga_case):
     assert "HANDLER_FIELDS_APPLIED stack=32768 priority=5 globVec=ffffffff handler_preserved=0" in results["dynamic-node.result"]
     assert "CONFIGURED DEVICE dn_Name=" in results["dynamic-node.result"]
     assert "dn_Name_decoded=DY0" in results["dynamic-node.result"]
-    assert "DEVICE_FIELDS name=DN0 handler=00000000 stack=32768 priority=5 globVec=ffffffff" in results["dynamic-doslist.result"]
-    assert "DEVICE_FIELDS name=DY0 handler=00000000 stack=32768 priority=5 globVec=ffffffff" in results["dynamic-doslist.result"]
-    assert "ENV name=DY0 table=19 sizeBlock=128 secOrg=0 surfaces=2 sectorPerBlock=1 blocksPerTrack=11 reserved=2 preAlloc=0 interleave=0 lowCyl=0 highCyl=79 buffers=5 bufMemType=1 maxTransfer=7fffffff mask=fffffffe bootPri=0 dosType=444f5300 baud=1200 control=0 bootBlocks=0 stack=32768 priority=5 globVec=ffffffff" in results["dynamic-doslist.result"]
-    assert "DEVICE_FIELDS name=DN0 handler=00000000 stack=32768 priority=5 globVec=ffffffff startup=" in results["dynamic-doslist.result"]
-    assert "DEVICE_FIELDS name=DY0 handler=00000000 stack=32768 priority=5 globVec=ffffffff startup=" in results["dynamic-doslist.result"]
+    assert "DY0 type=0 task=00000000" in results["dynamic-prestart.result"]
+    assert "DEVICE_FIELDS name=DY0 handler=00000000 stack=32768 priority=5 globVec=ffffffff startup=" in results["dynamic-prestart.result"]
+    assert "DYNAMIC DIR RC=0" in results["dynamic-dir-rc.result"]
+    assert "KNOWN.TXT" in results["dynamic-dir.result"].upper()
+    assert "DY0 type=0 task=" in results["dynamic-post-dir.result"]
+    assert "DY0 type=0 task=00000000" not in results["dynamic-post-dir.result"]
+    assert "DYNAMIC TYPE RC=0" in results["dynamic-type-rc.result"]
+    assert "FUJINET ADF READ PASSED" in results["dynamic-type.result"]
 
 
 def test_native_floppy_adf_dir_and_type(run_amiga_case):

@@ -2247,3 +2247,96 @@ c. exact static-vs-dynamic comparison;
 d. focused test result.
 
 If the startup structures now match, stop there. The following segment will perform the first natural handler-start test with Dir DY0:.
+
+# Part 5 
+
+Proceed to the next isolated dynamic-node segment: natural filesystem-handler startup for the already-validated DD DY0: node.
+
+Do not change production FMOUNT, HD handling, geometry classification, cleanup/removal, duplicate-node behavior, or static MountLists.
+
+The dynamic node construction and pre-start startup fields are now signed off.
+
+Goal
+
+Prove that AmigaDOS can naturally start the filesystem handler for dynamically created DY0: on first access, and that the handler can read the mounted DD ADF correctly.
+
+Test sequence
+
+Keep the existing construction path:
+
+LoadModule fujinet-disk.device
+mount standard DD ADF in NIO
+MakeDosNode("DY0", "fujinet-disk.device", unit 0, ...)
+apply verified handler startup fields
+AddDosNode(..., 0, ...)
+
+Before first access, use doslistdiag to prove:
+
+DY0 exists
+dn_Task = 0
+startup/DosEnvec still match expected DD values
+
+Then visibly execute:
+
+Echo "=== BEFORE DIR DY0 ==="
+Dir DY0:
+Echo "=== AFTER DIR DY0 RC=$RC ==="
+
+Record both screen-visible output and machine-readable result files.
+
+Immediately inspect DY0 again with doslistdiag.
+
+Required result:
+
+dn_Task was 0 before first access
+dn_Task is nonzero after successful Dir
+
+Then run:
+
+Echo "=== BEFORE TYPE DY0 ==="
+Type DY0:KNOWN.TXT
+Echo "=== AFTER TYPE DY0 RC=$RC ==="
+
+Required content:
+
+FUJINET ADF READ PASSED
+Diagnostics
+
+Retain:
+
+pre-start doslist result
+Dir output and RC
+post-Dir doslist result
+Type output and RC
+screenshot
+fujinet-nio.log
+
+If the handler does not start or the test stalls, stop there and report:
+
+last visible CLI boundary
+pre/post dn_Task
+requester text if any
+final FujiNet operations
+
+Do not attempt cleanup or duplicate-node tests in the same run.
+
+pytest assertions should be explicit rather than relying on files existing, i.e. something like:
+
+assert "task=00000000" in results["dynamic-prestart.result"]
+assert "DYNAMIC DIR RC=0" in results["dynamic-dir-rc.result"]
+assert "KNOWN.TXT" in results["dynamic-dir.result"].upper()
+assert "DYNAMIC TYPE RC=0" in results["dynamic-type-rc.result"]
+assert "FUJINET ADF READ PASSED" in results["dynamic-type.result"]
+
+Deliverable
+
+Report:
+
+1. DY0 state before first access;
+2. Dir DY0: result;
+3. DY0 state after Dir;
+4. Type DY0:KNOWN.TXT result;
+5. any requester or stall;
+6. focused Amiberry test result.
+
+If this succeeds, stop there. Cleanup/lifetime should be the following separate segment.

@@ -7,12 +7,27 @@ C:Echo "=== BEFORE DYNAMIC NODE ==="
 C:dynamicdosnode >DH0:dynamic-node.result
 C:Echo "=== AFTER DYNAMIC NODE RC=$RC ==="
 C:Echo "=== BEFORE DOSLIST ==="
-C:doslistdiag >DH0:dynamic-doslist.result
+C:doslistdiag >DH0:dynamic-prestart.result
 C:Echo "=== AFTER DOSLIST RC=$RC ==="
+C:Echo "=== BEFORE DIR DY0 ==="
+C:Dir DY0: >DH0:dynamic-dir.result
+C:Echo "DYNAMIC DIR RC=$RC" >DH0:dynamic-dir-rc.result
+C:Echo "=== AFTER DIR DY0 RC=$RC ==="
+C:doslistdiag >DH0:dynamic-post-dir.result
+C:Echo "=== BEFORE TYPE DY0 ==="
+C:Type DY0:KNOWN.TXT >DH0:dynamic-type.result
+C:Echo "DYNAMIC TYPE RC=$RC" >DH0:dynamic-type-rc.result
+C:Echo "=== AFTER TYPE DY0 RC=$RC ==="
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:dynamic-load.result
 C:Type DH0:dynamic-node.result
-C:Type DH0:dynamic-doslist.result
+C:Type DH0:dynamic-static-mount.result
+C:Type DH0:dynamic-prestart.result
+C:Type DH0:dynamic-dir.result
+C:Type DH0:dynamic-dir-rc.result
+C:Type DH0:dynamic-post-dir.result
+C:Type DH0:dynamic-type.result
+C:Type DH0:dynamic-type-rc.result
 C:Echo "RESULTS-END"
 C:FLS host:/amiga-e2e-complete/diskdevice-dynamic-dd >NIL:
 C:Echo "E2E COMPLETE"
