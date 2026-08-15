@@ -1282,3 +1282,320 @@ e. **Corrections made**
 Only the API contract wording was reviewed and clarified. No DosEnvec, geometry, lifecycle, FMOUNT, MountList, or fixture-generation changes were made.
 
 Commit e0697c09 in repos/fujinet-nio-driver
+
+# Part 3
+
+Proceed to the next bounded Media Geometry step: implement a pure/testable DosEnvec builder from the already-separated geometry profile and recognized boot-block DosType.
+
+Inputs:
+
+const fujinet_disk_media_profile_t *profile
+uint32_t dos_type
+
+Output:
+
+an AmigaDOS environment/DosEnvec representation suitable for later dynamic DOS-node construction
+
+Do not call MakeDosNode() or AddDosNode() yet.
+Do not modify FMOUNT, static MountLists, or handler lifecycle.
+
+The builder must map the profile into exact AmigaDOS values and must explicitly handle representation units.
+
+In particular:
+
+profile.block_size = 512 bytes
+de_SizeBlock       = 128 longwords
+
+Required field mapping for the current DD/HD scope:
+
+Surfaces       = 2
+BlocksPerTrack = 11 for DD, 22 for HD
+LowCyl         = 0
+HighCyl        = 79
+Reserved       = 2
+Interleave     = 0
+DosType        = supplied supported DosType
+
+Also preserve the operational values currently required by the existing DN0-DN7 MountLists where applicable, such as buffers, memory type, stack size, priority, and any other fields needed for a correct future DOS node.
+
+Before hard-coding those operational values, inspect the existing MountLists and classic DosEnvec structure and distinguish:
+
+filesystem/layout fields
+handler/device operational fields
+values that are omitted and therefore use OS defaults
+
+Do not invent values for fields that the existing MountLists intentionally omit unless the API requires an explicit value.
+
+Required tests:
+
+DD + DOS\0
+DD + DOS\1
+HD + DOS\0
+HD + DOS\1
+
+Verify every produced field, especially:
+
+de_SizeBlock
+de_Surfaces
+de_BlocksPerTrack
+de_LowCyl
+de_HighCyl
+de_Reserved
+de_Interleave
+de_DosType
+
+Ensure unsupported DosTypes cannot enter the builder silently. Either reject them directly or make the precondition explicit and test that contract.
+
+Also verify that DD and HD produce identical fields except where the geometry genuinely differs.
+
+Return:
+
+1. builder API;
+2. exact field mapping;
+3. treatment of omitted/default MountList fields;
+4. tests and results;
+5. the exact structure/output that the later MakeDosNode() integration will consume.
+
+Do not proceed to dynamic DOS-node creation in this turn.
+
+# Implementation for part 3
+
+Implemented the pure/testable DosEnvec builder. No `MakeDosNode()`, `AddDosNode()`, `FMOUNT`, MountList, or handler lifecycle changes were made.
+
+## 1. Builder API
+
+Added:
+
+`amiga/include/fujinet_disk_dos_envec.h`
+
+```c
+typedef struct fujinet_disk_dos_envec {
+    uint32_t de_SizeBlock;
+    uint32_t de_Surfaces;
+    uint32_t de_BlocksPerTrack;
+    uint32_t de_LowCyl;
+    uint32_t de_HighCyl;
+    uint32_t de_Reserved;
+    uint32_t de_PreAlloc;
+    uint32_t de_Interleave;
+    uint32_t de_NumBuffers;
+    uint32_t de_BufMemType;
+    uint32_t de_MaxTransfer;
+    uint32_t de_Mask;
+    uint32_t de_DosType;
+    int32_t handler_stack_size;
+    int32_t handler_priority;
+    int32_t handler_glob_vec;
+} fujinet_disk_dos_envec_t;
+```
+
+```c
+uint8_t fujinet_disk_build_dos_envec(
+    const fujinet_disk_media_profile_t *profile,
+    uint32_t dos_type,
+    fujinet_disk_dos_envec_t *envec);
+```
+
+The output is a host-testable representation of the DosEnvec and handler configuration fields required by the later dynamic-node path.
+
+## 2. Exact Field Mapping
+
+For both DD and HD:
+
+| Output field | Value |
+|---|---:|
+| `de_SizeBlock` | `128` longwords |
+| `de_Surfaces` | `2` |
+| `de_LowCyl` | `0` |
+| `de_HighCyl` | `79` |
+| `de_Reserved` | `2` |
+| `de_Interleave` | `0` |
+| `de_NumBuffers` | `5` |
+| `de_BufMemType` | `1` |
+| `handler_stack_size` | `32768` |
+| `handler_priority` | `5` |
+| `handler_glob_vec` | `-1` |
+
+`de_SizeBlock` is explicitly converted from bytes to longwords:
+
+```text
+profile.block_size = 512 bytes
+de_SizeBlock = 512 / 4 = 128 longwords
+```
+
+Geometry-specific values:
+
+| Profile | `de_BlocksPerTrack` |
+|---|---:|
+| DD | 11 |
+| HD | 22 |
+
+Filesystem-specific value:
+
+```text
+de_DosType = supplied DOS\0 or DOS\1
+```
+
+## 3. Omitted MountList Fields
+
+The existing MountLists explicitly provide:
+
+- `Surfaces`;
+- `BlocksPerTrack`;
+- `Reserved`;
+- `Interleave`;
+- `LowCyl`;
+- `HighCyl`;
+- `Buffers`;
+- `BufMemType`;
+- `StackSize`;
+- `Priority`;
+- `GlobVec`.
+
+They omit:
+
+- `PreAlloc`;
+- `MaxTransfer`;
+- `Mask`.
+
+The builder leaves omitted fields at zero:
+
+```text
+de_PreAlloc   = 0
+de_MaxTransfer = 0
+de_Mask       = 0
+```
+
+No values were invented for omitted MountList fields.
+
+## 4. Validation and Tests
+
+The builder rejects:
+
+- null profile;
+- null output;
+- unsupported profile kind;
+- non-512-byte profiles;
+- unsupported DosTypes, including `DOS\2` and above.
+
+Tests cover all required combinations:
+
+- DD + `DOS\0`;
+- DD + `DOS\1`;
+- HD + `DOS\0`;
+- HD + `DOS\1`.
+
+They verify:
+
+- `de_SizeBlock`;
+- surfaces;
+- blocks per track;
+- cylinder bounds;
+- reserved blocks;
+- interleave;
+- DosType;
+- operational MountList values;
+- omitted fields remain zero;
+- DD and HD differ only in genuine geometry fields when the DosType is held constant;
+- unsupported DosTypes cannot enter the builder.
+
+Validation passed:
+
+```text
+make -C repos/fujinet-nio-driver/amiga/tests test
+```
+
+Results:
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+`git diff --check` passed.
+
+## 5. Later Integration Input
+
+The future dynamic-node path will consume:
+
+```text
+fujinet_disk_media_profile_t geometry
++
+recognized boot-block DosType
++
+fujinet_disk_dos_envec_t output
+```
+
+The resulting structure is ready to be translated into the classic Amiga `DosEnvec` representation when dynamic DOS-node construction is implemented.
+
+# Part 3 Correction
+
+Before moving to dynamic DOS-node creation, verify that fujinet_disk_dos_envec_t represents the effective DosEnvec produced by the current static DNx MountLists, not merely the keywords textually present in the files.
+
+Do not start MakeDosNode() integration yet.
+
+There are two specific concerns to resolve.
+
+1. Omitted MountList fields versus effective defaults
+
+The current report says:
+
+PreAlloc = 0
+MaxTransfer = 0
+Mask = 0
+
+because those keywords are absent from the MountLists.
+
+Verify this against actual classic AmigaDOS behavior.
+
+Omitted MountList keywords may receive defaults rather than becoming zero. In particular investigate the effective values of:
+
+PreAlloc
+MaxTransfer
+Mask
+
+Do not infer these from the MountList text alone.
+
+Preferably verify the actual mounted DN0: environment at runtime using an AmigaOS API/tool such as MOUNTINFO ... DEBUG, DOS-list inspection, or an equivalent test helper that reads the active FileSysStartupMsg / DosEnvec.
+
+Report both:
+
+MountList keyword
+effective runtime DosEnvec value
+
+for all relevant fields.
+
+If the runtime effective values differ from the current builder output, correct the builder and tests.
+
+2. Complete DosEnvec shape required by MakeDosNode
+
+Review the classic DosEnvec / MakeDosNode() environment layout and identify every field the later dynamic-node packet must provide.
+
+In particular verify whether the current abstraction needs to represent:
+
+de_TableSize
+de_SecOrg
+de_SectorPerBlock
+de_BootPri
+
+and any other fields currently omitted.
+
+Do not add fields merely because they exist historically; add them if they are required to faithfully reproduce the existing DNx mount behavior or required by the MakeDosNode() environment format.
+
+Explicitly verify the expected values for our device, including:
+
+de_SizeBlock       = 128 longwords
+de_SecOrg          = 0
+de_SectorPerBlock  = 1
+Deliverable
+
+Return:
+
+a. the effective runtime DosEnvec for the current static DN0: mount;
+b. differences, if any, from the existing builder;
+c. the corrected builder representation if required;
+d. exact tests added/changed;
+e. confirmation that the resulting abstraction contains everything required for later MakeDosNode() construction.
+
+Do not proceed to dynamic-node creation yet.
