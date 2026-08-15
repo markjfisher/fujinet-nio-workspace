@@ -20,11 +20,15 @@ C:inhibitpoc 1 >NIL:
 C:fmount 16 0 RO >NIL:
 C:inhibitpoc 0 >DH0:inhibit-final.result
 C:Dir DN0: >>DH0:inhibit-final.result
+C:Echo "=== BEFORE FINAL TYPE ==="
 C:Echo "BEFORE FINAL TYPE" >DH0:before-type.result
 C:Type DN0:KNOWN.TXT >>DH0:inhibit-final.result
+C:Echo "=== AFTER FINAL TYPE RC=$RC ==="
 C:Echo "AFTER FINAL TYPE RC=$RC" >DH0:after-type.result
+C:Echo "=== BEFORE TEST FLS ==="
 C:Echo "BEFORE FLS" >DH0:before-fls.result
-C:FLS host:/amiga-e2e-complete/diskdevice-inhibit-poc >NIL:
+C:FLS host:/amiga-e2e-complete
+C:Echo "=== AFTER TEST FLS RC=$RC ==="
 C:Echo "AFTER FLS RC=$RC" >DH0:after-fls.result
 C:Type DH0:inhibit-a.result
 C:Type DH0:inhibit-true.result
@@ -32,4 +36,10 @@ C:Type DH0:inhibit-b.result
 C:Type DH0:inhibit-false.result
 C:Type DH0:inhibit-a-again.result
 C:Type DH0:inhibit-final.result
-C:Echo "E2E COMPLETE"
+C:Type DH0:before-type.result
+C:Type DH0:after-type.result
+C:Type DH0:before-fls.result
+C:Type DH0:after-fls.result
+C:Echo "=== E2E FUNCTIONAL WORK COMPLETE ==="
+C:Wait 2 SECS
+C:FLS host:/amiga-e2e-complete/diskdevice-inhibit-poc >NIL:
