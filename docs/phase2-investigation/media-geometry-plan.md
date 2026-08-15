@@ -1599,3 +1599,651 @@ d. exact tests added/changed;
 e. confirmation that the resulting abstraction contains everything required for later MakeDosNode() construction.
 
 Do not proceed to dynamic-node creation yet.
+
+# Part 4
+
+Proceed to the next Media Geometry segment: test-only dynamic DOS-node construction.
+
+The geometry classifier, boot-block DosType classifier, and complete DosEnvec builder are now signed off.
+
+Do not modify production FMOUNT lifecycle yet.
+Do not remove or repurpose the static DN0–DN7 MountLists yet.
+
+Goal
+
+Prove that classic AmigaOS can dynamically construct and activate a DNx: device node from the generated fujinet_disk_dos_envec_t, reproducing the current static MountList behavior.
+
+Start with DD only.
+
+1. Establish exact classic API mapping
+
+Implement a test helper that translates:
+
+fujinet_disk_dos_envec_t
+
+into the exact structures expected by classic:
+
+MakeDosNode()
+AddDosNode()
+
+and whatever startup structure is required for:
+
+Device = fujinet-disk.device
+Unit   = 0
+
+Use the complete verified environment values from the builder.
+
+Note explicitly that:
+
+de_TableSize = 19
+
+represents the complete environment entries 0..19; do not reinterpret it as an entry count of 20.
+
+2. DD proof only
+
+Using a new test-only DOS device name so the existing static DN0: does not interfere, dynamically construct a DD device node for unit 0.
+
+Prefer something unmistakably diagnostic such as:
+
+DY0:
+
+or another unused name.
+
+Then start/mount the filesystem handler through the normal classic AmigaDOS mechanism.
+
+The test must prove:
+
+dynamic node exists
+handler starts
+Dir succeeds
+Type KNOWN.TXT succeeds
+correct expected DD fixture contents are read
+
+Also use doslistdiag or equivalent to inspect the dynamically created node and verify its effective runtime DosEnvec matches the builder output.
+
+3. Cleanup/lifetime
+
+Establish and report:
+
+ownership/lifetime of MakeDosNode allocations
+ownership after AddDosNode
+how the test removes/retires the node
+what happens to the handler task
+whether explicit DOS-list removal is required
+
+Do not guess at ownership semantics. Verify them against the classic API behavior and/or the running test.
+
+Cleanup must leave the existing static DN devices unaffected.
+
+4. Failure behavior
+
+Exercise at least one bounded failure case, such as:
+
+invalid/unsupported DosEnvec input
+duplicate device-node name
+failed handler startup
+
+Ensure the helper does not leave a stale DOS-list entry behind.
+
+Scope boundary
+
+Do not:
+
+- integrate this into FMOUNT;
+- implement DD→HD replacement;
+- modify handler-safe Inhibit() logic;
+- remove static MountLists;
+- add RDB/HDF handling.
+
+This segment answers only:
+
+Can we faithfully replace the static DD MountList with a dynamically constructed classic DOS node?
+
+Deliverable
+
+Return:
+
+a. exact MakeDosNode/AddDosNode construction path;
+b. dynamic node name and startup sequence;
+c. runtime DosEnvec comparison against the builder;
+d. Dir/Type evidence;
+e. node/handler ownership and cleanup findings;
+f. failure-case result;
+g. focused Amiberry test result.
+
+If the DD proof succeeds, stop there. Do not proceed to HD in this turn.
+
+# Implementation 4
+
+The DD dynamic-node segment is not proven yet. I stopped before any HD work or production lifecycle changes.
+
+**Implemented**
+
+- Added test-only `dynamicdosnode` helper in `repos/nio-apps/apps/test/dynamicdosnode.c`.
+- Uses the classic packet layout:
+  - packet word 0: handler name, `L:FastFileSystem`
+  - packet word 1: Exec device, `fujinet-disk.device`
+  - packet word 2: unit `0`
+  - packet word 3: OpenDevice flags `0`
+  - words 4 through 23: the complete `fujinet_disk_dos_envec_t` environment
+- Uses `de_TableSize = 19` as the final populated index for entries `0..19`.
+- Uses diagnostic DOS name `DY0`.
+- Calls:
+  - `MakeDosNode(packet)`
+  - sets the returned node name to the BCPL string `DY0`
+  - `AddDosNode(0, ADNF_STARTPROC, node)`
+- Adds a duplicate-name attempt.
+- Adds a cleanup helper using `RemDosEntry()`.
+- Added a focused startup sequence and pytest case:
+  - `integration-tests/amiberry/startup/diskdevice-dynamic-dd.sequence`
+  - `integration-tests/amiberry/test_diskdevice_adf.py`
+  - `integration-tests/amiberry/tests.toml`
+
+The helper and native Amiga application build successfully.
+
+**Runtime Result**
+
+The focused Amiberry case reaches:
+
+```text
+dynamic-node.result
+```
+
+That confirms the helper reached the `MakeDosNode()` and `AddDosNode()` path far enough to produce its result file.
+
+However, the next operation, DOS-list inspection of the dynamic node, does not complete:
+
+```text
+last checkpoint present: dynamic-node.result
+first checkpoint missing: dynamic-doslist.result
+```
+
+The case then times out before `Dir DY0:`. Therefore:
+
+- dynamic node activation is not yet demonstrated;
+- handler startup is not yet demonstrated;
+- `Dir` and `Type` have not passed;
+- runtime DosEnvec comparison for `DY0` has not passed;
+- cleanup behavior has not been validated;
+- the duplicate-name result has not been accepted as a valid proof.
+
+The likely fault is in the constructed node/startup representation, not in the Amiberry harness or compiler. The next debugging step is to inspect the newly created `DeviceNode` directly before calling DOS-list traversal, especially the returned node’s `dn_Name`, `dn_Startup`, `dn_Handler`, and the BPTR chain to `FileSysStartupMsg`. The test currently stops rather than hiding that failure.
+
+**Validation**
+
+Passed:
+
+```text
+make -C repos/nio-apps amiga
+```
+
+The existing native driver contract tests also pass during the focused harness setup:
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+Failed:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+```
+
+Failure occurs after `dynamic-node.result` and before dynamic DOS-list inspection.
+
+No `FMOUNT` lifecycle code, static `DN0`–`DN7` MountLists, HD logic, RDB/HDF logic, or handler-safe `Inhibit()` logic was modified.
+
+# 4. Corrections, and next moves
+
+We now have the actual dynamicdosnode.c, and there is a concrete issue in the MakeDosNode() packet construction that must be corrected before any further debugging.
+
+Do not make production, FMOUNT, HD, geometry, or harness changes.
+
+Do not investigate handler startup yet.
+
+1. Correct the MakeDosNode() packet
+
+The current code contains:
+
+static const char dos_name[] = "DY0";
+static const unsigned char dos_name_bstr[] = { 3, 'D', 'Y', '0', 0 };
+static const char exec_name[] = "fujinet-disk.device";
+static const char handler_name[] = "L:FastFileSystem";
+
+
+...
+
+
+packet[0] = (ULONG)handler_name;
+packet[1] = (ULONG)exec_name;
+packet[2] = 0;
+packet[3] = 0;
+
+This is wrong for the classic MakeDosNode() packet.
+
+Packet word 0 must be the DOS device name, not the filesystem handler name.
+
+Correct the construction to use:
+
+packet[0] = "DY0"
+packet[1] = "fujinet-disk.device"
+packet[2] = unit 0
+packet[3] = OpenDevice flags 0
+packet[4..23] = complete DosEnvec
+
+Establish from the classic API whether packet word 0 is expected to point to a normal C string for MakeDosNode(), and implement it exactly as required.
+
+L:FastFileSystem must not be substituted for the DOS device name. If a filesystem handler path is needed anywhere else in this API path, identify the correct field/API for it rather than putting it into packet word 0.
+
+2. Stop rewriting dn_Name
+
+Remove this manual patch:
+
+node->dn_Name = MKBADDR(dos_name_bstr);
+
+MakeDosNode() should construct the DeviceNode name from packet word 0.
+
+After MakeDosNode() returns, inspect and report:
+
+dn_Name BPTR
+decoded dn_Name
+dn_Startup BPTR
+dn_Handler
+dn_StackSize
+dn_Priority
+dn_GlobVec
+
+The decoded name must already be:
+
+DY0
+
+before AddDosNode() is called.
+
+If it is not, stop and report the actual structure instead of patching it manually.
+
+3. Isolate DOS-list insertion from handler startup
+
+For this diagnostic run, do not use:
+
+ADNF_STARTPROC
+
+Add the correctly constructed node using:
+
+AddDosNode(source.de_BootPri, 0, node);
+
+The purpose of this run is only to prove:
+
+MakeDosNode
+    -> valid DY0 DeviceNode
+AddDosNode
+    -> valid DOS-list entry
+doslistdiag
+    -> safely enumerates and decodes DY0
+
+Do not invoke Dir DY0: or Type DY0: in this first corrected run.
+
+4. Remove unrelated duplicate/cleanup testing temporarily
+
+Do not perform the second MakeDosNode() duplicate-name attempt in this isolation run.
+
+Do not exercise removal/cleanup yet.
+
+Those tests can be restored after a single correctly constructed DY0 can be inserted and enumerated safely.
+
+This removes extra DOS-list mutation while establishing the basic structure.
+
+5. Inspect the complete generated startup structure
+
+Immediately after MakeDosNode() and after insertion, decode:
+
+DeviceNode
+  dn_Name
+  dn_Startup
+  dn_Handler
+  dn_StackSize
+  dn_Priority
+  dn_GlobVec
+
+
+dn_Startup
+  -> FileSysStartupMsg
+     fssm_Unit
+     fssm_Device
+     fssm_Environ
+     fssm_Flags
+
+
+fssm_Environ
+  -> complete DosEnvec
+
+Compare those values with the known-good static DN0 node already exposed by doslistdiag.
+
+6. Minimal startup sequence
+
+Temporarily reduce the focused case to approximately:
+
+LoadModule DEVS:fujinet-disk.device
+mount the standard ADF in the NIO device
+
+
+Echo "=== BEFORE DYNAMIC NODE ==="
+dynamicdosnode
+Echo "=== AFTER DYNAMIC NODE RC=$RC ==="
+
+
+Echo "=== BEFORE DOSLIST ==="
+doslistdiag
+Echo "=== AFTER DOSLIST RC=$RC ==="
+
+Retain both file results and visible CLI output/screenshots.
+
+Do not attempt Dir DY0: yet.
+
+Deliverable
+
+Report:
+
+a. corrected packet contents;
+b. decoded DeviceNode immediately after MakeDosNode();
+c. whether dn_Name is already DY0 without manual mutation;
+d. decoded FileSysStartupMsg;
+e. generated DosEnvec;
+f. whether doslistdiag can enumerate DY0 after AddDosNode(..., 0, ...);
+g. comparison with static DN0.
+
+If DOS-list enumeration succeeds, stop there. The following segment will test natural handler startup via Dir DY0:.
+
+## 4. fix result
+
+Corrected and verified the isolated `MakeDosNode()` packet path. No production, FMOUNT, HD, geometry, or harness changes were made. No handler startup, `Dir`, `Type`, duplicate-name, or cleanup testing was performed.
+
+**a. Corrected Packet**
+
+The packet now uses:
+
+```text
+packet[0]  = "DY0"
+packet[1]  = "fujinet-disk.device"
+packet[2]  = 0
+packet[3]  = 0
+packet[4]  = de_TableSize through packet[23] = de_BootBlocks
+```
+
+`MakeDosNode()` receives normal null-terminated C strings for the first two packet entries. `L:FastFileSystem` is no longer used or substituted into packet word 0.
+
+The environment is now serialized explicitly by classic `DosEnvec` index constants rather than copied with `memcpy()`. This was required because `fujinet_disk_dos_envec_t` uses a semantically grouped field order that differs from the classic in-memory order.
+
+The explicit mapping includes:
+
+```text
+DE_TABLESIZE      <- de_TableSize
+DE_SIZEBLOCK      <- de_SizeBlock
+DE_SECORG         <- de_SecOrg
+DE_NUMHEADS       <- de_Surfaces
+DE_SECSPERBLK     <- de_SectorPerBlock
+DE_BLKSPERTRACK   <- de_BlocksPerTrack
+DE_RESERVEDBLKS   <- de_Reserved
+DE_PREFAC         <- de_PreAlloc
+DE_INTERLEAVE     <- de_Interleave
+DE_LOWCYL         <- de_LowCyl
+DE_UPPERCYL       <- de_HighCyl
+DE_NUMBUFFERS     <- de_NumBuffers
+DE_BUFMEMTYPE     <- de_BufMemType
+DE_MAXTRANSFER    <- de_MaxTransfer
+DE_MASK           <- de_Mask
+DE_BOOTPRI        <- de_BootPri
+DE_DOSTYPE        <- de_DosType
+DE_BAUD           <- de_Baud
+DE_CONTROL        <- de_Control
+DE_BOOTBLOCKS     <- de_BootBlocks
+```
+
+`de_TableSize=19` remains the final populated index, representing complete entries `0..19`.
+
+**b. DeviceNode Immediately After MakeDosNode()**
+
+Runtime output before insertion:
+
+```text
+BEFORE_ADD DEVICE
+dn_Name      = 0x00302e64
+dn_Startup   = 0x0030365a
+dn_Handler   = 0x00000000
+dn_StackSize = 1024
+dn_Priority  = 10
+dn_GlobVec   = 0x00000000
+
+dn_Name_decoded = DY0
+dn_Handler_decoded =
+```
+
+**c. Manual Name Mutation Removed**
+
+The previous manual mutation was removed:
+
+```c
+node->dn_Name = MKBADDR(dos_name_bstr);
+```
+
+`MakeDosNode()` populated the name correctly from packet word 0. The decoded name was already:
+
+```text
+DY0
+```
+
+before `AddDosNode()`.
+
+**d. FileSysStartupMsg**
+
+Runtime output before insertion:
+
+```text
+BEFORE_ADD STARTUP
+fssm_Unit           = 0
+fssm_Device         = 0x00303672
+fssm_Environ        = 0x0030a3b8
+fssm_Flags          = 0
+
+fssm_Device_decoded = fujinet-disk.device
+```
+
+**e. Generated DosEnvec**
+
+After correcting the explicit packet ordering, the generated environment was:
+
+```text
+de_TableSize       = 19
+de_SizeBlock       = 128
+de_SecOrg          = 0
+de_Surfaces        = 2
+de_SectorPerBlock  = 1
+de_BlocksPerTrack  = 11
+de_Reserved        = 2
+de_PreAlloc        = 0
+de_Interleave      = 0
+de_LowCyl          = 0
+de_HighCyl         = 79
+de_NumBuffers      = 5
+de_BufMemType      = 1
+de_MaxTransfer     = 0x7fffffff
+de_Mask            = 0xfffffffe
+de_BootPri         = 0
+de_DosType         = 0x444f5300
+de_Baud            = 1200
+de_Control         = 0
+de_BootBlocks      = 0
+```
+
+The generated environment matched the builder values and the static `DN0:` environment.
+
+One difference is in handler fields produced by `MakeDosNode()`:
+
+```text
+dynamic MakeDosNode node:
+dn_StackSize = 1024
+dn_Priority  = 10
+dn_GlobVec   = 0
+
+static DN0:
+StackSize    = 32768
+Priority     = 5
+GlobVec      = -1
+```
+
+Those are `DeviceNode` handler defaults, not DosEnvec fields. They are not copied from the `fujinet_disk_dos_envec_t` environment by `MakeDosNode()`.
+
+**f. AddDosNode and DOS-List Enumeration**
+
+Insertion now uses:
+
+```c
+AddDosNode(source.de_BootPri, 0, node);
+```
+
+`ADNF_STARTPROC` is not used.
+
+After insertion, the node remains:
+
+```text
+AFTER_ADD DEVICE
+dn_Name_decoded = DY0
+dn_Startup      = unchanged
+```
+
+`doslistdiag` successfully enumerated the dynamically inserted `DY0` entry and decoded its runtime environment:
+
+```text
+DY0 type=0 task=00000000
+```
+
+The dynamic DOS-list environment matched the generated packet:
+
+```text
+ENV name=DY0
+table=19
+sizeBlock=128
+secOrg=0
+surfaces=2
+sectorPerBlock=1
+blocksPerTrack=11
+reserved=2
+preAlloc=0
+interleave=0
+lowCyl=0
+highCyl=79
+buffers=5
+bufMemType=1
+maxTransfer=7fffffff
+mask=fffffffe
+bootPri=0
+dosType=444f5300
+baud=1200
+control=0
+bootBlocks=0
+stack=1024
+priority=10
+globVec=00000000
+```
+
+**g. Focused Test**
+
+Passed:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+
+1 passed
+```
+
+The test now proves only:
+
+```text
+MakeDosNode()
+-> DeviceNode already named DY0
+-> complete FileSysStartupMsg exists
+-> complete DosEnvec is generated in classic memory order
+AddDosNode(..., 0, ...)
+-> DOS-list insertion succeeds
+doslistdiag
+-> safely enumerates and decodes DY0
+```
+
+The test intentionally does not attempt `Dir DY0:`, `Type DY0:`, handler startup, duplicate insertion, or cleanup. Those remain the next separate segment.
+
+## 4. fix request #2
+
+The corrected dynamic-node construction and DOS-list insertion are now proven. Before attempting Dir DY0: and starting the handler, close the remaining DeviceNode startup-field discrepancy.
+
+Do not make production, FMOUNT, HD, geometry, cleanup, or duplicate-node changes.
+
+1. Compare the complete DeviceNode startup fields
+
+Extend the existing diagnostic comparison so the known-good static DN0 and dynamic DY0 report, at minimum:
+
+dn_Name
+dn_Handler, including decoded value if non-zero
+dn_StackSize
+dn_Priority
+dn_GlobVec
+dn_Startup
+dn_Task
+
+We already know:
+
+static DN0:
+    StackSize = 32768
+    Priority  = 5
+    GlobVec   = -1
+
+
+dynamic DY0 from MakeDosNode defaults:
+    StackSize = 1024
+    Priority  = 10
+    GlobVec   = 0
+
+Establish the static DN0 value of dn_Handler as well.
+
+Do not assume it should be L:FastFileSystem.
+
+2. Reproduce the static handler settings
+
+After MakeDosNode() and before AddDosNode(), explicitly apply the already-built handler configuration:
+
+node->dn_StackSize = source.handler_stack_size;
+node->dn_Priority  = source.handler_priority;
+node->dn_GlobVec   = source.handler_glob_vec;
+
+Handle dn_Handler only according to the result of the static DN0 comparison:
+
+- if static DN0 has no explicit handler, preserve zero;
+- if it has a handler value, establish exactly where that value comes from and reproduce it correctly.
+
+Do not introduce L:FastFileSystem merely because the earlier broken helper contained that string.
+
+3. Re-run insertion/inspection only
+
+Repeat the existing isolated test:
+
+MakeDosNode
+-> apply handler startup fields
+-> AddDosNode(..., 0, ...)
+-> doslistdiag
+
+Still do not execute Dir DY0: in this run.
+
+The target is for DY0 to match static DN0 in all fields relevant to startup, except:
+
+name: DY0 vs DN0
+task: both should still be zero before first access
+4. Deliverable
+
+Report:
+
+a. static DN0 dn_Handler value and decoded meaning;
+b. corrected dynamic DeviceNode fields;
+c. exact static-vs-dynamic comparison;
+d. focused test result.
+
+If the startup structures now match, stop there. The following segment will perform the first natural handler-start test with Dir DY0:.

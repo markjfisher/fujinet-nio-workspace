@@ -1,0 +1,18 @@
+C:Assign T: RAM:
+C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-mount host:/standard.adf >DH0:dynamic-load.result
+C:Mount DN0: FROM DEVS:DN0
+C:Echo "STATIC DN0 MOUNT RC=$RC" >DH0:dynamic-static-mount.result
+C:Echo "=== BEFORE DYNAMIC NODE ==="
+C:dynamicdosnode >DH0:dynamic-node.result
+C:Echo "=== AFTER DYNAMIC NODE RC=$RC ==="
+C:Echo "=== BEFORE DOSLIST ==="
+C:doslistdiag >DH0:dynamic-doslist.result
+C:Echo "=== AFTER DOSLIST RC=$RC ==="
+C:Echo "RESULTS-BEGIN"
+C:Type DH0:dynamic-load.result
+C:Type DH0:dynamic-node.result
+C:Type DH0:dynamic-doslist.result
+C:Echo "RESULTS-END"
+C:FLS host:/amiga-e2e-complete/diskdevice-dynamic-dd >NIL:
+C:Echo "E2E COMPLETE"

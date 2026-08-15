@@ -27,6 +27,24 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-dynamic-dd"
+project = "apps"
+app = "dynamicdosnode"
+driver = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/diskdevice-dynamic-dd.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-dynamic-dd"
+results = [
+  "dynamic-load.result",
+  "dynamic-static-mount.result",
+  "dynamic-node.result",
+  "dynamic-doslist.result",
+]
+
+[[test]]
 name = "diskdevice-adf"
 project = "apps"
 app = "wifitest"
