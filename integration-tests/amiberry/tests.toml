@@ -49,8 +49,13 @@ results = [
   "dynamic-type-rc.result",
   "dynamic-die.result",
   "dynamic-post-die.result",
-  "dynamic-restart-dir.result",
-  "dynamic-restart-dir-rc.result",
+  "dynamic-hd-mount.result",
+  "dynamic-hd-update.result",
+  "dynamic-hd-prestart.result",
+  "dynamic-hd-dir.result",
+  "dynamic-hd-dir-rc.result",
+  "dynamic-hd-type.result",
+  "dynamic-hd-type-rc.result",
   "dynamic-post-restart.result",
 ]
 

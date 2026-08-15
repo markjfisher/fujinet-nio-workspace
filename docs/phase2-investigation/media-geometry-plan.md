@@ -3011,3 +3011,147 @@ The warnings are existing Pillow deprecation warnings from the Amiberry harness.
 
 No `RemDosEntry()`, `FreeDosEntry()`, `FreeDosObject()`, `FreeVec()`, duplicate-node, HD, FMOUNT, geometry, or static MountList changes were made.
 
+## ... next ask
+
+Proceed to the next Media Geometry experiment: DD → HD transition on the same persistent dynamic DY0 DeviceNode.
+
+Do not integrate this into production FMOUNT yet.
+Do not remove/recreate DY0.
+Do not call RemDosEntry() or attempt to free the MakeDosNode() allocation graph.
+
+The following lifecycle is now proven and should be preserved:
+
+DY0 active
+ACTION_DIE
+DY0 remains registered
+dn_Task becomes 0
+Dir DY0:
+fresh handler starts
+Goal
+
+Prove that an inactive persistent dynamic node can have its startup DosEnvec changed from the validated DD profile to the validated HD profile, then successfully restart against HD media.
+
+1. Prepare real HD evidence
+
+Use the existing generated standard HD ADF fixture.
+
+Ensure it contains a distinctive file/content different from the DD fixture so the test proves the handler is reading the replacement HD media, not stale DD state.
+
+Keep the currently recognized DOS\0 filesystem identity unless the fixture already uses something else.
+
+2. Establish DD baseline
+
+Start with the already-proven dynamic DD node:
+
+DY0 DosEnvec:
+    SizeBlock       = 128
+    Surfaces        = 2
+    BlocksPerTrack  = 11
+    LowCyl          = 0
+    HighCyl         = 79
+    DosType         = DOS\0
+
+
+underlying NIO media:
+    512 × 1760
+
+Prove:
+
+Dir DY0: succeeds
+Type DD-specific file succeeds
+dn_Task != 0
+3. Retire the DD handler
+
+Use the now-proven path:
+
+ACTION_DIE
+
+Assert:
+
+DY0 remains present
+dn_Task == 0
+
+Do not continue unless the handler is demonstrably inactive.
+
+4. Replace the underlying media with HD
+
+Mount the existing standard HD ADF through the same validated NIO/device path.
+
+Verify the retained media descriptor reports:
+
+sector_size  = 512
+sector_count = 3520
+5. Update the inactive node's environment
+
+Using the already-tested HD geometry classifier and DosEnvec builder, update the existing DY0 startup environment to the HD values:
+
+de_SizeBlock       = 128
+de_Surfaces        = 2
+de_BlocksPerTrack  = 22
+de_LowCyl          = 0
+de_HighCyl         = 79
+de_DosType         = recognized HD fixture DosType
+
+Do not hand-code an unrelated second set of constants if the existing classifier/builder can provide them.
+
+Before restarting the handler, inspect DY0 with doslistdiag and assert:
+
+dn_Task == 0
+BlocksPerTrack == 22
+complete DosEnvec matches the expected HD profile
+6. Restart naturally
+
+Then visibly run:
+
+Echo "=== BEFORE HD DIR ==="
+Dir DY0:
+Echo "=== AFTER HD DIR RC=$RC ==="
+
+Required:
+
+RC=0
+HD-specific file visible
+dn_Task becomes nonzero
+
+Then:
+
+Type DY0:<HD-specific-file>
+
+and assert the expected HD-specific contents.
+
+7. No reverse transition yet
+
+Stop after proving DD → HD.
+
+Do not perform HD → DD in this turn.
+
+Do not integrate with FMOUNT.
+
+Diagnostics
+
+Retain:
+
+DD pre-retirement DosEnvec/task
+ACTION_DIE result
+inactive task state
+NIO HD status/geometry
+HD DosEnvec before restart
+HD Dir/Type output
+post-restart task
+screenshot
+fujinet-nio.log
+Deliverable
+
+Report:
+
+a. DD baseline;
+b. retirement result;
+c. HD NIO geometry;
+d. exact DosEnvec changes made while inactive;
+e. pre-restart DY0 state;
+f. HD Dir result;
+g. HD Type result;
+h. post-restart task state;
+i. focused Amiberry result.
+
+If DD → HD succeeds, stop there.
