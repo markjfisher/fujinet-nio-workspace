@@ -20,8 +20,12 @@ C:inhibitpoc 1 >NIL:
 C:fmount 16 0 RO >NIL:
 C:inhibitpoc 0 >DH0:inhibit-final.result
 C:Dir DN0: >>DH0:inhibit-final.result
+C:Echo "BEFORE FINAL TYPE" >DH0:before-type.result
 C:Type DN0:KNOWN.TXT >>DH0:inhibit-final.result
+C:Echo "AFTER FINAL TYPE RC=$RC" >DH0:after-type.result
+C:Echo "BEFORE FLS" >DH0:before-fls.result
 C:FLS host:/amiga-e2e-complete/diskdevice-inhibit-poc >NIL:
+C:Echo "AFTER FLS RC=$RC" >DH0:after-fls.result
 C:Type DH0:inhibit-a.result
 C:Type DH0:inhibit-true.result
 C:Type DH0:inhibit-b.result

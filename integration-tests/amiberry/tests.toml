@@ -112,6 +112,10 @@ results = [
   "inhibit-false.result",
   "inhibit-a-again.result",
   "inhibit-final.result",
+  "before-type.result",
+  "after-type.result",
+  "before-fls.result",
+  "after-fls.result",
 ]
 
 [[test]]
