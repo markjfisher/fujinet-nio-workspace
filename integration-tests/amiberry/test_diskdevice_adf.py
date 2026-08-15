@@ -49,6 +49,16 @@ def test_dynamic_dd_dos_node(run_amiga_case):
     assert "DY0 type=0 task=00000000" not in results["dynamic-post-dir.result"]
     assert "DYNAMIC TYPE RC=0" in results["dynamic-type-rc.result"]
     assert "FUJINET ADF READ PASSED" in results["dynamic-type.result"]
+    assert "DIE pre_present=1 pre_task=00000000" not in results["dynamic-die.result"]
+    assert "DIE pre_present=1 pre_task=" in results["dynamic-die.result"]
+    assert "DIE action_result=" in results["dynamic-die.result"]
+    assert "DIE poll=0 present=1 task=00000000" in results["dynamic-die.result"]
+    assert "DY0 type=0 task=00000000" in results["dynamic-post-die.result"]
+    assert "DN0 type=0 task=" in results["dynamic-post-die.result"]
+    assert "DYNAMIC RESTART DIR RC=0" in results["dynamic-restart-dir-rc.result"]
+    assert "DY0 type=0 task=" in results["dynamic-post-restart.result"]
+    assert "DY0 type=0 task=00000000" not in results["dynamic-post-restart.result"]
+    assert "DN0 type=0 task=" in results["dynamic-post-restart.result"]
 
 
 def test_native_floppy_adf_dir_and_type(run_amiga_case):

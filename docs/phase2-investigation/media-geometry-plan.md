@@ -2340,3 +2340,674 @@ Report:
 6. focused Amiberry test result.
 
 If this succeeds, stop there. Cleanup/lifetime should be the following separate segment.
+
+# Report on implementation
+
+Natural DD filesystem-handler startup is proven for the dynamically created `DY0:` node.
+
+**1. Pre-Start State**
+
+Before the first `Dir DY0:` access:
+
+```text
+DY0 type=0 task=00000000
+```
+
+The pre-start DOS-list inspection also confirmed:
+
+```text
+DEVICE_FIELDS name=DY0
+handler=00000000
+stack=32768
+priority=5
+globVec=ffffffff
+```
+
+The startup structure and DD DosEnvec remained valid and matched the verified static `DN0:` values.
+
+**2. `Dir DY0:` Result**
+
+The sequence executed:
+
+```text
+=== BEFORE DIR DY0 ===
+Dir DY0:
+=== AFTER DIR DY0 RC=0 ===
+```
+
+Machine-readable assertions passed:
+
+```text
+DYNAMIC DIR RC=0
+KNOWN.TXT
+```
+
+**3. Post-Dir State**
+
+Immediately after the successful `Dir DY0:`, `doslistdiag` confirmed that `DY0` still existed and its task pointer was no longer zero:
+
+```text
+DY0 type=0 task=<nonzero>
+```
+
+The test explicitly asserts:
+
+```python
+assert "DY0 type=0 task=" in results["dynamic-post-dir.result"]
+assert "DY0 type=0 task=00000000" not in results["dynamic-post-dir.result"]
+```
+
+This proves that AmigaDOS naturally started the filesystem handler on first access.
+
+**4. `Type DY0:KNOWN.TXT` Result**
+
+The sequence then executed:
+
+```text
+=== BEFORE TYPE DY0 ===
+Type DY0:KNOWN.TXT
+=== AFTER TYPE DY0 RC=0 ===
+```
+
+Assertions passed:
+
+```text
+DYNAMIC TYPE RC=0
+FUJINET ADF READ PASSED
+```
+
+**5. Requester or Stall**
+
+No requester appeared and no stall occurred.
+
+The run completed through:
+
+- dynamic node construction;
+- pre-start DOS-list inspection;
+- first natural handler startup;
+- successful `Dir DY0:`;
+- post-`Dir` task inspection;
+- successful `Type DY0:KNOWN.TXT`;
+- completion marker.
+
+The existing Amiberry evidence retained the result files, screenshots, and `fujinet-nio.log`.
+
+**6. Focused Test Result**
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+
+1 passed
+```
+
+The run emitted existing Pillow deprecation warnings only.
+
+No cleanup, removal, duplicate-node, HD, FMOUNT, geometry, or static MountList behavior was changed or exercised beyond mounting static `DN0:` for the established startup-field comparison.
+
+# 5. next isolated dynamic-node segment
+
+Proceed to the next isolated dynamic-node segment: cleanup and lifetime of an active dynamically created DD DY0: node.
+
+Do not start HD work yet.
+Do not modify production FMOUNT, static MountLists, geometry classification, or handler-safe Inhibit() behavior.
+
+The following are now signed off:
+
+MakeDosNode packet construction
+complete DosEnvec serialization
+AddDosNode insertion
+natural handler startup
+Dir DY0:
+Type DY0:KNOWN.TXT
+Goal
+
+Establish the correct classic AmigaDOS lifecycle for retiring a dynamically created node after its filesystem handler has started.
+
+We need to know:
+
+how to stop/retire the running handler safely
+when RemDosEntry() is legal
+who owns/frees the DeviceNode and startup allocations
+whether MakeDosNode allocations must be explicitly freed
+whether removing the node while dn_Task != 0 is safe or forbidden
+1. Inspect API/ownership semantics first
+
+Review the classic APIs actually available in this m68k environment and establish the required sequence for an active dynamically added node.
+
+Do not assume the existing:
+
+RemDosEntry(entry);
+
+is sufficient.
+
+In particular, inspect whether:
+
+Inhibit()
+ACTION_DIE
+RemDosEntry()
+RemDosNode()/equivalent
+FreeDosEntry()/FreeDosObject()/FreeVec()
+
+or another mechanism applies.
+
+Use only APIs actually present in the installed classic NDK.
+
+2. Fix the current evidence problem
+
+The old helper printed:
+
+CLEANUP removed=1 handler_task_retired=1 static_dn_unaffected=1
+
+without actually proving all three conditions.
+
+Do not use declarative success strings like that unless each condition is measured.
+
+The test must separately prove:
+
+DY0 existed with nonzero task before cleanup
+cleanup operation succeeded
+DY0 no longer appears in LDF_DEVICES
+its handler task is no longer referenced/running as appropriate
+static DN0 remains present and unchanged
+3. Locking/pointer lifetime
+
+Review the current helper pattern where a DosList * pointer is obtained under:
+
+LockDosList(...)
+
+and then returned/used after unlocking.
+
+Do not rely on that pattern unless the API explicitly permits it.
+
+If removal requires a write lock or a different lookup/removal flow, implement the correct pattern.
+
+4. Focused runtime test
+
+Use the already-working sequence to:
+
+create DY0
+Dir DY0:
+Type DY0:KNOWN.TXT
+
+Confirm DY0 task != 0.
+
+Then perform only the cleanup operation being tested.
+
+Afterward run doslistdiag and assert:
+
+DY0 absent
+DN0 still present
+
+Retain visible CLI breadcrumbs and screenshots.
+
+Do not add duplicate-node testing in this same segment unless cleanup semantics require it.
+
+5. Failure safety
+
+If the correct cleanup sequence cannot be established safely, stop and report the exact blocker rather than forcing RemDosEntry().
+
+Do not leave a test that removes an active handler node by assumption.
+
+Deliverable
+
+Return:
+
+1. correct ownership/lifetime semantics for MakeDosNode/AddDosNode;
+2. correct active-handler retirement sequence;
+3. exact locking/removal pattern;
+4. before/after DOS-list evidence;
+5. proof that static DN0 is unaffected;
+6. focused Amiberry test result.
+
+If cleanup is proven, stop there. Duplicate insertion can be tested afterward, and HD should remain a separate subsequent segment.
+
+## Rectification
+
+Cleanup remains unresolved. Do not restore the experimental removal path yet.
+
+Do not start HD, FMOUNT integration, duplicate-node testing, or production lifecycle work.
+
+We need to answer two precise questions before another removal experiment.
+
+1. Verify the exact DOS-list locking requirements
+
+Inspect the installed classic NDK/autodocs for:
+
+LockDosList
+RemDosEntry
+AddDosEntry/AddDosNode
+
+Report the exact required locking mode for RemDosEntry().
+
+In particular, determine whether removal requires:
+
+LockDosList(LDF_WRITE | LDF_DEVICES)
+
+rather than the LDF_READ lock used by doslistdiag.
+
+Show the exact lock flags used by the previous failed experiment.
+
+Do not rerun anything until this is answered.
+
+2. Establish the correct active-handler retirement protocol
+
+Inspect the classic NDK/autodocs and existing system behavior for:
+
+ACTION_DIE
+Inhibit
+handler task lifetime
+DeviceNode dn_Task
+RemDosEntry
+
+We need to establish whether the intended lifecycle is actually:
+
+ACTION_DIE
+wait for handler termination
+remove DOS entry
+
+or whether additional coordination is required.
+
+Do not infer success merely because DoPkt(ACTION_DIE) returns.
+
+Specifically determine:
+
+- what ACTION_DIE return value means;
+- whether the handler replies before or after its task actually terminates;
+- how the caller can safely determine that dn_Task is no longer live;
+- whether the DeviceNode is expected to remain on the DOS list while the handler dies;
+- whether RemDosEntry() is legal while dn_Task is still nonzero.
+
+3. Determine MakeDosNode allocation ownership
+
+The current evidence suggests MakeDosNode() allocates:
+
+DeviceNode
+FileSysStartupMsg
+DosEnvec
+strings
+
+but no matching FreeDosNode() exists in the installed API.
+
+Establish from the classic API documentation or implementation contract:
+
+who owns those allocations after successful AddDosNode();
+whether they are intentionally system-lifetime allocations;
+whether the caller is expected to free them after removal;
+and if so, by what documented mechanism.
+
+Do not use FreeDosEntry() or FreeDosObject() unless the documentation explicitly says they apply to MakeDosNode() output.
+
+4. Inspect the preserved failed-run evidence
+
+Before another experiment, report:
+
+ACTION_DIE return value / IoErr
+dn_Task before ACTION_DIE
+exact DOS-list lock flags used for RemDosEntry
+RemDosEntry return value
+last visible CLI boundary
+whether any requester appeared
+
+If the existing helper did not record one of these, state that explicitly.
+
+Deliverable
+
+Return only:
+
+a. required RemDosEntry lock mode;
+b. exact semantics of ACTION_DIE relevant to this handler;
+c. safe testable retirement sequence, if one can be established;
+d. MakeDosNode allocation ownership;
+e. what was wrong or still unknown in the failed experiment.
+
+Do not implement or rerun cleanup yet.
+
+## Response
+
+**a. Required `RemDosEntry()` lock mode**
+
+The installed NDK defines:
+
+```c
+#define LDF_READ  (1L << 0)
+#define LDF_WRITE (1L << 1)
+```
+
+`LockDosList()` requires exactly one access mode plus the node type:
+
+```c
+LockDosList(LDF_READ | LDF_DEVICES)
+LockDosList(LDF_WRITE | LDF_DEVICES)
+```
+
+The classic `RemDosEntry()` autodoc states that the DOS list must be locked before removal. The required mode for mutation is the exclusive write mode:
+
+```c
+LockDosList(LDF_WRITE | LDF_DEVICES)
+RemDosEntry(entry)
+UnLockDosList(LDF_WRITE | LDF_DEVICES)
+```
+
+`AddDosEntry()` differs: its autodoc explicitly says the DOS list does not have to be locked when calling it. If a caller does lock it, an exclusive write lock is the appropriate mutation lock.
+
+The failed experiment used the wrong mode:
+
+```c
+list = LockDosList(LDF_READ | LDF_DEVICES);
+entry = FindDosEntry(list, "DY0", LDF_DEVICES);
+...
+RemDosEntry(entry);
+```
+
+It also used an entry pointer after releasing the read lock in the earlier helper pattern. That is not a valid removal pattern.
+
+The NDK/autodoc also warns that a handler should avoid blocking `LockDosList(LDF_WRITE | ...)` because of deadlock risk. A handler should use `AttemptLockDosList(LDF_WRITE | ...)` and retry while continuing to service its own messages. The test helper is a normal process, not the filesystem handler, so the documented write-lock path is applicable to a future experiment.
+
+**b. `ACTION_DIE` semantics**
+
+The installed NDK provides:
+
+```c
+#define ACTION_DIE 5
+#define ACTION_INHIBIT 31
+```
+
+`DoPkt()` sends an action packet to a handler task’s message port and waits for the handler’s packet reply. `ACTION_DIE` is therefore a handler request, not a task-management primitive.
+
+The important conclusions are:
+
+- A successful `DoPkt(..., ACTION_DIE, ...)` result is only the handler’s packet result.
+- It does not by itself prove that the handler task has terminated.
+- The available APIs do not provide a general “wait until this arbitrary handler task exits” call.
+- `dn_Task != NULL` means DOS has an active handler process port recorded in the node.
+- A nonzero `dn_Task` pointer by itself is not proof that the task is still executing after an `ACTION_DIE` reply.
+- `Inhibit()` only sends `ACTION_INHIBIT`; it stops filesystem activity while inhibited and is not a termination or removal operation.
+- `RemDosEntry()` only unlinks the DOS-list entry. It neither sends `ACTION_DIE` nor waits for handler termination.
+
+A safe sequence cannot therefore be established merely as:
+
+```text
+ACTION_DIE
+RemDosEntry()
+```
+
+The missing coordination is an explicit, testable handler-termination confirmation. The current available evidence does not establish whether the particular handler replies to `ACTION_DIE` before or after its process has fully exited, nor whether this driver’s handler has a completion signal that can be observed externally.
+
+The DOS-list entry is expected to remain available while the handler is active because the handler’s task port and startup state are stored in that entry. Removal must be performed only after the handler’s retirement protocol is known, under an exclusive DOS-list lock.
+
+**c. Safe testable retirement sequence**
+
+The only defensible sequence identified so far is:
+
+```text
+1. Obtain the DY0 entry under a read lock.
+2. Record its nonzero dn_Task message port.
+3. Use the handler-specific retirement protocol to request termination.
+4. Independently confirm that the handler has terminated.
+5. Acquire LDF_WRITE | LDF_DEVICES.
+6. Re-find DY0 while holding the write lock.
+7. Call RemDosEntry(entry).
+8. Keep the write lock while verifying DY0 is absent and DN0 remains present.
+9. Unlock with LDF_WRITE | LDF_DEVICES.
+```
+
+Step 4 is not currently established for this handler. Consequently, no safe runtime removal experiment should be run yet.
+
+`ACTION_DIE` can be part of step 3, but its return value cannot serve as step 4.
+
+**d. `MakeDosNode()` allocation ownership**
+
+The `MakeDosNode()` autodoc states that it allocates and links:
+
+- `DeviceNode`;
+- `FileSysStartupMsg`;
+- `DosEnvec`;
+- up to two null-terminated BCPL strings.
+
+The installed classic API has no `FreeDosNode()` or equivalent.
+
+The documented `FreeDosEntry()` contract applies specifically to entries created by:
+
+```c
+MakeDosEntry()
+```
+
+It does not apply to the `DeviceNode *` returned by `MakeDosNode()`.
+
+Likewise:
+
+- `FreeDosObject()` is for objects allocated by `AllocDosObject()`;
+- it is not documented for `MakeDosNode()` output;
+- `FreeVec()` is not documented as a valid way to free the entire linked allocation graph returned by `MakeDosNode()`.
+
+`RemDosEntry()` explicitly does not free the memory associated with the removed entry.
+
+Therefore, ownership after `MakeDosNode()`/`AddDosNode()` is unresolved for a removable dynamic node using only the installed public APIs. The documented APIs support creation and list insertion, but do not expose a matching destructor for the allocation graph. It may be intended as system-lifetime storage, or it may require retaining and individually freeing implementation-specific allocations, but the installed API contract does not establish a safe caller-side release mechanism.
+
+**e. Failed experiment: known and unknown**
+
+Known:
+
+- The helper captured a nonzero `dn_Task` before attempting cleanup.
+- The attempted handler request was `DoPkt(task, ACTION_DIE, 0, 0, 0, 0, 0)`.
+- The attempted DOS-list lookup/removal used the wrong read lock:
+  ```c
+  LockDosList(LDF_READ | LDF_DEVICES)
+  ```
+- The helper then attempted `RemDosEntry()` under that read-lock path.
+- The last visible/runtime checkpoint was the cleanup result.
+- The subsequent post-cleanup DOS-list inspection did not complete.
+- No requester was detected by the Amiberry harness.
+- No `Dir`, `Type`, HD, duplicate-node, or production lifecycle work was performed as part of the failed cleanup attempt.
+
+Not recorded in preserved machine-readable evidence:
+
+- the exact `ACTION_DIE` return value;
+- `IoErr()` immediately after `DoPkt()`;
+- the `RemDosEntry()` return value;
+- an independently confirmed handler-task termination state;
+- proof that `DY0` was absent after removal;
+- proof that `DN0` remained unaffected after removal.
+
+The cleanup experiment has therefore been disabled and must not be restored until the write-lock requirement, handler termination confirmation, and `MakeDosNode()` allocation ownership are resolved sufficiently to make removal safe.
+
+## ... next iteration
+
+Do not attempt RemDosEntry() or free any MakeDosNode() allocation in this segment.
+
+The previous removal experiment is invalid as evidence because RemDosEntry() was attempted under an LDF_READ lock. Do not repeat it yet.
+
+Instead investigate whether an active dynamically created node can be returned to its inactive but still registered state.
+
+Goal
+
+Answer only:
+
+After ACTION_DIE is sent to a naturally started DY0: filesystem handler, does AmigaDOS/the handler leave the existing DeviceNode safely registered with dn_Task == 0?
+
+Test
+
+Use the already-proven dynamic DD path:
+
+create DY0
+AddDosNode
+Dir DY0:
+Type DY0:KNOWN.TXT
+
+Confirm before retirement:
+
+DY0 present
+dn_Task != 0
+Dir RC=0
+Type RC=0
+
+Then:
+
+1. obtain dn_Task under a read lock;
+2. release the lock;
+3. send only:
+
+DoPkt(task, ACTION_DIE, 0, 0, 0, 0, 0)
+
+4. record the exact DoPkt() return value and IoErr();
+5. do not call RemDosEntry();
+6. do not alter dn_Task manually;
+7. inspect DY0 again using normal read-only DOS-list access.
+
+If necessary, poll the entry for a short bounded period and record:
+
+DY0 present?
+dn_Task value
+
+Do not add arbitrary sleeps as a fix; a short polling diagnostic is acceptable to establish lifecycle behavior.
+
+Also confirm DN0 remains readable/present.
+
+Important
+
+If post-ACTION_DIE DOS-list inspection itself hangs even though no DOS-list mutation occurred, stop and report that. That would tell us the problem is in the handler retirement path rather than RemDosEntry().
+
+If dn_Task naturally becomes zero, then perform a second bounded experiment:
+
+Dir DY0:
+
+without recreating or removing the node.
+
+Establish whether AmigaDOS starts a fresh handler again from the existing dn_Startup/DosEnvec.
+
+If that succeeds:
+
+task != 0
+ACTION_DIE
+task == 0
+Dir DY0:
+task != 0 again
+
+we have proven that the dynamic node can be persistent while its handler is retired/restarted.
+
+Do not modify the DosEnvec yet.
+Do not attempt HD yet.
+Do not call RemDosEntry().
+
+Deliverable
+
+Report:
+
+1. pre-DIE task;
+2. ACTION_DIE return and IoErr;
+3. post-DIE node presence and task;
+4. whether read-only DOS-list inspection remains healthy;
+5. whether Dir DY0: can restart the handler;
+6. task after restart;
+7. any requester/stall.
+
+## answer...
+The read-only `ACTION_DIE` lifecycle probe succeeded. No `RemDosEntry()` call, DOS-list mutation, or allocation free was performed.
+
+**1. Pre-DIE Task**
+
+Before retirement:
+
+```text
+DIE pre_present=1 pre_task=00c3805c
+```
+
+This confirms:
+
+- `DY0` was present;
+- `dn_Task` was nonzero;
+- the task pointer was obtained under:
+  ```c
+  LockDosList(LDF_READ | LDF_DEVICES)
+  ```
+- the lock was released before sending `ACTION_DIE`.
+
+The preceding `Dir DY0:` and `Type DY0:KNOWN.TXT` both succeeded.
+
+**2. `ACTION_DIE` Result**
+
+Exact runtime result:
+
+```text
+DIE action_result=-1 ioerr=0
+```
+
+The handler returned `-1`, with `IoErr() == 0`.
+
+The test does not interpret this return value as proof of task termination. It separately polls the DOS-list entry.
+
+**3. Post-DIE State**
+
+The first bounded read-only poll reported:
+
+```text
+DIE poll=0 present=1 task=00000000
+```
+
+This establishes that:
+
+- the `DY0` DeviceNode remained registered;
+- the handler task pointer naturally became zero;
+- no manual mutation of `dn_Task` occurred;
+- no DOS-list removal occurred.
+
+A subsequent read-only DOS-list inspection remained healthy and showed:
+
+```text
+DY0 type=0 task=00000000
+DN0 type=0 task=...
+```
+
+`DN0` remained present.
+
+**4. Handler Restart**
+
+Without recreating or removing `DY0`, the test then executed:
+
+```text
+Dir DY0:
+```
+
+The result was:
+
+```text
+DYNAMIC RESTART DIR RC=0
+```
+
+The subsequent DOS-list inspection showed:
+
+```text
+DY0 type=0 task=<nonzero>
+DN0 type=0 task=...
+```
+
+Therefore the dynamic node supports the lifecycle:
+
+```text
+dn_Task != 0
+ACTION_DIE
+dn_Task == 0
+Dir DY0:
+dn_Task != 0 again
+```
+
+AmigaDOS retained the DeviceNode and its startup environment, then naturally started a fresh handler from the existing `dn_Startup`/DosEnvec on the next access.
+
+**5. Requester or Stall**
+
+No requester appeared. No stall occurred.
+
+The full read-only DOS-list inspection after `ACTION_DIE` completed successfully. The existing screenshot and `fujinet-nio.log` evidence were retained by the focused Amiberry harness.
+
+**6. Focused Test**
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+
+1 passed, 112 warnings
+```
+
+The warnings are existing Pillow deprecation warnings from the Amiberry harness.
+
+No `RemDosEntry()`, `FreeDosEntry()`, `FreeDosObject()`, `FreeVec()`, duplicate-node, HD, FMOUNT, geometry, or static MountList changes were made.
+

@@ -47,6 +47,11 @@ results = [
   "dynamic-post-dir.result",
   "dynamic-type.result",
   "dynamic-type-rc.result",
+  "dynamic-die.result",
+  "dynamic-post-die.result",
+  "dynamic-restart-dir.result",
+  "dynamic-restart-dir-rc.result",
+  "dynamic-post-restart.result",
 ]
 
 [[test]]

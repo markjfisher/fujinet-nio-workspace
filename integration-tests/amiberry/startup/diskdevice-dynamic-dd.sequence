@@ -18,6 +18,13 @@ C:Echo "=== BEFORE TYPE DY0 ==="
 C:Type DY0:KNOWN.TXT >DH0:dynamic-type.result
 C:Echo "DYNAMIC TYPE RC=$RC" >DH0:dynamic-type-rc.result
 C:Echo "=== AFTER TYPE DY0 RC=$RC ==="
+C:dynamicdosnode --die >DH0:dynamic-die.result
+C:Echo "=== AFTER ACTION DIE RC=$RC ==="
+C:doslistdiag --find-only >DH0:dynamic-post-die.result
+C:Echo "=== BEFORE DY0 RESTART DIR ==="
+C:Dir DY0: >DH0:dynamic-restart-dir.result
+C:Echo "DYNAMIC RESTART DIR RC=$RC" >DH0:dynamic-restart-dir-rc.result
+C:doslistdiag --find-only >DH0:dynamic-post-restart.result
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:dynamic-load.result
 C:Type DH0:dynamic-node.result
@@ -28,6 +35,11 @@ C:Type DH0:dynamic-dir-rc.result
 C:Type DH0:dynamic-post-dir.result
 C:Type DH0:dynamic-type.result
 C:Type DH0:dynamic-type-rc.result
+C:Type DH0:dynamic-die.result
+C:Type DH0:dynamic-post-die.result
+C:Type DH0:dynamic-restart-dir.result
+C:Type DH0:dynamic-restart-dir-rc.result
+C:Type DH0:dynamic-post-restart.result
 C:Echo "RESULTS-END"
 C:FLS host:/amiga-e2e-complete/diskdevice-dynamic-dd >NIL:
 C:Echo "E2E COMPLETE"
