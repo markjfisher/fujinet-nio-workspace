@@ -3,6 +3,110 @@
 Add from the top down, so previous history is at the bottom of this document making the top of the document the latest progress, and lower down just history.
 Ensure additions are short but relevant to indicate areas attempted, and findings that worked or did not, so future agents do not attempt the same mistakes.
 
+## Handler-safe media replacement via `Inhibit()`
+
+Classic AmigaOS does not provide the OS4-style `DismountDevice()` /
+`MountDevice()` API. Investigation against the installed classic NDK showed
+that `Inhibit()` is the appropriate mechanism for coordinating media
+replacement with an already-running DOS filesystem handler.
+
+A standalone proof-of-concept established that an existing `DN0:` handler can
+remain resident across media replacement:
+
+1. Mount volume A on `DN0:`
+2. `Inhibit("DN0:", DOSTRUE)`
+3. Replace the underlying FujiNet media
+4. `Inhibit("DN0:", DOSFALSE)`
+5. Read volume B through the same DOS handler
+
+The handler rescanned the newly inserted media successfully without
+`Assign ... DISMOUNT`, recreating the handler, requester dialogs, or DOS-list
+surgery.
+
+Production `FMOUNT` was updated to:
+
+- detect an active DOS handler using
+  `LockDosList(LDF_READ | LDF_DEVICES)`;
+- require the matching device entry to have a non-NULL `dol_Task`;
+- inhibit the DOS handler before opening `fujinet-disk.device`;
+- perform the catalogue media replacement;
+- close the device/request resources;
+- uninhibit the existing handler;
+- report inhibit/uninhibit failure distinctly.
+
+An earlier detection attempt used `LockDosList(LDF_ALL)` without `LDF_READ` or
+`LDF_WRITE`. That returned no usable list and caused production `FMOUNT` to
+incorrectly conclude that no handler was active. Correcting the lock flags
+fixed this.
+
+Repeated A->B->A replacement was then validated with the same handler task
+remaining active throughout. For both directions:
+
+- `Inhibit(TRUE)` returned success;
+- the volume node disappeared while inhibited;
+- catalogue replacement returned success;
+- `Inhibit(FALSE)` returned success;
+- exactly one volume node reappeared afterward;
+- the same handler task remained active;
+- the disk change counter advanced;
+- `Dir` and `Type` saw the newly inserted media;
+- no requester appeared.
+
+This validates handler-safe replacement for the current DD ADF fixture. The
+replacement mechanism must not depend on old/new media geometry; support for
+different geometries belongs to the separate Media Geometry work.
+
+## `diskdevice-inhibit-poc` completion flake
+
+During final full-suite validation, `diskdevice-inhibit-poc` showed an
+intermittent completion failure even though all functional media-replacement
+checkpoints had succeeded.
+
+Initial evidence showed the final FujiNet traffic ending with:
+
+- normal disk reads;
+- `DiskCommand::Flush` (`0x0E`);
+- the expected FLS host-filesystem request.
+
+A 20-run isolated campaign reproduced the apparent failure 5/20 times. Further
+instrumentation proved:
+
+- the final `Type` returned with RC=0;
+- the shell reached the command immediately before FLS;
+- FLS issued its FujiNet request;
+- FujiNet returned a successful response;
+- failing runs lacked the guest-side command following FLS.
+
+The disk flush was not causal: all 20 runs, passing and failing, had the same
+final FujiNet command ordering, including the same flush followed by the FLS
+request.
+
+The test was then corrected so the FLS operation being exercised was no longer
+also used as the harness completion sentinel. The sequence now:
+
+1. runs an ordinary FLS command under test;
+2. records and asserts an `after-fls` checkpoint;
+3. displays the functional results;
+4. waits 2 seconds for visual evidence capture;
+5. issues a separate FLS request solely as the `nio_marker` completion signal.
+
+No production, driver, or shared transport/client code changed.
+
+With the corrected sequencing and explicit assertions for:
+
+- `before-type.result`;
+- `after-type.result`;
+- `before-fls.result`;
+- `after-fls.result`;
+
+the isolated test passed 20/20 runs.
+
+Conclusion: the prior intermittent failure is attributed to completion/test
+sequencing rather than a demonstrated production FLS, disk flush, or
+handler-replacement defect. The original failing evidence is retained for
+history, but the shared transport/FLS return path should not be reopened unless
+the failure reproduces with the corrected test structure.
+
 ## Root Cause 2026-08-14
 
 - Root cause: deferred IORequests stored in the resident device's private FIFO were not transitioned to `NT_MESSAGE`. Because private FIFO insertion bypasses Exec `PutMsg()`, queued requests could retain `NT_UNKNOWN` or stale node state, violating Exec message lifecycle semantics when the device later completed them with `ReplyMsg()`. Under real OFS writable workloads this caused intermittent completion/requester failures.
