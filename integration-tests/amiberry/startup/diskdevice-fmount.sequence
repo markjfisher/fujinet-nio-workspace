@@ -12,14 +12,22 @@ C:fujinet-mount --status 0 >DH0:fmount-status.result
 C:Dir DN0: >DH0:fmount-dir.result
 C:Echo "DIR RC=$RC" >>DH0:fmount-dir.result
 C:Type DN0:KNOWN.TXT >DH0:fmount-type.result
-C:FMOUNT 12 DN0: RO >DH0:fmount-replace-mount.result
-C:fujinet-mount --status 0 >DH0:fmount-replace-present.result
-C:Wait 1 SECS
+C:fujinet-mount --status 0 >DH0:fmount-cycle-ab-before-status.result
+C:fmount_cycle_trace DH0:fmount-cycle-ab.trace 12 >DH0:fmount-replace-mount.result
+C:fujinet-mount --status 0 >DH0:fmount-cycle-ab-after-status.result
+C:Copy DH0:fmount-cycle-ab-after-status.result TO DH0:fmount-replace-present.result
+C:Dir DN0: >DH0:fmount-cycle-ab-dir.result
+C:Echo "DIR RC=$RC" >>DH0:fmount-cycle-ab-dir.result
 C:Type DN0:SECOND.TXT >DH0:fmount-replace-type.result
-C:FMOUNT 11 DN0: RO >DH0:fmount-replace-back-mount.result
-C:fujinet-mount --status 0 >DH0:fmount-replace-back-present.result
-C:Wait 1 SECS
+C:Echo "TYPE RC=$RC" >>DH0:fmount-replace-type.result
+C:fujinet-mount --status 0 >DH0:fmount-cycle-ba-before-status.result
+C:fmount_cycle_trace DH0:fmount-cycle-ba.trace 11 >DH0:fmount-replace-back-mount.result
+C:fujinet-mount --status 0 >DH0:fmount-cycle-ba-after-status.result
+C:Copy DH0:fmount-cycle-ba-after-status.result TO DH0:fmount-replace-back-present.result
+C:Dir DN0: >DH0:fmount-cycle-ba-dir.result
+C:Echo "DIR RC=$RC" >>DH0:fmount-cycle-ba-dir.result
 C:Type DN0:KNOWN.TXT >DH0:fmount-replace-back-type.result
+C:Echo "TYPE RC=$RC" >>DH0:fmount-replace-back-type.result
 C:FMOUNT 99 DN0: RO >DH0:fmount-failed-replace.result
 C:Wait 1 SECS
 C:Type DN0:KNOWN.TXT >DH0:fmount-failed-replace-type.result

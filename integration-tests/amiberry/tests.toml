@@ -150,7 +150,7 @@ results = [
 [[test]]
 name = "diskdevice-fmount"
 project = "apps"
-app = "wifitest"
+app = "fmount_cycle_trace"
 driver = true
 timeout = 75
 activity_timeout = 60
@@ -165,11 +165,19 @@ results = [
   "fmount-mount.result",
   "fmount-status.result",
   "fmount-dir.result",
-  "fmount-type.result",
-  "fmount-replace-mount.result",
-  "fmount-replace-present.result",
-  "fmount-replace-type.result",
-  "fmount-replace-back-mount.result",
+    "fmount-type.result",
+    "fmount-cycle-ab-before-status.result",
+    "fmount-replace-mount.result",
+    "fmount-cycle-ab.trace",
+    "fmount-cycle-ab-after-status.result",
+    "fmount-cycle-ab-dir.result",
+    "fmount-replace-present.result",
+    "fmount-replace-type.result",
+    "fmount-cycle-ba-before-status.result",
+    "fmount-replace-back-mount.result",
+    "fmount-cycle-ba.trace",
+    "fmount-cycle-ba-after-status.result",
+    "fmount-cycle-ba-dir.result",
   "fmount-replace-back-present.result",
   "fmount-replace-back-type.result",
   "fmount-failed-replace.result",
