@@ -21,19 +21,19 @@ def test_fmount_fumount_standard_adf(run_amiga_case):
     assert "DIR RC=0" in results["fmount-dir.result"]
     assert "FUJINET ADF READ PASSED" in results["fmount-type.result"]
     replace_before = _status(results["fmount-status.result"])
-    replace_present = _status(results["fmount-replace-present.result"])
+    replace_present = _status(results["fmount-ab-present.result"])
     assert replace_before[0] == replace_present[0] == 0
     assert replace_present[2:] == (0, 1)
     assert replace_before[1] < replace_present[1]
-    assert "Mounted slot 12 on DN0:" in results["fmount-replace-mount.result"]
-    assert "FUJINET SECOND DRIVE PASSED" in results["fmount-replace-type.result"]
-    back_present = _status(results["fmount-replace-back-present.result"])
+    assert "Mounted slot 12 on DN0:" in results["fmount-ab-mount.result"]
+    assert "FUJINET SECOND DRIVE PASSED" in results["fmount-ab-type.result"]
+    back_present = _status(results["fmount-ba-present.result"])
     assert back_present[0] == 0
     assert back_present[2:] == (0, 1)
-    assert "Mounted slot 11 on DN0:" in results["fmount-replace-back-mount.result"]
-    assert "FUJINET ADF READ PASSED" in results["fmount-replace-back-type.result"]
-    assert "Mount failed" in results["fmount-failed-replace.result"]
-    assert "FUJINET ADF READ PASSED" in results["fmount-failed-replace-type.result"]
+    assert "Mounted slot 11 on DN0:" in results["fmount-ba-mount.result"]
+    assert "FUJINET ADF READ PASSED" in results["fmount-ba-type.result"]
+    assert "FMOUNT FAILED RC=10" in results["fmount-failed-replace.result"]
+    assert "FUJINET ADF READ PASSED" in results["fmount-fail-type.result"]
     assert "FMOUNT RW RC=0" in results["fmount-rw-mount.result"]
     assert "Mounted slot 13 on DN2:" in results["fmount-rw-mount.result"]
     assert "DOS MOUNT 2 RC=0" in results["fmount-rw-dos-mount.result"]

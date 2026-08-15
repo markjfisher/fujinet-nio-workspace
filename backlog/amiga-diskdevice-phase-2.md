@@ -49,12 +49,13 @@ progression are specified in the associated
       resident driver's media state, change counter, protection state, flush,
       or replacement behavior. Existing `diskdevice-adf` proves the resident
       baseline; extend the standard-tool (`FMOUNT`/`FUMOUNT`) path specifically.
-- [ ] Coordinate replacement with the existing AmigaDOS filesystem handler so
+- [x] Coordinate replacement with the existing AmigaDOS filesystem handler so
       `FMOUNT` can retire the old volume and rescan the inserted one without a
       `You MUST replace volume`, `Not a DOS disk`, or invalid-block requester.
-      Stage 8 proves the safe explicit baseline by dismounting and recreating
-      the DNx handler; its attempted nested single-command orchestration was
-      rejected by emulator evidence.
+      The validated mechanism detects the active DOS handler, calls
+      `Inhibit(TRUE)`, performs the catalogue/device replacement, then calls
+      `Inhibit(FALSE)`; the existing `DNx` handler rescans the new media, so no
+      `Assign`/`Mount` recreation is required.
 
 ## Media geometry
 
@@ -105,6 +106,12 @@ geometry, and AmigaDOS mounting remain consistent without a competing mount
 utility or a hidden 1760-sector fallback.
 
 ## Validated Baseline
+
+- [x] Handler-safe live replacement is validated by the focused
+      `diskdevice-fmount` case and the complete Amiberry suite. Both A->B and
+      B->A replacements pass with the existing `DNx` handler, preserve the
+      handler task, update the change counter, and complete `Dir`/`Type`
+      access without a requester.
 
 - [x] The current production driver passes the unchanged foreground
       `diskdevice-adf` workflow at the default harness timeout in five of five

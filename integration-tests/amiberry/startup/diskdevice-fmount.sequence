@@ -12,25 +12,18 @@ C:fujinet-mount --status 0 >DH0:fmount-status.result
 C:Dir DN0: >DH0:fmount-dir.result
 C:Echo "DIR RC=$RC" >>DH0:fmount-dir.result
 C:Type DN0:KNOWN.TXT >DH0:fmount-type.result
-C:fujinet-mount --status 0 >DH0:fmount-cycle-ab-before-status.result
-C:fmount_cycle_trace DH0:fmount-cycle-ab.trace 12 >DH0:fmount-replace-mount.result
-C:fujinet-mount --status 0 >DH0:fmount-cycle-ab-after-status.result
-C:Copy DH0:fmount-cycle-ab-after-status.result TO DH0:fmount-replace-present.result
-C:Dir DN0: >DH0:fmount-cycle-ab-dir.result
-C:Echo "DIR RC=$RC" >>DH0:fmount-cycle-ab-dir.result
-C:Type DN0:SECOND.TXT >DH0:fmount-replace-type.result
-C:Echo "TYPE RC=$RC" >>DH0:fmount-replace-type.result
-C:fujinet-mount --status 0 >DH0:fmount-cycle-ba-before-status.result
-C:fmount_cycle_trace DH0:fmount-cycle-ba.trace 11 >DH0:fmount-replace-back-mount.result
-C:fujinet-mount --status 0 >DH0:fmount-cycle-ba-after-status.result
-C:Copy DH0:fmount-cycle-ba-after-status.result TO DH0:fmount-replace-back-present.result
-C:Dir DN0: >DH0:fmount-cycle-ba-dir.result
-C:Echo "DIR RC=$RC" >>DH0:fmount-cycle-ba-dir.result
-C:Type DN0:KNOWN.TXT >DH0:fmount-replace-back-type.result
-C:Echo "TYPE RC=$RC" >>DH0:fmount-replace-back-type.result
-C:FMOUNT 99 DN0: RO >DH0:fmount-failed-replace.result
+C:FMOUNT 12 DN0: RO >DH0:fmount-ab-mount.result
+C:fujinet-mount --status 0 >DH0:fmount-ab-present.result
 C:Wait 1 SECS
-C:Type DN0:KNOWN.TXT >DH0:fmount-failed-replace-type.result
+C:Type DN0:SECOND.TXT >DH0:fmount-ab-type.result
+C:FMOUNT 11 DN0: RO >DH0:fmount-ba-mount.result
+C:fujinet-mount --status 0 >DH0:fmount-ba-present.result
+C:Wait 1 SECS
+C:Type DN0:KNOWN.TXT >DH0:fmount-ba-type.result
+C:FMOUNT 99 DN0: RO >DH0:fmount-failed-replace.result
+C:Echo "FMOUNT FAILED RC=$RC" >>DH0:fmount-failed-replace.result
+C:Wait 1 SECS
+C:Type DN0:KNOWN.TXT >DH0:fmount-fail-type.result
 C:fmount 13 2 RW >DH0:fmount-rw-mount.result
 C:Echo "FMOUNT RW RC=$RC" >>DH0:fmount-rw-mount.result
 C:If NOT ERROR
@@ -60,14 +53,14 @@ C:Type DH0:fmount-mount.result
 C:Type DH0:fmount-status.result
 C:Type DH0:fmount-dir.result
 C:Type DH0:fmount-type.result
-C:Type DH0:fmount-replace-mount.result
-C:Type DH0:fmount-replace-present.result
-C:Type DH0:fmount-replace-type.result
-C:Type DH0:fmount-replace-back-mount.result
-C:Type DH0:fmount-replace-back-present.result
-C:Type DH0:fmount-replace-back-type.result
+C:Type DH0:fmount-ab-mount.result
+C:Type DH0:fmount-ab-present.result
+C:Type DH0:fmount-ab-type.result
+C:Type DH0:fmount-ba-mount.result
+C:Type DH0:fmount-ba-present.result
+C:Type DH0:fmount-ba-type.result
 C:Type DH0:fmount-failed-replace.result
-C:Type DH0:fmount-failed-replace-type.result
+C:Type DH0:fmount-fail-type.result
 C:Type DH0:fmount-rw-mount.result
 C:Type DH0:fmount-rw-dos-mount.result
 C:Type DH0:fmount-rw-copy.result
