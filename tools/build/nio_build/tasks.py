@@ -118,6 +118,11 @@ class Build:
     def lib_amiga(self) -> None:
         self.run_make("lib-amiga", "FUJINET_NIO_LIB", "amiga")
 
+    def amiga_driver_sdk(self) -> None:
+        driver_amiga = self.p("FUJINET_NIO_DRIVER") / "amiga"
+        self.runner.require_dir(driver_amiga)
+        self.runner.run("amiga-driver-sdk", ["make", "sdk"], cwd=driver_amiga)
+
     def lib_tests(self) -> None:
         self.run_make("lib-tests", "FUJINET_NIO_LIB", "test")
 
@@ -182,6 +187,7 @@ class Build:
 
     def apps_amiga(self) -> None:
         self.lib_amiga()
+        self.amiga_driver_sdk()
         self.run_make("apps-amiga", "NIO_APPS", "TARGET=amiga", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
 
     def amiga_test_app(self) -> tuple[str, Path]:
@@ -415,6 +421,7 @@ class Build:
 
     def core_apps_amiga(self) -> None:
         self.lib_amiga()
+        self.amiga_driver_sdk()
         self.run_make("core-apps-amiga", "NIO_CORE_APPS", "TARGET=amiga", f"FUJINET_NIO_LIB={self.p('FUJINET_NIO_LIB')}")
 
     def core_apps_all(self) -> None:
@@ -782,6 +789,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("lib-atari", "Build fujinet-nio-lib Atari library", Build.lib_atari),
         t("lib-bbc", "Build fujinet-nio-lib BBC library", Build.lib_bbc),
         t("lib-amiga", "Build fujinet-nio-lib Amiga library", Build.lib_amiga),
+        t("amiga-driver-sdk", "Build the public Amiga DiskDevice SDK archive", Build.amiga_driver_sdk),
         t("lib-tests", "Run fujinet-nio-lib host-side wire tests", Build.lib_tests),
         t("cc65", "Incrementally build cc65 tools and BBC libraries", Build.cc65),
         t("cc65-bbc", "Incrementally build cc65 BBC and bbc-clib libraries", Build.cc65_bbc),
