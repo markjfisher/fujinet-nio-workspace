@@ -6037,3 +6037,45 @@ Do not modify FMOUNT or Amiberry tests in this turn.
 
 Report the test name and result only after it passes.
 
+## Its response
+
+Added and passed the focused native isolation contract test:
+
+```text
+test_inspect_catalog_preserves_mounted_unit
+```
+
+It verifies `FUJINET_DISK_CMD_INSPECT_CATALOG`’s shared resident command path:
+
+- Resolves catalogue slot `14` to `host:/images/candidate.adf`.
+- Calls fake `client->inspect()` exactly once.
+- Never calls fake `client->mount()`.
+- Returns:
+  - raw image type;
+  - sector size `512`;
+  - sector count `3520`;
+  - boot bytes `DOS\0`.
+- Preserves the live mounted DD unit:
+  - mounted state;
+  - writable/protection state;
+  - media flags, including changed;
+  - image type;
+  - sector size;
+  - sector count;
+  - change counter.
+
+Validation passed:
+
+```text
+./build/test_fujinet_disk_driver
+All Amiga driver contract tests passed
+```
+
+```text
+make amiga
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+The testable shared helper `fujinet_disk_inspect_catalog()` is now used by the resident `FUJINET_DISK_CMD_INSPECT_CATALOG` command, preserving production behavior while allowing the native test to lock down its no-mount/no-state-mutation contract.
