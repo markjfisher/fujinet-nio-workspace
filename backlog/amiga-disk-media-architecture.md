@@ -22,10 +22,12 @@ end-to-end tests from the selected production design and from future work.
 - DD -> HD -> DD transitions on one persistent dynamic node.
 - Same-geometry A -> B -> A replacement using `Inhibit()` without handler
   recreation or requester.
-- Generic non-mutating NIO Disk Inspect, including DD/HD classification and
-  filesystem identity, is implemented and tested.
-- Amiga `INSPECT_CATALOG` consumes that operation without changing live unit
-  state, including status, change state, geometry, and handler state.
+- Generic non-mutating NIO Disk Inspect is implemented and tested,
+  returning image type, authoritative sector size/count, and bounded
+  boot-sector bytes without changing runtime slot state.
+- Amiga INSPECT_CATALOG consumes those raw facts and applies the
+  Amiga-side DD/HD and filesystem classifiers without changing live
+  unit or handler state.
 - Production `FMOUNT` inspects and classifies the candidate before selecting
   the existing-node or absent-node lifecycle.
 - Production `FMOUNT` dynamically creates an absent `DNx:` after a successful
@@ -183,9 +185,14 @@ MakeDosNode packet:
     [4..23] DosEnvec in classic DE_* index order
 ```
 
-The semantic `fujinet_disk_dos_envec_t` field order is not the classic memory
-order. It must be explicitly serialized by `DE_*` index; direct `memcpy()` is
-incorrect.
+The public fujinet_disk_dos_envec_t now follows the classic DosEnvec
+field ordering. Construction still uses the explicit
+fujinet_disk_serialize_dos_envec() helper rather than relying on
+struct memcpy, so the MakeDosNode packet ABI remains explicit and
+independent of compiler representation. It must be explicitly serialized by `DE_*` index; direct `memcpy()` is incorrect.
+An earlier private representation used a different semantic field
+order; that duplicate definition was removed after it caused an ABI
+mismatch between SDK callers and the serializer implementation.
 
 `MakeDosNode()` supplies different handler defaults. The verified startup
 fields are therefore applied explicitly before insertion:

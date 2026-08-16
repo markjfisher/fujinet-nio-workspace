@@ -97,15 +97,17 @@ persistent dynamic DeviceNode
 
 ## Verification
 
-- [ ] Add host tests for inferred geometry, hints, malformed sizes, and
-      independent geometry on all eight units.
+- [ ] Add host/native tests covering raw-image geometry inference, hint
+      interactions, malformed sizes, and independent retained geometry on all
+      eight driver units.
 - [ ] Add native tests for dynamic `TD_GETGEOMETRY` and standard-tool device
       calls.
-- [x] Add Amiberry tests mounting at least DD and HD images through catalogue
+- [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
-      `FUMOUNT`, and remounting persisted assignments. (Direct HD and
-      read-only `FMOUNT`/`FUMOUNT` coverage exists; writable replacement and
-      persisted standard-tool remount coverage remain.)
+      `FUMOUNT`, and remounting persisted assignments. Existing focused tests
+      prove the individual DD/HD mount, replacement, absent-node, writable, and
+      persistence behaviors, but the complete DD/HD standard-tool
+      mount/eject/persisted-remount matrix is not yet covered.
 - [ ] Preserve Stage 8 writable durability, replacement, concurrent access,
       and change-notification regressions for every supported geometry.
 - [ ] Document the exact supported media families and distinguish current
@@ -141,25 +143,31 @@ utility or a hidden 1760-sector fallback.
 The following items remain unchecked because the current evidence does not
 cover the complete wording of each acceptance criterion.
 
-### Host geometry and all-unit coverage
+### Geometry inference and all-unit coverage
 
-- Existing evidence: the production classifier and focused Amiberry cases
-  prove the 512-byte DD/HD profiles, malformed URI rejection, and per-unit
-  geometry in the exercised units.
-- Missing coverage: host-level tests for every inferred-geometry boundary and
-  hint interaction, malformed image sizes, and independent geometry on all
-  eight units.
-- Smallest closure: add a table-driven host classifier test for valid DD, valid
-  HD, unsupported sizes, conflicting hints, and eight unit descriptors.
+- Existing evidence: NIO inspection and Amiga classification tests prove the
+  standard 512-byte DD/HD profiles, and focused Amiberry cases prove retained
+  per-unit geometry for the units exercised by those workflows.
+- Missing coverage: direct tests of raw-image geometry inference and hint
+  interaction, malformed or unsupported raw sizes, and explicit proof that
+  units 0 through 7 retain independent committed geometry.
+- Smallest closure:
+  - extend the NIO/DiskService host tests with table-driven raw-image cases for
+    DD, HD, unsupported/malformed sizes, and conflicting hints;
+  - extend the driver native fixture with eight units carrying deliberately
+    different committed geometry/state and assert that querying or changing
+    one unit does not alter the others.
 
 ### Native geometry and standard-tool calls
 
 - Existing evidence: native driver contract, FIFO, and Exec-boundary tests
-  pass; Amiberry covers FMOUNT and the dynamic-node geometry path.
-- Missing coverage: native assertions for production `TD_GETGEOMETRY` on DD
-  and HD plus a native standard-tool request boundary case.
-- Smallest closure: extend the native driver fixture with DD/HD geometry and
-  one standard-tool request assertion.
+  pass; Amiberry covers `FMOUNT` and the dynamic-node geometry path.
+- Missing coverage: direct native assertions that `TD_GETGEOMETRY` reflects
+  each unit's committed DD/HD geometry, plus a standard-tool request crossing
+  the public Amiga DiskDevice ABI boundary.
+- Smallest closure: extend the native driver fixture with DD and HD units,
+  assert their `TD_GETGEOMETRY` responses independently, and add one request
+  exercised through the same public device ABI used by the standard tools.
 
 ### Standard-tool DD/HD eject and persistence matrix
 
