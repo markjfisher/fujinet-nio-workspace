@@ -255,6 +255,48 @@ completion_log = "host:/amiga-e2e-complete/diskdevice-dynamic-fmount-dd"
 results = ["dynamic-fmount-pre.result", "dynamic-fmount-mount.result", "dynamic-fmount-post-add.result", "dynamic-fmount-dir.result", "dynamic-fmount-post-dir.result", "dynamic-fmount-type.result"]
 
 [[test]]
+name = "diskdevice-fmount-restore"
+project = "core-apps"
+app = "fmountrestore"
+driver = true
+timeout = 150
+activity_timeout = 90
+no_activity_timeout = 45
+startup = "startup/diskdevice-fmount-restore.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-fmount-restore"
+results = [
+  "restore-dd-mount.result",
+  "restore-dd-before-dir.result",
+  "restore-dd-before-type.result",
+  "restore-hd-mount.result",
+  "restore-hd-before-dir.result",
+  "restore-hd-before-type.result",
+  "restore-startup.result",
+  "restore-dd-after-dir.result",
+  "restore-dd-after-type.result",
+  "restore-hd-after-dir.result",
+  "restore-hd-after-type.result",
+  "restore-dd-fumount.result",
+  "restore-dd-absent.result",
+  "restore-hd-fumount.result",
+  "restore-hd-absent.result",
+]
+
+[[test]]
+name = "diskdevice-fmount-restore-invalid"
+project = "core-apps"
+app = "fmountrestore"
+driver = true
+restore_invalid_mapping = true
+timeout = 45
+activity_timeout = 35
+startup = "startup/diskdevice-fmount-restore-invalid.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-fmount-restore-invalid"
+results = ["restore-invalid.result", "restore-invalid-dos.result"]
+
+[[test]]
 name = "diskdevice-dynamic-fmount-hd"
 project = "apps"
 app = "wifitest"

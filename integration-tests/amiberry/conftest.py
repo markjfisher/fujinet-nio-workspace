@@ -604,6 +604,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
             (catalog_dir / "slot-014.bin").write_bytes(b"\x01\x01host:/hd.adf")
+            if case.get("restore_invalid_mapping"):
+                (catalog_dir / "mappings.bin").write_bytes(
+                    b"\x01\x03\x63" + b"\x00" * 14
+                )
             if case.get("inhibit_poc"):
                 (catalog_dir / "slot-015.bin").write_bytes(b"\x01\x01host:/inhibit-a.adf")
                 (catalog_dir / "slot-016.bin").write_bytes(b"\x01\x01host:/inhibit-b.adf")

@@ -1,0 +1,7 @@
+C:Assign T: RAM:
+C:LoadModule DEVS:fujinet-disk.device
+C:FailAt 11
+C:FMOUNTRESTORE >DH0:restore-invalid.result
+C:Echo "RESTORE INVALID RC=$RC" >>DH0:restore-invalid.result
+C:doslistdiag >DH0:restore-invalid-dos.result
+C:FLS host:/amiga-e2e-complete/diskdevice-fmount-restore-invalid >NIL:

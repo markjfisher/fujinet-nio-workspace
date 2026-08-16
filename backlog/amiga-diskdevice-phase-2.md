@@ -168,15 +168,20 @@ cover the complete wording of each acceptance criterion.
 
 ### Standard-tool DD/HD eject and persistence matrix
 
-- Existing evidence: the full current Amiberry suite is green; it covers
-  inspect-first FMOUNT, existing-node DD -> HD -> DD, same-geometry DD A -> B
-  -> A with `Inhibit()`, absent-node DD and HD creation without static
-  MountLists, filesystem startup, writable replacement, and mapping
-  persistence across the focused cases.
-- Missing coverage: one complete standard-tool case whose assertions jointly
-  prove DD and HD `FMOUNT`, `FUMOUNT`, and persisted remount behavior.
-- Smallest closure: add one sequence and assertions for DD mount/FUMOUNT/
-  reload followed by HD mount/FUMOUNT/reload.
+- Existing evidence: `FMOUNTRESTORE` now consumes the real 17-byte
+  `config-nio/mappings` record and invokes standard `FMOUNT` for each valid
+  DD/HD mapping. The focused `diskdevice-fmount-restore` Amiberry case proves
+  DD and HD FMOUNT/access, persisted-record restoration through the command,
+  restored filesystem access, and FUMOUNT removal. The companion stale-slot
+  case proves invalid persisted entries fail before FMOUNT can create a node.
+- Missing coverage: a fresh AmigaOS startup boundary between FMOUNT persistence
+  and FMOUNTRESTORE. The current headless test disk presents an interactive
+  requester for both `Reboot` and `Reboot FORCE`, preventing the second
+  Startup-Sequence phase from executing.
+- Smallest closure: extend the Amiberry harness with a two-boot/run boundary
+  that preserves the host AppStore directory and starts a fresh AmigaOS process
+  using the same test HDF, then run `FMOUNTRESTORE` without an intervening
+  FMOUNT.
 
 ### Stage 8 durability across every supported geometry
 
