@@ -6495,3 +6495,647 @@ Rollback remains incomplete after a successful geometry-changing `MOUNT_CATALOG`
 production does not yet restore the former media/environment transactionally.
 
 Static MountLists remain installed as the DD bootstrap/compatibility path. HDF, RDB, nonstandard geometry, node removal, and dynamic-node creation were not started.
+
+## Sort out the boundary problems
+
+Before further FMOUNT functionality, clean up the cross-repository Amiga DiskDevice dependency boundary.
+
+Current nio-core-apps/apps/platform/amiga/fmount.c must not include source or private implementation files from fujinet-nio-driver, particularly:
+
+../../../fujinet-nio-driver/.../fujinet_disk_driver.h
+../../../fujinet-nio-driver/.../fujinet_disk_media_profile.c
+../../../fujinet-nio-driver/.../fujinet_disk_filesystem.c
+
+Design and implement a small public Amiga DiskDevice support/client static library built by fujinet-nio-driver.
+
+Do not turn the resident driver itself into a link library.
+
+The intended boundary is:
+
+fujinet-nio-driver
+    fujinet-disk.device
+    +
+    public headers
+    +
+    libfujinet-amiga-disk.a
+
+
+nio-core-apps
+    FMOUNT
+        -> public headers
+        -> link libfujinet-amiga-disk.a
+
+Classify current code into:
+
+public ABI
+
+- resident command numbers;
+- public request/response structures;
+
+shared support library
+
+- media-profile classifier;
+- filesystem classifier;
+- DosEnvec builder/serialization where applicable;
+
+driver-private
+
+- unit state;
+- resident base;
+- FIFO/request processing;
+- private client/vtable implementation.
+
+nio-core-apps must not include driver-private headers.
+
+Build the support code once into a static archive and expose public headers through a stable include path. Use the workspace/submodule build dependency; do not introduce external binary/package publishing.
+
+Update the Amiga nio-core-apps build to consume that include/library artifact rather than relative ../../../ source paths.
+
+Preserve all current behavior.
+
+Required validation:
+
+no .c file from another repo is #included
+no driver-private header is consumed by nio-core-apps
+FMOUNT builds and links
+native driver tests pass
+safe inspection Amiberry test passes
+FMOUNT DD A->B->A and DD->HD->DD test passes
+
+Report the resulting public API boundary and which symbols remain intentionally private.
+
+# Additional boundary issues
+
+Expand the Amiga DiskDevice boundary cleanup to all cross-repository consumers, not just nio-core-apps/FMOUNT.
+
+I have found additional direct reach-through from nio-apps, including:
+
+diskinspect.c
+dynamicdosnode.c
+fmount_inhibit_exp_a.c
+fmount_inhibit_exp_b.c
+
+Search the entire workspace for all occurrences of:
+
+#include paths into repos/fujinet-nio-driver
+relative includes containing fujinet-nio-driver
+#include of driver .c files
+consumers of driver-private headers
+
+Do not assume the list above is exhaustive.
+
+Target architecture
+
+fujinet-nio-driver should expose a small public Amiga DiskDevice SDK/support artifact:
+
+public headers
+libfujinet-amiga-disk.a
+
+Consumer repos such as:
+
+nio-core-apps
+nio-apps
+
+may consume only that public boundary.
+
+They must not:
+
+include driver-private headers
+include driver implementation .c files
+depend on the driver source-tree layout
+use ../../../fujinet-nio-driver/... paths
+Classify all shared code
+
+Move or expose only genuinely shared pieces:
+
+Public resident-device ABI
+
+command IDs
+request/response structures
+public constants
+
+Shared pure Amiga support
+
+media-profile classifier
+filesystem classifier
+DosEnvec builder/serializer
+DeviceNode construction helpers if appropriate
+other pure helpers required by diagnostics/apps
+
+Driver-private
+
+unit/base structures
+queue/FIFO internals
+request processing
+resident implementation details
+transport/client internals
+
+Do not expose private internals merely to make old code compile.
+
+Audit every consumer
+
+For each offending file, report:
+
+what it currently reaches into
+why it needs that functionality
+which public API/library symbol should replace it
+
+In particular review:
+
+nio-core-apps FMOUNT
+nio-apps diskinspect
+nio-apps dynamicdosnode
+nio-apps fmount_inhibit_exp_a
+nio-apps fmount_inhibit_exp_b
+
+Also search all other Amiga tools/tests for the same pattern.
+
+Experimental/test programs
+
+Do not give test programs a special exemption.
+
+If a test helper needs:
+
+media classification
+filesystem classification
+DosEnvec construction
+DeviceNode helpers
+
+it should use the same public support library as production code.
+
+If an experiment genuinely needs private driver internals, either:
+
+move that experiment into the driver repo where it belongs, or
+rewrite it against a public diagnostic API.
+
+Do not leave cross-repo private includes merely because the file is test-only.
+
+Build integration
+
+Make the driver repo produce a stable build artifact, for example:
+
+build/amiga/include/...
+build/amiga/lib/libfujinet-amiga-disk.a
+
+Adapt the workspace build so nio-core-apps and nio-apps consume that artifact through normal include/library flags.
+
+Do not use relative source includes as a substitute for dependency management.
+
+External package publishing is not required; workspace/submodule build dependency is sufficient.
+
+Search-based acceptance criteria
+
+After cleanup, run a repo-wide search proving:
+
+no consumer repo contains "#include ...fujinet-nio-driver..."
+no consumer repo includes driver .c files
+no consumer repo includes driver-private headers
+
+Intentional references in workspace scripts/build dependency declarations are fine.
+
+Regression validation
+
+Preserve behavior and rerun at minimum:
+
+driver native tests
+safe catalog inspection Amiberry case
+FMOUNT DD A->B->A
+FMOUNT DD->HD->DD
+dynamicdosnode focused test
+inhibit experiment tests if they remain supported
+
+Build both:
+
+nio-core-apps Amiga tools
+nio-apps Amiga test/diagnostic tools
+Deliverable
+
+# Report:
+
+- every cross-repo violation found;
+- public SDK/library layout created;
+- public headers/symbols exported;
+- private headers/symbols retained;
+- each consumer migrated;
+- repo-wide search proving no remaining source-level reach-through;
+- build/test results;
+- any experiment that had to be moved or redesigned.
+
+Do not add new Phase 2 functionality while doing this cleanup.
+
+Do not add dynamic-node production functionality in this task.
+
+## response
+
+Stopped before modifying consumer imports because the public-SDK migration patch did not apply cleanly against the current `nio-core-apps` ABI header.
+
+Completed in this turn:
+
+- Audited cross-repository source reach-throughs.
+- Identified actual consumer violations:
+  - `repos/nio-core-apps/apps/platform/amiga/fmount.c`
+    - private driver headers;
+    - direct inclusion of driver `.c` classifier implementations.
+  - `repos/nio-apps/apps/test/diskinspect.c`
+    - private driver headers;
+    - direct inclusion of driver `.c` classifier implementations.
+  - `repos/nio-apps/apps/test/dynamicdosnode.c`
+    - private DosEnvec header.
+  - `repos/nio-core-apps/makefiles/compiler-amigagcc.mk`
+    - private driver include path.
+  - `repos/nio-apps/makefiles/compiler-amigagcc.mk`
+    - private driver include path.
+- Confirmed `fmount_inhibit_exp_a.c` and `fmount_inhibit_exp_b.c` do not currently reach into the driver source tree; they use the core-apps ABI header only.
+- Added the initial public SDK layout in `repos/fujinet-nio-driver`:
+  - `amiga/public/include/fujinet-amiga-disk/device.h`
+  - `amiga/public/include/fujinet-amiga-disk/support.h`
+  - `amiga/Makefile` rules for:
+    - `build/amiga/include/fujinet-amiga-disk/`
+    - `build/amiga/lib/libfujinet-amiga-disk.a`
+- The intended exported SDK surface is:
+  - Public resident ABI:
+    - device name;
+    - unit limit;
+    - public command IDs;
+    - catalog mount/inspection payload structures.
+  - Shared pure support:
+    - media-profile classifier;
+    - filesystem classifier;
+    - DosEnvec builder and representation.
+- Intentionally private:
+  - `fujinet_disk_driver_t`;
+  - NIO client/vtable types;
+  - resident unit/base structures;
+  - catalogue resolution implementation;
+  - FIFO/queue internals;
+  - request processing;
+  - transport implementation.
+
+No consumer was migrated yet, no production behavior changed, and no validation was run after the incomplete SDK setup.
+
+The next step is to reread the current `repos/nio-core-apps/include/platform/amiga/fujinet_disk_iface.h`, apply the consumer migration in small patches, build the SDK before each consumer build, then run the required source-search and Amiberry regressions.
+
+## next ask
+
+Continue the public Amiga DiskDevice SDK cleanup from the current partial state.
+
+Do not add new Phase 2 functionality.
+Do not redesign the SDK surface unless required by an actual ABI conflict.
+
+The audit is accepted:
+
+offending consumers:
+- nio-core-apps/apps/platform/amiga/fmount.c
+- nio-apps/apps/test/diskinspect.c
+- nio-apps/apps/test/dynamicdosnode.c
+- nio-core-apps/makefiles/compiler-amigagcc.mk
+- nio-apps/makefiles/compiler-amigagcc.mk
+
+
+fmount_inhibit_exp_a/b are already clean
+
+The initial SDK layout in fujinet-nio-driver is also accepted as the working direction:
+
+amiga/public/include/fujinet-amiga-disk/device.h
+amiga/public/include/fujinet-amiga-disk/support.h
+build/amiga/lib/libfujinet-amiga-disk.a
+
+1. Reconcile, do not replace, the existing core-apps ABI header
+
+First reread:
+
+repos/nio-core-apps/include/platform/amiga/fujinet_disk_iface.h
+
+Determine which declarations already exist there and which belong in the new public SDK.
+
+Avoid creating two competing definitions of:
+
+command IDs
+device name
+unit limits
+catalog mount payloads
+catalog inspection payloads
+
+Choose one canonical public definition and make the other header include/re-export it if compatibility requires that existing include path to remain stable.
+
+Preserve source compatibility for current core-apps users where practical.
+
+2. Build the SDK first
+
+Complete and validate:
+
+make -C repos/fujinet-nio-driver <SDK target>
+
+Required artifacts:
+
+build/amiga/include/fujinet-amiga-disk/device.h
+build/amiga/include/fujinet-amiga-disk/support.h
+build/amiga/lib/libfujinet-amiga-disk.a
+
+Verify the archive contains only shared/public support objects, not resident-driver internals.
+
+3. Migrate nio-core-apps first
+
+Change FMOUNT so it consumes only public headers, e.g.:
+
+#include <fujinet-amiga-disk/device.h>
+#include <fujinet-amiga-disk/support.h>
+
+Remove all:
+
+relative paths into fujinet-nio-driver
+#include of driver .c files
+private driver headers
+
+Update the Amiga makefile to use normal:
+
+-I<SDK include>
+-L<SDK lib>
+-lfujinet-amiga-disk
+
+Build core-apps before touching nio-apps.
+
+Run the focused FMOUNT test after this migration and require it to remain green.
+
+4. Migrate nio-apps
+
+Then migrate:
+
+diskinspect.c
+dynamicdosnode.c
+
+diskinspect.c should consume public classification support.
+
+dynamicdosnode.c should consume the public DosEnvec representation/builder rather than a private driver header.
+
+Update its makefile to link the same SDK archive.
+
+Do not copy implementations into nio-apps.
+
+5. Keep private symbols private
+
+Do not expose:
+
+fujinet_disk_driver_t
+client/vtable internals
+resident base/unit structures
+FIFO/request-processing internals
+transport implementation
+catalogue-resolution implementation
+
+If a consumer currently needs one of these, stop and explain why instead of exporting it automatically.
+
+6. Source-tree acceptance search
+
+After migration, search the entire workspace and prove there are no consumer source includes matching:
+
+fujinet-nio-driver/amiga/include
+fujinet-nio-driver/amiga/common
+#include "*.c"
+
+where those refer to driver implementation files.
+
+Build-script references to the SDK artifact location are acceptable.
+
+7. Regression validation
+
+Run at minimum:
+
+driver SDK build
+driver native tests
+nio-core-apps Amiga build
+nio-apps Amiga test tools build
+safe catalog inspection Amiberry case
+production FMOUNT DD A->B->A
+production FMOUNT DD->HD->DD
+dynamicdosnode focused test
+Deliverable
+
+Report:
+
+- canonical public ABI location;
+- how the old fujinet_disk_iface.h is handled;
+- SDK archive contents;
+- core-apps migration;
+- nio-apps migration;
+- repo-wide search result;
+- all build/test results;
+- any remaining direct dependency on driver internals.
+
+Stop after the migration is clean and green.
+
+## response
+
+Completed the public Amiga DiskDevice SDK boundary cleanup. No new Phase 2 behavior was added.
+
+**Canonical Public Boundary**
+
+`repos/fujinet-nio-driver` now builds and exposes:
+
+```text
+build/amiga/include/fujinet-amiga-disk/device.h
+build/amiga/include/fujinet-amiga-disk/support.h
+build/amiga/lib/libfujinet-amiga-disk.a
+```
+
+Build target:
+
+```text
+make -C repos/fujinet-nio-driver/amiga sdk
+```
+
+The static archive contains only shared pure support objects:
+
+```text
+fujinet_disk_dos_envec.o
+fujinet_disk_filesystem.o
+fujinet_disk_media_profile.o
+```
+
+It deliberately does not contain:
+
+- resident device code;
+- unit/base structures;
+- client/vtable or transport implementation;
+- queue/FIFO internals;
+- request processing;
+- catalogue resolution.
+
+**Public Headers**
+
+`fujinet-amiga-disk/device.h` exports the public resident-device ABI:
+
+- `FUJINET_DISK_DEVICE_NAME`
+- `FUJINET_DISK_MAX_UNIT`
+- public command IDs:
+  - mount;
+  - trace;
+  - writable mount;
+  - catalogue mount;
+  - catalogue inspection.
+- `fujinet_disk_catalog_mount`
+- `fujinet_disk_catalog_inspection`
+
+`fujinet-amiga-disk/support.h` exports pure support:
+
+- `fujinet_disk_media_profile_t`
+- DD/HD profile enum
+- `fujinet_disk_dos_envec_t`
+- OFS/FFS DosType constants
+- `fujinet_disk_classify_media_profile()`
+- `fujinet_disk_classify_filesystem()`
+- `fujinet_disk_build_dos_envec()`
+
+**Compatibility Header**
+
+`repos/nio-core-apps/include/platform/amiga/fujinet_disk_iface.h` remains present for current core-apps source compatibility, but no longer duplicates ABI declarations. It now re-exports the canonical public SDK header:
+
+```c
+#include <fujinet-amiga-disk/device.h>
+```
+
+**Consumer Migration**
+
+Migrated `nio-core-apps`:
+
+- `apps/platform/amiga/fmount.c`
+  - Removed private driver header includes.
+  - Removed direct inclusion of driver `.c` classifier implementations.
+  - Uses:
+
+```c
+#include <fujinet-amiga-disk/support.h>
+```
+
+- `makefiles/compiler-amigagcc.mk`
+  - Replaced private source include path with:
+
+```text
+-I../fujinet-nio-driver/build/amiga/include
+-L../fujinet-nio-driver/build/amiga/lib
+-lfujinet-amiga-disk
+```
+
+Migrated `nio-apps`:
+
+- `apps/test/diskinspect.c`
+  - Replaced private headers and included `.c` files with public SDK headers.
+- `apps/test/dynamicdosnode.c`
+  - Replaced private DosEnvec header with public support header.
+- `makefiles/compiler-amigagcc.mk`
+  - Uses the same SDK include/library artifact and link flags.
+
+`fmount_inhibit_exp_a.c` and `fmount_inhibit_exp_b.c` required no source change. They were already using the public core-apps ABI boundary rather than driver internals.
+
+**Link Fix**
+
+Consumer link commands originally placed `-lfujinet-amiga-disk` before objects, preventing static resolution of classifier symbols. Both compiler makefiles now link objects before SDK library flags.
+
+**Source Reach-Through Proof**
+
+Repository searches returned no consumer source-level violations:
+
+```text
+repos/nio-core-apps:
+  fujinet-nio-driver/amiga/include       no matches
+  fujinet-nio-driver/amiga/common        no matches
+  #include "*.c" driver implementations  no matches
+
+repos/nio-apps:
+  fujinet-nio-driver/amiga/include       no matches
+  fujinet-nio-driver/amiga/common        no matches
+  #include "*.c" driver implementations  no matches
+```
+
+Consumer build files only refer to the generated SDK artifact location, not driver source headers or implementation paths.
+
+**Validation**
+
+SDK artifact:
+
+```text
+make -C repos/fujinet-nio-driver/amiga sdk
+```
+
+Passed. Archive membership verified as the three support objects only.
+
+Core-apps Amiga build:
+
+```text
+make -B -f makefiles/build.mk TARGET=amiga
+```
+
+Passed.
+
+Nio-apps Amiga diagnostic/tool build:
+
+```text
+make -B -f makefiles/build.mk TARGET=amiga
+```
+
+Passed.
+
+Driver native suite:
+
+```text
+make -C repos/fujinet-nio-driver amiga
+```
+
+Passed:
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+Safe catalogue inspection Amiberry case:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_catalog_inspection_preserves_live_dd_handler -q --run-amiga
+```
+
+Passed:
+
+```text
+1 passed, 63 warnings in 26.50s
+```
+
+Dynamic DOS-node regression:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node -q --run-amiga
+```
+
+Passed:
+
+```text
+1 passed, 162 warnings in 56.04s
+```
+
+Production FMOUNT DD A-to-B-to-A and DD-to-HD-to-DD:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+```
+
+Passed:
+
+```text
+1 passed, 154 warnings in 60.48s
+```
+
+A first parallel FMOUNT run collided with concurrent replacement/execution of the native link-test binary and failed with `Text file busy`; rerunning serially passed. This was a host test-process race, not an SDK or functional failure.
+
+**Remaining Driver-Internal Dependencies**
+
+None remain in `nio-core-apps` or `nio-apps` source. The following remain intentionally private within `fujinet-nio-driver`:
+
+- `fujinet_disk_driver_t`
+- `fujinet_disk_client_t`
+- resident unit/base structures
+- NIO context and RS-232 transport client
+- catalogue resolver implementation
+- device request dispatch
+- FIFO/queue implementation
+- Exec completion and notification handling
