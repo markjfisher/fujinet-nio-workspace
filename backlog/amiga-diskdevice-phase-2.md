@@ -106,8 +106,13 @@ persistent dynamic DeviceNode
       `amiga/tests/test_fujinet_disk_driver.c` fixture mounts alternating DD/HD
       geometry on units 0..7, changes unit 0, and queries units 1..7 to prove
       retained independent geometry/state.
-- [ ] Add native tests for dynamic `TD_GETGEOMETRY` and standard-tool device
-      calls.
+- [x] Add native tests for dynamic `TD_GETGEOMETRY` and standard-tool device
+      calls. `amiga/tests/test_fujinet_disk_resident.c` compiles the production
+      `disk.device/fujinet_disk_device.c` dispatcher with local Exec ABI stubs,
+      commits simultaneous DD/HD unit state, and submits public `IOExtTD`
+      requests. It verifies DD `512/1760/80/2/22/11`, HD
+      `512/3520/80/2/44/22`, repeated per-unit queries, and public
+      `FUJINET_DISK_CMD_MOUNT` dispatch through the same ABI used by FMOUNT.
 - [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
       `FUMOUNT`, and remounting persisted assignments. Existing focused tests
@@ -157,14 +162,9 @@ cover the complete wording of each acceptance criterion.
 
 ### Native geometry and standard-tool calls
 
-- Existing evidence: native driver contract, FIFO, and Exec-boundary tests
-  pass; Amiberry covers `FMOUNT` and the dynamic-node geometry path.
-- Missing coverage: direct native assertions that `TD_GETGEOMETRY` reflects
-  each unit's committed DD/HD geometry, plus a standard-tool request crossing
-  the public Amiga DiskDevice ABI boundary.
-- Smallest closure: extend the native driver fixture with DD and HD units,
-  assert their `TD_GETGEOMETRY` responses independently, and add one request
-  exercised through the same public device ABI used by the standard tools.
+- Closed by `amiga/tests/test_fujinet_disk_resident.c`, which invokes the real
+  resident `BeginIO` dispatcher with the public request ABI and verifies the
+  committed DD/HD geometry fields and per-unit isolation.
 
 ### Standard-tool DD/HD eject and persistence matrix
 
