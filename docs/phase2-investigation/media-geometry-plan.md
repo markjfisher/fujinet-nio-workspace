@@ -5021,3 +5021,453 @@ Production DD/HD geometry transitions require an isolated or non-mutating candid
 
 No HDF, RDB, nonstandard geometry, static MountList removal, or low-level driver completion instrumentation was started.
 
+## Next instruction for Terra
+
+We now have a clean green production checkpoint:
+
+existing DD FMOUNT lifecycle restored
+FMOUNT -> Dir -> Type passes
+DD A -> B -> A replacement passes
+unsafe PROBE_CATALOG removed
+
+Do not modify production FMOUNT in this task.
+
+The remaining Phase 2 blocker is the lack of a non-mutating candidate-media inspection primitive.
+
+# Problem to solve
+
+FMOUNT must know enough about a catalogue candidate to distinguish:
+
+same compatible geometry
+    -> Inhibit existing handler
+
+
+geometry/DosEnvec change
+    -> ACTION_DIE existing handler
+
+before replacing the live backing media.
+
+The removed PROBE_CATALOG was invalid because it called:
+
+client->mount(candidate_uri, live_nio_slot, ...)
+
+which changed the media underneath the still-active DOS handler.
+
+We need candidate inspection that does not mutate the live DiskService slot or resident driver state.
+
+1. Reconnaissance first
+
+Inspect the current NIO/DiskService/image-handler architecture and answer:
+
+- how mount() obtains fn_disk_info_t;
+- where raw-image sector size/count are determined;
+- whether an image handler can be opened independently of a mounted DiskService slot;
+- whether there is already a stat/info/probe/open operation that can inspect a URI without mounting it;
+- whether DiskService has any explicit temporary/scratch-slot concept;
+- whether sector 0 can be read from a transiently opened image without registering it as mounted media.
+
+Inspect the actual implementation rather than inferring this from interfaces.
+
+2. Choose the smallest safe primitive
+
+Compare these possible designs:
+
+A. Transient URI inspection
+
+inspect candidate URI
+    open image handler transiently
+    determine media info
+    read required boot bytes/sector
+    close image
+    no DiskService slot changes
+
+B. Explicit isolated scratch slot
+
+mount candidate into a purpose-designed temporary slot
+inspect Info/sector 0
+unmount temporary slot
+live unit untouched
+
+Do not use an arbitrary unused normal slot as a scratch slot.
+
+Prefer the design that naturally fits the existing NIO architecture and has the smallest state/lifetime surface.
+
+3. Required inspection result
+
+The Amiga side needs enough authoritative evidence to apply its already-tested classifiers:
+
+coarse media type
+sector size
+sector count
+boot sector bytes sufficient to classify DOS\0 / DOS\1
+
+NIO should not decide DD versus HD or OFS versus FFS policy if that would duplicate the established Amiga classifiers.
+
+The intended split remains:
+
+NIO inspection
+    -> media facts + boot data
+
+
+Amiga classifier
+    -> DD / HD
+    -> supported DosType
+
+4. Prove non-mutation explicitly
+
+Implement only the minimum POC necessary to prove candidate inspection.
+
+Before inspection record the live unit:
+
+mounted slot
+sector size/count
+changed/change counter if available
+live media identity
+
+Inspect a different candidate.
+
+After inspection prove the live unit is unchanged.
+
+Then prove:
+
+Dir/Type existing DN0 still reads the original media
+
+The inspection must not:
+
+replace live backing media
+change resident unit geometry
+signal media change
+alter mappings
+affect active DOS handler
+
+5. Candidate correctness
+
+Use the existing DD and HD fixtures and prove inspection reports:
+
+DD:
+    sector_size = 512
+    sector_count = 1760
+    boot id = expected DOS type
+
+
+HD:
+    sector_size = 512
+    sector_count = 3520
+    boot id = expected DOS type
+
+No FMOUNT DD->HD transition yet.
+
+6. Keep the API generic
+
+Do not add another Amiga-specific command whose implementation embeds DD/HD classification if a lower-level NIO media-inspection operation is more appropriate.
+
+The new primitive should ideally be usable by other clients/platforms that need to inspect media before committing a mount.
+
+Do not add HDF/RDB parsing in this task.
+
+# Deliverable
+
+Report:
+
+a. where media geometry is currently inferred during mount();
+b. whether image handlers can be opened transiently;
+c. whether any existing non-mutating API can already do this;
+d. selected inspection architecture and why;
+e. exact API/protocol changes, if required;
+f. DD and HD inspection evidence;
+g. proof that inspection leaves the live unit/media/handler untouched;
+h. focused tests;
+i. what FMOUNT will be able to do once this primitive exists.
+
+Stop after the inspection primitive is proven. Do not integrate DD->HD into FMOUNT in the same task.
+
+## response...
+
+## Rework...
+
+Continue from the completed reconnaissance. Do not revisit FMOUNT or the architecture choice.
+
+The selected design is now fixed:
+
+DiskService::inspect(uri)
+    open candidate file
+    run existing ProbeRegistry
+    create appropriate IDiskImage
+    transiently mount it
+    return media facts + boot bytes
+    destroy temporary image
+    never assign it to a runtime DiskService slot
+
+There is no scratch-slot design.
+
+There was a partial prior attempt adding DiskMediaInspection, DiskService::inspect(...), and DiskCommand::Inspect = 0x0F; those edits have been stashed. Treat them as design notes only, not committed API. Re-derive the exact shape from the existing DiskService::mount() implementation and tests.
+
+# Goal
+
+Implement and prove the generic non-mutating media inspection primitive only.
+
+Do not modify Amiga FMOUNT in this turn.
+
+1. Complete DiskService::inspect
+
+Reuse the same internal path used by DiskService::mount() for:
+
+URI resolution/open
+ProbeRegistry
+image-handler construction
+geometry inference
+
+Refactor shared code if necessary so mount() and inspect() cannot drift into different probing behavior.
+
+inspect() must stop before runtime-slot assignment.
+
+It must not modify:
+
+mounted runtime images
+slot mappings
+dirty/change state
+live media descriptors
+client-visible mounted state
+
+2. Define the smallest useful result
+
+Keep the result generic.
+
+It needs at least:
+
+media/image type
+sector_size
+sector_count
+boot-sector bytes sufficient for callers to inspect filesystem identity
+
+If returning an entire first sector is natural, do that.
+
+Do not put Amiga DD/HD or DOS\0/DOS\1 policy into DiskService::inspect().
+
+3. Implement service-level tests first
+
+Add host/unit tests proving:
+
+DD ADF:
+
+sector_size = 512
+sector_count = 1760
+boot bytes correct
+
+HD ADF:
+
+sector_size = 512
+sector_count = 3520
+boot bytes correct
+
+unsupported/missing candidate:
+
+inspect fails cleanly
+
+4. Prove non-mutation
+
+Add an explicit test:
+
+mount image A into runtime slot N
+record slot state/info
+
+
+inspect image B
+
+
+verify slot N still points to A
+verify info/state unchanged
+verify reads from slot N still return A
+
+This is the core acceptance criterion.
+
+5. Only after service-level proof, expose protocol command
+
+If DiskCommands::Inspect = 0x0F remains the appropriate generic protocol surface, implement the wire handler after DiskService::inspect() tests pass.
+
+Do not expose a command before the service primitive works.
+
+Define a bounded response format containing the inspection result.
+
+Add protocol tests proving:
+
+Inspect DD
+Inspect HD
+live slot unchanged
+
+6. Do not integrate Amiga yet
+
+Stop once the generic service/protocol inspection primitive is green.
+
+Do not modify:
+
+nio-core-apps FMOUNT
+fujinet-disk.device
+Amiga DosEnvec lifecycle
+
+# Deliverable
+
+Report:
+
+- exact DiskService::inspect() implementation;
+- any shared refactor with mount();
+- inspection result type;
+- DD/HD service tests;
+- explicit live-slot non-mutation test;
+- protocol command implementation/tests if completed;
+- exact files changed;
+- anything still needed before Amiga can consume it.
+
+
+## Response
+
+Implemented the generic non-mutating media-inspection primitive in `repos/fujinet-nio`. No FMOUNT, Amiga resident driver, or DosEnvec lifecycle code was modified.
+
+**DiskService Inspection**
+
+Added:
+
+```cpp
+DiskResult DiskService::inspect(
+    const std::string& fsName,
+    const std::string& path,
+    const MountOptions& opts,
+    std::size_t bootByteCount,
+    DiskMediaInspection& out
+);
+```
+
+`DiskMediaInspection` returns:
+
+- `ImageType type`
+- `DiskGeometry geometry`
+  - sector size
+  - sector count
+- `std::vector<uint8_t> bootBytes`
+
+`inspect()`:
+
+1. Forces read-only opening.
+2. Uses the same shared preparation path as `DiskService::mount()`.
+3. Opens the filesystem image.
+4. Runs the existing `ProbeRegistry`.
+5. Creates and transiently mounts the selected `IDiskImage`.
+6. Reads bounded bytes from logical sector zero.
+7. Calls `IDiskImage::unmount()`.
+8. Destroys the temporary handler without touching any `_slots` or `_stats` entry.
+
+**Shared Mount Refactor**
+
+Extracted the common mount preparation logic into private `prepare_image(...)` in `src/lib/disk/disk_service.cpp`.
+
+Both `mount()` and `inspect()` now share:
+
+- filesystem lookup;
+- file existence and stat;
+- effective access-mode selection;
+- image probing and raw geometry inference;
+- registry image construction;
+- `IDiskImage::mount()` validation.
+
+This prevents probe behavior from drifting between committed mount and transient inspection.
+
+**Protocol Command**
+
+Added generic DiskDevice command:
+
+```text
+Inspect = 0x0F
+```
+
+Request payload:
+
+```text
+u8  protocol version
+u8  flags (reserved, currently zero)
+u8  image type override
+u16 sector-size hint
+u16 requested boot-byte count, maximum 512
+lp-u16 URI
+```
+
+Response payload:
+
+```text
+u8  protocol version
+u8  detected image type
+u16 sector size
+u32 sector count
+u16 returned boot-byte count
+bytes boot data
+```
+
+The command has no runtime slot parameter and performs no mapping persistence, runtime-mount changes, changed-flag updates, or mounted-media replacement.
+
+**DD/HD Evidence**
+
+Service and protocol tests verify:
+
+| Candidate | Sector Size | Sector Count | Boot Bytes |
+|---|---:|---:|---|
+| DD ADF | 512 | 1760 | `DOS\0`, fixture marker `D` |
+| HD ADF | 512 | 3520 | `DOS\0`, fixture marker `H` |
+
+Missing candidates fail cleanly:
+
+- Service: `DiskError::FileNotFound`
+- Protocol: existing URI-resolution behavior returns `StatusCode::InvalidRequest`
+
+**Non-Mutation Proof**
+
+Both service and protocol tests:
+
+1. Mount a live DD ADF containing marker `A` into runtime slot zero.
+2. Record its `DiskSlotInfo`.
+3. Inspect separate DD and HD candidate ADFs.
+4. Verify the live slot retains:
+   - inserted state;
+   - read-only state;
+   - image type;
+   - sector size;
+   - sector count;
+   - changed state.
+5. Read live slot sector zero again.
+6. Verify it still contains marker `A`.
+
+This proves inspection does not replace live backing media or alter the mounted slot descriptor.
+
+**Files Changed**
+
+- `repos/fujinet-nio/include/fujinet/disk/disk_service.h`
+- `repos/fujinet-nio/src/lib/disk/disk_service.cpp`
+- `repos/fujinet-nio/include/fujinet/io/devices/disk_commands.h`
+- `repos/fujinet-nio/src/lib/disk_device.cpp`
+- `repos/fujinet-nio/tests/test_disk_device_protocol.cpp`
+
+**Validation**
+
+Executed:
+
+```text
+./build.sh -cp fujibus-pty-debug
+```
+
+Result:
+
+```text
+264 C++ test cases passed
+5704 C++ assertions passed
+23 Python tests passed
+100% tests passed
+```
+
+**Remaining Before Amiga Can Consume It**
+
+Amiga integration still needs a small separate task to:
+
+1. Add the `0x0F` protocol/client contract to the shared Amiga-facing interface.
+2. Call generic DiskDevice inspection from FMOUNT.
+3. Apply the existing Amiga DD/HD and `DOS\0`/`DOS\1` classifiers to the returned raw facts and boot bytes.
+4. Select `Inhibit()` or `ACTION_DIE` before issuing the stateful catalog mount.
+
+The generic inspection primitive is now ready for that separate integration.
