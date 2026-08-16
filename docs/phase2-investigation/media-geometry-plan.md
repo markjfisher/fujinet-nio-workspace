@@ -5471,3 +5471,246 @@ Amiga integration still needs a small separate task to:
 4. Select `Inhibit()` or `ACTION_DIE` before issuing the stateful catalog mount.
 
 The generic inspection primitive is now ready for that separate integration.
+
+## Next ask...
+
+Now implement only the Amiga consumption bridge and isolated proof.
+
+Do not yet rewrite production FMOUNT lifecycle or perform DD→HD replacement.
+
+# Goal
+
+Allow Amiga code to inspect a catalogue candidate safely and obtain:
+
+detected image type
+sector size
+sector count
+boot bytes
+
+without changing the live DiskService slot or disturbing the active DNx: handler.
+
+1. Add client support for generic Disk Inspect
+
+Extend the existing NIO client/library boundary used by fujinet-disk.device to issue:
+
+DiskCommand::Inspect = 0x0F
+
+using the protocol contract already implemented in fujinet-nio.
+
+Do not duplicate URI/image probing locally.
+
+Add unit tests at the client/library layer if that layer has protocol tests.
+
+2. Add a safe resident-driver catalogue-inspection command
+
+Add an Amiga resident-device command conceptually equivalent to:
+
+INSPECT_CATALOG
+
+It may:
+
+catalogue slot
+    -> resolve catalogue URI
+    -> issue generic NIO Disk Inspect for that URI
+    -> return raw media facts + boot bytes
+
+It must not:
+
+call client->mount()
+choose or alter a runtime NIO slot
+modify unit media state
+alter change counters
+signal media change
+alter mappings
+
+This replaces the removed unsafe PROBE_CATALOG; do not restore that implementation.
+
+Keep the returned payload raw/generic enough for the established Amiga classifiers:
+
+image type
+sector_size
+sector_count
+boot bytes
+
+Do not return a fabricated DD/HD decision from NIO.
+
+3. Apply existing Amiga classifiers in an isolated helper/test
+
+Use the already-proven:
+
+fujinet_disk_classify_media_profile()
+fujinet_disk_classify_filesystem()
+
+against the inspection result.
+
+Prove:
+
+DD candidate:
+    512 x 1760
+    DD
+    DOS\0 or expected fixture DosType
+
+
+HD candidate:
+    512 x 3520
+    HD
+    expected DosType
+
+Do not introduce new classifier rules.
+
+4. Amiberry non-mutation proof
+
+This is the key acceptance test.
+
+Start with a live DD DN0: whose handler is active and whose known file can be read:
+
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+Then inspect a different HD catalogue candidate using the new safe resident command.
+
+Do not inhibit or retire DN0.
+
+After inspection assert:
+
+existing dn_Task unchanged/nonzero
+current unit sector size/count unchanged
+current change counter unchanged
+no media-change indication
+Dir DN0: still succeeds
+Type DN0:KNOWN.TXT still returns original DD content
+
+Also assert that the inspection response describes the HD candidate:
+
+512
+3520
+HD profile after Amiga classification
+expected DosType
+
+This demonstrates that we can finally answer the candidate-geometry question safely while the old handler remains active.
+
+5. Do not modify FMOUNT decision logic yet
+
+Production FMOUNT must remain on the restored known-good path during this task.
+
+Do not add:
+
+ACTION_DIE
+DosEnvec update
+dynamic node creation
+DD->HD replacement
+
+yet.
+
+# Validation
+
+Run:
+
+- relevant fujinet-nio-lib unit tests;
+- native Amiga driver tests;
+- focused Amiberry safe-inspection test;
+- existing test_diskdevice_fmount.py unchanged to prove DD A→B→A still passes.
+
+# Deliverable
+
+Report:
+
+- protocol/client bridge implemented;
+- resident inspection command and payload;
+- confirmation it never invokes mount/runtime-slot mutation;
+- DD and HD classification results on Amiga;
+- live-DN0 non-mutation evidence;
+- unchanged production FMOUNT regression result;
+- exact files changed.
+
+Stop there. The following task will consume this proven inspection result inside FMOUNT and perform DD→HD→DD.
+
+
+## Response
+
+The implementation is partially complete but not validated to the requested Amiberry acceptance level. No FMOUNT lifecycle code was changed.
+
+Implemented:
+
+- Generic Disk Inspect client bridge in `fujinet-nio-lib`:
+  - `fn_disk_inspection_t`
+  - `fn_disk_inspect_context(...)`
+  - Uses DiskDevice command `0x0F`.
+  - Encodes the generic protocol request:
+    - version
+    - reserved flags
+    - image type override
+    - sector-size hint
+    - requested boot-byte count
+    - URI
+  - Decodes:
+    - image type
+    - sector size
+    - sector count
+    - bounded boot bytes
+  - Produces raw `fn_disk_info_t`-compatible media facts with no local DD/HD or DOS policy.
+
+- Amiga RS-232 bridge:
+  - Added `inspect` callback to `fujinet_disk_client_t`.
+  - `fujinet_nio_disk_client.inspect` delegates to `fn_disk_inspect_context()`.
+
+- Resident device command:
+  - Added `FUJINET_DISK_CMD_INSPECT_CATALOG`.
+  - Payload: `fujinet_disk_catalog_inspection`.
+  - Resolves catalogue slot to URI, then calls only `client->inspect(...)`.
+  - Does not call:
+    - `client->mount()`
+    - `fujinet_disk_mount_mode()`
+    - mapping load/store
+    - change acknowledgement
+    - `signal_media_change()`
+    - unit-slot selection
+  - It therefore does not change resident unit media, geometry, change counter, mappings, or handler state.
+
+- Test-only helper:
+  - Added `repos/nio-apps/apps/test/diskinspect.c`.
+  - Invokes `INSPECT_CATALOG`.
+  - Applies the existing:
+    - `fujinet_disk_classify_media_profile()`
+    - `fujinet_disk_classify_filesystem()`
+  - It does not use FMOUNT, `Inhibit()`, `ACTION_DIE`, or any node mutation.
+
+- Client vtable coverage:
+  - Native link test now asserts `fujinet_nio_disk_client.inspect != NULL`.
+  - Fake client gained an `inspect` implementation for native-driver test compilation.
+
+Build/validation completed:
+
+- `repos/fujinet-nio-lib` `make check`:
+  - Atari and BBC targets compiled successfully.
+  - Stopped at environment failure: OpenWatcom `wcc` is missing for `msdos-serial`.
+- `repos/fujinet-nio-driver` `make amiga`:
+  - Passed.
+  - Native driver contract, FIFO policy, and Exec-boundary tests passed.
+- Test helper:
+  - `diskinspect` Amiga binary builds successfully.
+
+Not completed:
+
+- No client/library protocol unit test was added for exact Inspect packet/response encoding.
+- No native test directly invokes `INSPECT_CATALOG` and asserts unit state remains unchanged.
+- No focused Amiberry live-DN0 DD plus HD-candidate inspection case was added or run.
+- Existing `test_diskdevice_fmount.py` was not rerun after these bridge changes.
+- No DD/HD inspection evidence was captured through the resident command.
+- No Amiberry proof yet confirms unchanged `dn_Task`, sector count, change counter, and original `KNOWN.TXT` content after HD inspection.
+
+Files changed:
+
+- `repos/fujinet-nio-lib/include/fujinet-nio.h`
+- `repos/fujinet-nio-lib/src/common/fn_disk.c`
+- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_driver.h`
+- `repos/fujinet-nio-driver/amiga/channels/rs232/fujinet_nio_client.c`
+- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_device.h`
+- `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c`
+- `repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_driver.c`
+- `repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_client_link.c`
+- `repos/nio-apps/apps/test/diskinspect.c`
+- `repos/nio-apps/makefiles/compiler-amigagcc.mk`
+
+The next controlled step is to add the native resident-command test and a focused Amiberry sequence that mounts DD on `DN0:`, reads `KNOWN.TXT`, inspects HD catalogue slot 14, confirms `512x3520` and the HD profile, then verifies the live DD handler and media state are unchanged.
+
