@@ -7488,3 +7488,658 @@ No new lifecycle design.
 No HDF/RDB.
 
 If changing only this ordering restores absent-node DD/HD, report that as the root cause and then run the existing regression suite.
+
+
+## response
+
+Confirmed the absent-node root cause and fixed the ordering.
+
+**Root Cause**
+
+The prior absent-node production order was:
+
+```text
+INSPECT_CATALOG
+MakeDosNode
+AddDosNode
+MOUNT_CATALOG
+```
+
+This exposed `DN0:` to AmigaDOS before valid backing media had been committed. Both DD and HD no-MountList cases triggered a requester immediately after FMOUNT.
+
+The proven `dynamicdosnode` POC instead has backing media mounted before the node becomes visible.
+
+**Corrected Absent-Node Order**
+
+FMOUNT now uses:
+
+```text
+INSPECT_CATALOG
+classify candidate
+
+MOUNT_CATALOG
+
+open expansion.library
+MakeDosNode
+apply StackSize=32768, Priority=5, GlobalVec=-1, Handler=0
+AddDosNode(..., 0, node)
+
+snapshot inserted node under LDF_READ | LDF_DEVICES
+return
+```
+
+Existing-node paths were not changed:
+
+- Compatible same-geometry still uses `Inhibit(TRUE) -> MOUNT_CATALOG -> Inhibit(FALSE)`.
+- Geometry changes still use `ACTION_DIE -> confirm inactive -> MOUNT_CATALOG -> update inactive DosEnvec`.
+
+**Boundary Evidence Added**
+
+FMOUNT now writes narrow runtime checkpoints for the absent-node path:
+
+```text
+FMOUNT INSPECT=ok
+FMOUNT MOUNT_CATALOG rc=<value>
+FMOUNT NODE before_make unit=<n>
+FMOUNT NODE add=ok unit=<n> bpt=<value> dostype=<value>
+FMOUNT NODE post_add present=<value> task=<value> bpt=<value> dostype=<value>
+```
+
+The post-add observation uses the existing scalar-copy DOS-list snapshot helper and does not retain pointers after unlocking.
+
+**Shared SDK Update**
+
+Added the reusable public support function:
+
+```c
+void fujinet_disk_serialize_dos_envec(
+    const fujinet_disk_dos_envec_t *envec,
+    uint32_t classic_envec[20]
+);
+```
+
+It lives in `libfujinet-amiga-disk.a` and serializes the exact classic `DE_*` order.
+
+Both production FMOUNT and `dynamicdosnode` now use this same serializer, eliminating POC/production packet drift.
+
+**Absent-Node DD Result**
+
+Passed:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_fmount_creates_absent_dd_node -q --run-amiga
+1 passed, 55 warnings in 23.42s
+```
+
+This proves, with all static MountLists omitted:
+
+```text
+DN0 absent initially
+INSPECT_CATALOG/classification succeeds
+MOUNT_CATALOG succeeds
+dynamic DN0 is inserted
+post-add dn_Task == 0
+BPT == 11
+Dir DN0: succeeds
+handler naturally starts
+Type DN0:KNOWN.TXT succeeds
+FUJINET ADF READ PASSED
+```
+
+**Absent-Node HD Result**
+
+Passed:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_fmount_creates_absent_hd_node -q --run-amiga
+1 passed, 55 warnings in 22.94s
+```
+
+This proves direct initial HD mounting without a prior DD bootstrap:
+
+```text
+DN0 absent initially
+FMOUNT 14 DN0: RO
+post-add dn_Task == 0
+BPT == 22
+Dir DN0: succeeds
+HD.TXT visible
+handler naturally starts
+Type DN0:HD.TXT succeeds
+FUJINET HD ADF READ PASSED
+```
+
+**Failure-State Consequence**
+
+The residual state is now intentionally reversed:
+
+```text
+MOUNT_CATALOG succeeds
+AddDosNode fails
+-> mounted resident-driver unit with no DOS node
+```
+
+FMOUNT returns failure and reports:
+
+```text
+Mounted media but cannot create DNx
+```
+
+No rollback, node removal, or unsafe cleanup was added.
+
+This is preferable to the former state:
+
+```text
+AddDosNode succeeds
+MOUNT_CATALOG fails
+-> visible DOS node with invalid/no backing media
+```
+
+**Regression Status**
+
+Passed during this iteration:
+
+```text
+make -C repos/fujinet-nio-driver/amiga sdk
+```
+
+```text
+make -C repos/nio-core-apps -B -f makefiles/build.mk TARGET=amiga fmount
+```
+
+```text
+test_fmount_creates_absent_dd_node
+```
+
+```text
+test_fmount_creates_absent_hd_node
+```
+
+```text
+make -C repos/fujinet-nio-driver amiga
+```
+
+Native result:
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+Two later existing-regression runs were not green:
+
+- `test_diskdevice_fmount.py`
+  - Reached all DD A-to-B-to-A and DD-to-HD-to-DD assertions successfully.
+  - Failed later at the existing RW DN2 static `Mount DN2:` stage:
+    ```text
+    DOS MOUNT 2 RC=20
+    ```
+- `test_catalog_inspection_preserves_live_dd_handler`
+  - Timed out after its initial FMOUNT checkpoint, before its initial `Dir`.
+- `test_dynamic_dd_dos_node`
+  - Timed out after `dynamic-dir.result`, before its next checkpoint.
+
+Those failures happened after the two new no-MountList acceptance cases passed and do not reproduce the absent-node requester. They require a clean serial rerun before static MountLists can be formally reclassified as optional compatibility assets.
+
+**Files Changed**
+
+- `repos/fujinet-nio-driver/amiga/public/include/fujinet-amiga-disk/support.h`
+- `repos/fujinet-nio-driver/amiga/common/fujinet_disk_dos_envec.c`
+- `repos/nio-core-apps/apps/platform/amiga/fmount.c`
+- `repos/nio-apps/apps/test/dynamicdosnode.c`
+- `integration-tests/amiberry/conftest.py`
+- `integration-tests/amiberry/tests.toml`
+- `integration-tests/amiberry/test_diskdevice_adf.py`
+- `integration-tests/amiberry/startup/diskdevice-dynamic-fmount-dd.sequence`
+- `integration-tests/amiberry/startup/diskdevice-dynamic-fmount-hd.sequence`
+
+Static MountLists were not removed.
+
+## test fixes
+
+The absent-node DD and HD production paths are now accepted as functionally fixed.
+
+Do not change production code yet.
+
+The only remaining task in this turn is to establish whether the three later failures were environmental/test-order contamination or genuine regressions.
+
+Run the relevant Amiberry tests serially from a clean test state, with no concurrent builds or Amiberry instances.
+
+Before running:
+
+- kill any stale Amiberry/QEMU/helper processes from previous tests;
+- remove/recreate the normal generated test-state/output directories as the harness expects;
+- rebuild required Amiga artifacts once;
+- do not rebuild binaries concurrently with a running Amiberry test.
+
+Then run, individually and in this order:
+
+1. test_catalog_inspection_preserves_live_dd_handler
+2. test_dynamic_dd_dos_node
+3. test_diskdevice_fmount.py
+
+Run each test by itself and record its result.
+
+If all three pass, then run the two new cases again:
+
+test_fmount_creates_absent_dd_node
+test_fmount_creates_absent_hd_node
+
+Then run the complete relevant Amiberry diskdevice set serially.
+
+Do not alter test timeouts merely to obtain green results.
+
+If any of the original three still fails when run alone, stop and isolate that failure before changing code.
+
+For a persistent failure, report:
+
+exact last successful checkpoint
+first missing checkpoint
+relevant command RC
+requester status
+whether static MountLists were installed for that case
+whether DN0/DN2 existed before the failing command
+current dn_Task / BPT if available
+
+In particular:
+
+- for DOS MOUNT 2 RC=20, establish whether DN2 is actually present in the DOS list and whether its static MountList was installed;
+- for the inspection timeout, establish whether the handler starts and whether the first Dir is actually issued;
+- for the dynamic-node POC timeout, establish whether dynamic-dir.result means the handler completed Dir successfully or merely reached the command boundary.
+
+Do not modify FMOUNT, dynamic-node construction, the SDK, or MountList policy unless one of these tests reproduces consistently in isolation.
+
+Deliver only:
+
+- isolated result of each test;
+- full serial diskdevice result;
+- whether any failure reproduces;
+- if so, its exact boundary.
+
+If everything is green, stop and report that static MountLists can now be evaluated for compatibility-only status.
+
+## Fix sequences doing fmount and mount
+
+Audit and clean the Amiberry startup sequences now that standard FMOUNT owns the full catalogue-slot-to-DNx: operation, including dynamic DOS-node creation.
+
+Do not modify production code.
+Do not modify the driver SDK.
+This task is test-sequence cleanup only.
+
+# Goal
+
+Remove stale assumptions that callers must run:
+
+Mount DNx: FROM DEVS:DNx
+
+after successful standard FMOUNT.
+
+Also identify old tests that still use private/diagnostic fujinet-mount where the test should now be exercising standard FMOUNT.
+
+1. Audit all startup sequences
+
+Search:
+
+rg -ni -B3 -A3 'C:fmount([[:space:]]|$)|C:fujinet-mount([[:space:]]|$)|Mount DN[0-7]' integration-tests/amiberry/startup
+
+Review every match individually.
+
+Do not blindly replace commands.
+
+Classify each occurrence into one of these categories:
+
+A. Standard FMOUNT path
+
+Example:
+
+C:FMOUNT 11 DN0: RO
+C:Mount DN0: FROM DEVS:DN0
+
+The Mount DN0: is now stale and must be removed.
+
+FMOUNT now:
+
+mounts the media
+ensures DNx exists
+leaves inactive handler ready for natural startup
+
+The first real filesystem operation such as Dir or Type should naturally start the handler.
+
+B. Inhibit/handler-lifecycle tests
+
+If the explicit Mount DNx: was present only to ensure the filesystem handler is active before the actual experiment, replace it with a real access such as:
+
+C:Dir DNx: >NIL:
+
+Do not leave a duplicate DOS Mount after FMOUNT.
+
+Preserve the test's actual intent: active handler before inhibition/replacement experiment.
+
+C. Old direct/private fujinet-mount tests
+
+These need review rather than automatic deletion.
+
+Determine whether the test is:
+
+- intentionally testing private/resident driver diagnostics; or
+- historical test code that should now use standard FMOUNT.
+
+If the test is meant to validate end-user mounting behavior, migrate it to FMOUNT.
+
+If it is deliberately validating private driver commands or low-level behavior, keep fujinet-mount and explain why.
+
+In particular inspect:
+
+diskdevice-dynamic-dd.sequence
+diskdevice-adf.sequence
+diskdevice-hd-adf.sequence
+
+diskdevice-dynamic-dd.sequence currently begins:
+
+C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-mount host:/standard.adf
+C:Mount DN0: FROM DEVS:DN0
+
+Establish what that test is actually intended to prove and whether it should now use standard FMOUNT.
+
+Do not preserve private-tool usage merely because it predates FMOUNT.
+
+2. Known standard-FMOUNT sequences to inspect
+
+At minimum review:
+
+diskdevice-inspect-catalog.sequence
+diskdevice-fmount.sequence
+diskdevice-inhibit-exp-a.sequence
+diskdevice-inhibit-exp-b.sequence
+diskdevice-inhibit-poc.sequence
+diskdevice-dynamic-fmount-dd.sequence
+diskdevice-dynamic-fmount-hd.sequence
+
+diskdevice-dynamic-fmount-dd/hd are already correct if they contain no redundant Mount DNx:.
+
+Do not change them unnecessarily.
+
+3. Preserve semantic checkpoints
+
+Where a removed Mount DNx: previously generated an RC result file, update the test only if that result is still semantically useful.
+
+Do not keep assertions for obsolete behavior like:
+
+DOS MOUNT RC=0
+
+after FMOUNT.
+
+Replace them with assertions around:
+
+FMOUNT RC=0
+Dir RC=0
+Type RC=0
+dn_Task becomes active where relevant
+4. Update Python assertions
+
+Audit corresponding tests under:
+
+integration-tests/amiberry/
+
+Remove assertions that expect explicit DOS Mount result files after FMOUNT.
+
+Preserve or strengthen assertions that prove:
+
+FMOUNT succeeded
+DNx exists
+correct geometry/DosEnvec
+handler naturally starts
+expected media content is readable
+
+5. Do not over-convert low-level tests
+
+Some Stage-8/resident-driver tests may intentionally bypass FMOUNT and exercise:
+
+fujinet-mount
+raw resident commands
+static MountLists
+
+Keep those if their purpose is explicitly low-level regression coverage.
+
+For every retained fujinet-mount, report why it remains necessary.
+
+5a. Treat fujinet-mount as a low-level diagnostic tool, not the normal mount path
+
+The current architectural distinction is:
+
+fmount
+    supported end-user mount command
+    owns catalogue selection
+    candidate inspection/classification
+    resident-device mount
+    DOS-node creation
+    handler lifecycle
+    DosEnvec updates
+    mapping persistence
+
+
+fujinet-mount
+    low-level resident-driver diagnostic/test utility
+    may mount media into a driver unit
+    may expose status/update/boundary diagnostics
+    does not represent the normal user-facing AmigaDOS mount workflow
+
+Therefore:
+
+- production/end-user behaviour tests should use FMOUNT;
+- Stage-8, resident-driver contract, boundary, status, update, and other intentionally low-level tests may retain fujinet-mount;
+- any test using fujinet-mount merely because it predates the completed FMOUNT path should be migrated;
+- do not migrate a low-level driver regression to FMOUNT if doing so would stop testing the resident interface it was designed to exercise.
+
+For every remaining fujinet-mount use, classify it explicitly as either:
+
+KEEP — intentional low-level driver coverage
+MIGRATE — historical end-user mounting workflow now superseded by FMOUNT
+
+Report that classification in the deliverable.
+
+In particular, do not assume:
+
+fujinet-mount ... + Mount DNx:
+
+is still an appropriate standard mounting sequence. That combination is now only justified where the test deliberately exercises the lower-level driver/static-MountList path.
+
+6. Validation
+
+After cleanup, run the affected tests serially only.
+
+At minimum:
+
+test_catalog_inspection_preserves_live_dd_handler
+test_diskdevice_fmount.py
+inhibit POC/experiment tests affected by sequence changes
+dynamic DD node test
+absent-node DD FMOUNT
+absent-node HD FMOUNT
+
+Do not run them in parallel.
+
+Do not change production code if a test fails; report the exact stale assumption or failure boundary first.
+
+Deliverable
+
+Report:
+
+- every startup sequence reviewed;
+- every redundant Mount DNx: removed;
+- every Mount DNx: replaced with Dir DNx: and why;
+- every remaining fujinet-mount usage and why it is intentionally retained;
+- every test migrated from fujinet-mount to standard FMOUNT;
+- Python assertions/result files updated;
+- serial test results;
+- any remaining sequence whose intent is unclear.
+
+Stop after test cleanup and validation. Do not add new Phase 2 functionality.
+
+## Response
+
+**Sequence Cleanup Applied**
+
+Removed stale manual DOS Mount calls from the standard FMOUNT workflow:
+
+`integration-tests/amiberry/startup/diskdevice-fmount.sequence`
+
+Removed:
+
+```text
+Mount DN0: FROM DEVS:DN0
+Mount DN2: FROM DEVS:DN2
+```
+
+including the writable-remount `Mount DN2:` step.
+
+Removed obsolete assertions:
+
+- `DOS MOUNT 2 RC=0`
+- `DOS REMOUNT 2 RC=0`
+
+from:
+
+- `integration-tests/amiberry/test_diskdevice_fmount.py`
+- `integration-tests/amiberry/tests.toml`
+
+The cleaned standard workflow now proves handler startup through real filesystem operations:
+
+```text
+FMOUNT
+Dir
+Type
+Copy / Type on DN2
+```
+
+No explicit DOS Mount is needed after a successful FMOUNT.
+
+**Inhibit Sequence Changes**
+
+Replaced redundant DOS Mount activation with real handler-start access:
+
+```text
+FMOUNT 11 DN0: RO
+Dir DN0: >NIL:
+```
+
+Updated:
+
+- `startup/diskdevice-inhibit-exp-a.sequence`
+- `startup/diskdevice-inhibit-exp-b.sequence`
+- `startup/diskdevice-inhibit-poc.sequence`
+
+This preserves the semantic requirement that the DN0 filesystem handler is active before the inhibition/replacement experiment.
+
+**Startup Sequence Classification**
+
+| Sequence | Classification | Action |
+|---|---|---|
+| `diskdevice-fmount.sequence` | Standard end-user FMOUNT workflow | Migrated; removed redundant `Mount DN0:` and `Mount DN2:` |
+| `diskdevice-inspect-catalog.sequence` | Standard FMOUNT plus safe inspection | Already correct; no explicit DOS Mount |
+| `diskdevice-dynamic-fmount-dd.sequence` | Standard absent-node FMOUNT DD | Already correct; no explicit DOS Mount |
+| `diskdevice-dynamic-fmount-hd.sequence` | Standard absent-node FMOUNT HD | Already correct; no explicit DOS Mount |
+| `diskdevice-inhibit-exp-a.sequence` | Handler-lifecycle experiment | Replaced DOS Mount with `Dir DN0: >NIL:` |
+| `diskdevice-inhibit-exp-b.sequence` | Handler-lifecycle experiment | Replaced DOS Mount with `Dir DN0: >NIL:` |
+| `diskdevice-inhibit-poc.sequence` | Inhibit lifecycle proof | Replaced DOS Mount with `Dir DN0: >NIL:` |
+| `diskdevice-dynamic-dd.sequence` | Dynamic DosNode/ACTION_DIE/geometry POC | Retained low-level `fujinet-mount` |
+| `diskdevice-adf.sequence` | Stage-8 resident driver contract, raw I/O, writable/update/eject/status coverage | Retained low-level `fujinet-mount` |
+| `diskdevice-hd-adf.sequence` | Static HD MountList and resident geometry regression | Retained low-level `fujinet-mount` |
+| `diskdevice-mapping-failure.sequence` | Resident mapping failure and direct URI behavior | Retained low-level `fujinet-mount` |
+| `diskdevice-silent-timeout.sequence` | Low-level transport timeout behavior | Retained low-level `fujinet-mount` |
+
+**Remaining `fujinet-mount` Uses**
+
+All retained uses are intentional low-level driver coverage:
+
+- `diskdevice-adf.sequence`
+  - Direct resident mounting, raw sector reads, boundary diagnostics, update, status, malformed URI, direct URI, eject, and low-level mapping behavior.
+- `diskdevice-dynamic-dd.sequence`
+  - Directly changes resident media around the dynamic `DY0:` POC and its explicit `ACTION_DIE`/DosEnvec manipulation.
+- `diskdevice-hd-adf.sequence`
+  - Validates the static `DN0HD:` MountList against an HD image.
+- `diskdevice-mapping-failure.sequence`
+  - Validates driver-side mapping persistence failure behavior.
+- `diskdevice-silent-timeout.sequence`
+  - Exercises low-level timeout behavior without the higher-level FMOUNT workflow.
+- `diskdevice-fmount.sequence`
+  - Retains only `--status` queries as diagnostic observations around standard FMOUNT; it does not use `fujinet-mount` to mount media.
+
+No historical end-user mounting workflow remains on `fujinet-mount` where it should use FMOUNT.
+
+**Serial Validation Results**
+
+Passed:
+
+```text
+test_catalog_inspection_preserves_live_dd_handler
+1 passed, 61 warnings in 25.90s
+```
+
+```text
+test_diskdevice_fmount.py
+1 passed, 145 warnings in 57.78s
+```
+
+This proves the cleaned standard FMOUNT sequence preserves:
+
+- DD A-to-B-to-A replacement;
+- DD-to-HD-to-DD replacement;
+- writable DN2 mount, copy, eject, remount, and persistence;
+- no caller-side `Mount DNx:` dependence.
+
+```text
+test_diskdevice_inhibit.py
+test_diskdevice_inhibit_experiments.py
+3 passed, 221 warnings in 88.83s
+```
+
+This proves replacing DOS Mount with `Dir DN0: >NIL:` correctly starts the handler for all affected inhibit tests.
+
+```text
+test_fmount_creates_absent_dd_node
+test_fmount_creates_absent_hd_node
+2 passed
+```
+
+The absent-node standard FMOUNT cases remain green.
+
+**Persistent Failure**
+
+`test_dynamic_dd_dos_node` still fails when run alone, independent of this sequence cleanup.
+
+Exact boundary:
+
+```text
+Last checkpoint present: dynamic-dir.result
+First checkpoint missing: dynamic-dir-rc.result
+Termination: nio_marker_timeout
+Requester: no
+Recent NIO/serial activity: no
+```
+
+The sequence still uses intentional low-level setup:
+
+```text
+fujinet-mount host:/standard.adf
+Mount DN0: FROM DEVS:DN0
+```
+
+because this POC is not a standard user-facing FMOUNT test. Its explicit purpose is to validate a separate dynamic `DY0:` DeviceNode against a static low-level DN0 baseline, then directly exercise `ACTION_DIE` and manual geometry switching.
+
+`dynamic-dir.result` exists, meaning the redirected `Dir DY0:` produced output. `dynamic-dir-rc.result` was not written, so the test does not establish that the shell command returned. No requester appeared.
+
+Per the requested stop condition, I did not modify production code, dynamic-node construction, SDK code, MountList policy, or this POC sequence after the isolated failure.
+
+**Static MountList Conclusion**
+
+The standard FMOUNT user path no longer depends on explicit caller-side `Mount DNx: FROM DEVS:DNx` calls:
+
+- standard existing-node DD/HD FMOUNT works;
+- absent-node DD/HD FMOUNT works without installed static MountLists;
+- safe inspection works;
+- inhibit lifecycle tests start handlers through actual filesystem access.
+
+Static MountLists can now be evaluated as compatibility/bootstrap assets. Final disposition should wait for the separate `dynamic-dd` POC timeout to be isolated, because that deliberately retains the low-level static-node baseline.

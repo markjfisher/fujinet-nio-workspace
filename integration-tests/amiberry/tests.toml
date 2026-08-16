@@ -230,7 +230,6 @@ results = [
   "fmount-failed-replace.result",
     "fmount-fail-type.result",
   "fmount-rw-mount.result",
-  "fmount-rw-dos-mount.result",
   "fmount-rw-copy.result",
   "fmount-rw-fumount.result",
   "fmount-rw-absent.result",

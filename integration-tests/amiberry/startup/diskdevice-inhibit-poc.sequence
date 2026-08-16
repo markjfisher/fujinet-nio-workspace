@@ -2,8 +2,7 @@ C:Assign T: RAM:
 C:FailAt 21
 C:LoadModule DEVS:fujinet-disk.device
 C:fmount 15 0 RO >NIL:
-C:Mount DN0: FROM DEVS:DN0
-C:Wait 2 SECS
+C:Dir DN0: >NIL:
 C:Dir DN0: >DH0:inhibit-a.result
 C:Type DN0:KNOWN.TXT >>DH0:inhibit-a.result
 C:inhibitpoc 1 >DH0:inhibit-true.result

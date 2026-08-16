@@ -1,6 +1,5 @@
 C:LoadModule DEVS:fujinet-disk.device
 C:fmount 11 DN0: RO >DH0:inspect-mount.result
-C:Mount DN0: FROM DEVS:DN0
 C:Dir DN0: >DH0:inspect-pre-dir.result
 C:Echo "DIR RC=$RC" >>DH0:inspect-pre-dir.result
 C:Type DN0:KNOWN.TXT >DH0:inspect-pre-type.result
