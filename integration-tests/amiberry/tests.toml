@@ -243,6 +243,32 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-dynamic-fmount-dd"
+project = "apps"
+app = "wifitest"
+driver = true
+no_static_mountlists = true
+timeout = 45
+activity_timeout = 35
+startup = "startup/diskdevice-dynamic-fmount-dd.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-dynamic-fmount-dd"
+results = ["dynamic-fmount-pre.result", "dynamic-fmount-mount.result", "dynamic-fmount-post-add.result", "dynamic-fmount-dir.result", "dynamic-fmount-post-dir.result", "dynamic-fmount-type.result"]
+
+[[test]]
+name = "diskdevice-dynamic-fmount-hd"
+project = "apps"
+app = "wifitest"
+driver = true
+no_static_mountlists = true
+timeout = 45
+activity_timeout = 35
+startup = "startup/diskdevice-dynamic-fmount-hd.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-dynamic-fmount-hd"
+results = ["dynamic-hd-pre.result", "dynamic-hd-mount.result", "dynamic-hd-post-add.result", "dynamic-hd-dir.result", "dynamic-hd-post-dir.result", "dynamic-hd-type.result"]
+
+[[test]]
 name = "diskdevice-inspect-catalog"
 project = "apps"
 app = "wifitest"

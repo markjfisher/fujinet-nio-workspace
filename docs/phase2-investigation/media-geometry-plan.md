@@ -7139,3 +7139,352 @@ None remain in `nio-core-apps` or `nio-apps` source. The following remain intent
 - device request dispatch
 - FIFO/queue implementation
 - Exec completion and notification handling
+
+# Resuming the main phase 2 dynamic node task
+
+Resume the Phase 2 production dynamic-node task on top of the now-clean public Amiga DiskDevice SDK boundary.
+
+Do not reintroduce any source-level dependency on driver internals.
+
+Do not remove static MountLists yet; first prove they are no longer required.
+
+# Goal
+
+Production FMOUNT must support:
+
+DNx absent
++ valid inspected standard DD or HD ADF
+-> create persistent dynamic DNx
+-> commit media
+-> normal access starts handler
+
+for both DD and HD.
+
+# Reuse the proven construction
+
+Use the already-validated MakeDosNode() model:
+
+packet[0] = DNx
+packet[1] = fujinet-disk.device
+packet[2] = unit
+packet[3] = 0
+packet[4..23] = classic DE_* environment order
+
+Apply:
+
+stack    32768
+priority 5
+GlobVec  -1
+handler  0
+
+Insert with:
+
+AddDosNode(..., 0, node)
+
+Do not use ADNF_STARTPROC.
+
+If the node-construction/serialization helper is useful to more than FMOUNT and belongs conceptually in the public Amiga disk support layer, add it to libfujinet-amiga-disk.a rather than duplicating the logic in fmount.c.
+
+Keep anything that depends on DOS-list orchestration or command-specific policy in FMOUNT.
+
+# Candidate inspection first
+
+Continue using INSPECT_CATALOG before mutating the live unit.
+
+Reject unsupported candidate media before creating a node or mounting anything.
+
+# Absent-node initial DD
+
+In a clean Amiberry startup with no static DN0: entry:
+
+assert DN0 absent
+FMOUNT <DD slot> DN0: RO
+
+Prove:
+
+DN0 dynamically appears
+BPT=11
+expected DosType
+dn_Task initially zero if observable
+Dir DN0: succeeds
+dn_Task becomes nonzero
+Type KNOWN.TXT succeeds
+Absent-node initial HD
+
+In a separate clean case with no DN0: entry:
+
+FMOUNT <HD slot> DN0: RO
+
+Prove:
+
+DN0 dynamically appears directly as HD
+BPT=22
+expected DosType
+Dir succeeds
+HD.TXT visible
+Type succeeds
+
+Do not require a prior DD bootstrap.
+
+# Existing-node regressions
+
+Preserve:
+
+DD A -> B -> A
+DD -> HD -> DD
+safe candidate inspection
+dynamic-node focused POC
+
+# Failure behavior
+
+Do not add node removal/destruction as rollback.
+
+If candidate classification fails:
+
+no node
+no media commit
+
+If dynamic node creation succeeds but MOUNT_CATALOG fails, report and document the residual registered inactive node state. Do not invent unsafe cleanup.
+
+# Static MountLists
+
+Once both absent-node DD and absent-node HD pass, establish whether static DN0:–DN7: MountLists are now only optional compatibility/bootstrap assets.
+
+Do not delete them unless there is a clear reason.
+
+If they are no longer required for the standard FMOUNT user path, update documentation/backlog accordingly.
+
+# Validation
+
+Run:
+
+SDK build
+nio-core-apps Amiga build
+native driver tests
+absent-node DD Amiberry case
+absent-node HD Amiberry case
+production FMOUNT DD A->B->A
+production FMOUNT DD->HD->DD
+dynamicdosnode focused test
+safe inspection focused test
+
+# Deliverable
+
+Report:
+
+- where dynamic-node construction logic lives;
+- absent-node DD evidence;
+- absent-node HD evidence;
+- natural handler-start evidence;
+- existing-node regression results;
+- residual-state behavior on commit failure;
+- whether static MountLists are now optional compatibility assets;
+- exact files changed;
+- Phase 2 boxes now satisfied.
+
+Stop after this. Do not start HDF/RDB/nonstandard geometry.
+
+
+## resonse
+
+Dynamic absent-node production integration is not complete. Existing-node behavior remains intact, but both no-MountList dynamic-node acceptance cases currently fail immediately after `FMOUNT` returns.
+
+Implemented before the failure boundary:
+
+- Added public SDK `fujinet_disk_serialize_dos_envec()`:
+  - Converts `fujinet_disk_dos_envec_t` to the required classic 20-word `DE_*` order.
+  - Used by both production FMOUNT and the existing `dynamicdosnode` POC, avoiding duplicate serialization logic.
+- Added absent-node FMOUNT creation path:
+  - Candidate inspection/classification still occurs before node creation or media commit.
+  - Builds the DosEnvec using public SDK support.
+  - Opens `expansion.library`.
+  - Constructs:
+    ```text
+    packet[0] = DNx
+    packet[1] = fujinet-disk.device
+    packet[2] = unit
+    packet[3] = 0
+    packet[4..23] = serialized classic DosEnvec
+    ```
+  - Calls `MakeDosNode()`.
+  - Applies:
+    ```text
+    StackSize = 32768
+    Priority = 5
+    GlobalVec = -1
+    Handler = 0
+    ```
+  - Calls `AddDosNode(0, 0, node)`.
+  - Closes `expansion.library` after construction, matching the proven POC’s lifetime pattern.
+- Added no-static-MountList harness support:
+  - `no_static_mountlists = true` suppresses installation of all `DN0:`–`DN7:` MountLists and `DN0HD`.
+- Added dedicated no-MountList cases:
+  - `diskdevice-dynamic-fmount-dd`
+  - `diskdevice-dynamic-fmount-hd`
+- Added assertions for:
+  - node absent before FMOUNT;
+  - DD/HD FMOUNT result;
+  - inactive `dn_Task` immediately after node creation;
+  - BPT 11/22;
+  - natural startup after `Dir`;
+  - fixture-specific `Type` content.
+
+Current failure:
+
+```text
+diskdevice-dynamic-fmount-dd:
+  FMOUNT result file exists
+  requester appears before post-add DOS-list checkpoint
+
+diskdevice-dynamic-fmount-hd:
+  FMOUNT result file exists
+  requester appears before post-add DOS-list checkpoint
+```
+
+The framebuffer requester evidence is blank/unreadable, so the exact requester text has not yet been established. The failure occurs after the FMOUNT command and before `doslistdiag` writes its post-add result. Neither absent-node case can yet claim node insertion, natural handler start, or readable DD/HD media.
+
+Validated before this blocker:
+
+- SDK rebuild succeeds.
+- Updated FMOUNT builds successfully.
+- Public SDK serializer is shared by the POC and production path.
+
+Not yet run after the dynamic-node change because the core acceptance cases are red:
+
+- Existing-node FMOUNT DD A-to-B-to-A regression.
+- Existing-node FMOUNT DD-to-HD-to-DD regression.
+- Safe inspection regression.
+- Dynamic-node POC regression.
+- Native driver suite after the final dynamic-node edits.
+
+No static MountLists were removed or reclassified as optional because the absent-node path is not green.
+
+The next diagnostic must establish the actual post-`AddDosNode()` requester source without changing lifecycle semantics, likely by adding a minimal FMOUNT-side result before returning and a direct DOS-list observation immediately after `AddDosNode()` while preserving the existing no-MountList fixture.
+
+## Follow up investigation
+
+The failure boundary suggests we should first compare the absent-node production ordering with the already-passing dynamicdosnode POC.
+
+Do not add broad requester/debug instrumentation yet.
+
+The proven POC had valid media mounted on the unit before MakeDosNode() / AddDosNode().
+
+The new production absent-node path currently appears to expose the dynamic DOS node before MOUNT_CATALOG commits the backing media.
+
+Test that ordering as the first hypothesis.
+
+1. Confirm exact current ordering
+
+Report the precise production absent-node sequence around:
+
+INSPECT_CATALOG
+MakeDosNode
+AddDosNode
+MOUNT_CATALOG
+
+and compare it with the proven dynamicdosnode test sequence.
+
+2. Change absent-node ordering only
+
+For DNx absent, use:
+
+INSPECT_CATALOG
+classify candidate
+
+
+MOUNT_CATALOG
+
+
+MakeDosNode
+apply verified handler fields
+AddDosNode(..., 0, node)
+
+Rationale:
+
+no DNx exists
+-> therefore no AmigaDOS handler exists for that drive
+-> committing media first cannot expose changed media to a live handler
+
+
+after AddDosNode:
+-> DNx is first exposed only when valid classified media is already present
+
+Do not change the existing-node same-geometry or geometry-changing paths.
+
+3. Add minimal boundary evidence
+
+For the focused absent-node case, record:
+
+candidate inspection passed
+MOUNT_CATALOG RC
+before MakeDosNode
+MakeDosNode result
+AddDosNode result
+FMOUNT return RC
+
+Immediately after AddDosNode, while FMOUNT still owns the flow, inspect the node safely under LDF_READ | LDF_DEVICES and copy/print:
+
+DN0 present
+dn_Task
+BPT
+DosType
+
+Do not retain pointers after unlock.
+
+4. Run DD first
+
+Run only:
+
+diskdevice-dynamic-fmount-dd
+
+Required:
+
+DN0 absent initially
+inspection passes
+MOUNT_CATALOG succeeds
+AddDosNode succeeds
+immediate post-add DN0 present
+dn_Task == 0
+no requester
+doslistdiag completes
+Dir DN0: succeeds
+task becomes nonzero
+Type KNOWN.TXT succeeds
+
+Stop if DD remains red.
+
+5. If DD passes, run HD
+
+Then run the identical absent-node HD case and require:
+
+direct initial HD mount
+BPT=22
+Dir/Type success
+
+6. Failure-state consequence
+
+This reverses the residual failure case:
+
+previously:
+AddDosNode succeeds
+MOUNT_CATALOG fails
+-> visible node with no/old media
+
+
+proposed:
+MOUNT_CATALOG succeeds
+AddDosNode fails
+-> mounted driver unit with no DOS node
+
+Do not invent cleanup yet.
+
+Record that residual state explicitly if node creation fails. It is preferable to exposing a DOS device before its backing media exists, but full rollback remains separate.
+
+7. Do not change anything else
+
+No static MountList removal.
+No node destruction.
+No new lifecycle design.
+No HDF/RDB.
+
+If changing only this ordering restores absent-node DD/HD, report that as the root cause and then run the existing regression suite.

@@ -631,9 +631,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
             ])
-            for unit in range(8):
-                build_cmd.extend(["--disk-mountlist", driver_root / f"amiga/config/DN{unit}"])
-            build_cmd.extend(["--disk-mountlist", driver_root / "amiga/config/DN0HD"])
+            if not case.get("no_static_mountlists"):
+                for unit in range(8):
+                    build_cmd.extend(["--disk-mountlist", driver_root / f"amiga/config/DN{unit}"])
+                build_cmd.extend(["--disk-mountlist", driver_root / "amiga/config/DN0HD"])
         subprocess.run(build_cmd, cwd=ROOT, env=amiga_environment, check=True)
 
         native_adf: Path | None = None

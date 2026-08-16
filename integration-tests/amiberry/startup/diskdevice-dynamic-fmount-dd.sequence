@@ -1,0 +1,11 @@
+C:LoadModule DEVS:fujinet-disk.device
+C:doslistdiag >DH0:dynamic-fmount-pre.result
+C:FMOUNT 11 DN0: RO >DH0:dynamic-fmount-mount.result
+C:Echo "FMOUNT DD RC=$RC" >>DH0:dynamic-fmount-mount.result
+C:doslistdiag >DH0:dynamic-fmount-post-add.result
+C:Dir DN0: >DH0:dynamic-fmount-dir.result
+C:Echo "DIR RC=$RC" >>DH0:dynamic-fmount-dir.result
+C:doslistdiag >DH0:dynamic-fmount-post-dir.result
+C:Type DN0:KNOWN.TXT >DH0:dynamic-fmount-type.result
+C:Echo "TYPE RC=$RC" >>DH0:dynamic-fmount-type.result
+C:FLS host:/amiga-e2e-complete/diskdevice-dynamic-fmount-dd >NIL:

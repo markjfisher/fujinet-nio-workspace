@@ -119,3 +119,29 @@ def test_catalog_inspection_preserves_live_dd_handler(run_amiga_case):
     assert "KNOWN.TXT" in results["inspect-post-dir.result"].upper()
     assert "TYPE RC=0" in results["inspect-post-type.result"]
     assert "FUJINET ADF READ PASSED" in results["inspect-post-type.result"]
+
+
+def test_fmount_creates_absent_dd_node(run_amiga_case):
+    results = run_amiga_case("diskdevice-dynamic-fmount-dd")
+    assert "DN0 type=0" not in results["dynamic-fmount-pre.result"]
+    assert "FMOUNT DD RC=0" in results["dynamic-fmount-mount.result"]
+    assert "DN0 type=0 task=00000000" in results["dynamic-fmount-post-add.result"]
+    assert "blocksPerTrack=11" in results["dynamic-fmount-post-add.result"]
+    assert "DIR RC=0" in results["dynamic-fmount-dir.result"]
+    assert "KNOWN.TXT" in results["dynamic-fmount-dir.result"].upper()
+    assert "DN0 type=0 task=00000000" not in results["dynamic-fmount-post-dir.result"]
+    assert "TYPE RC=0" in results["dynamic-fmount-type.result"]
+    assert "FUJINET ADF READ PASSED" in results["dynamic-fmount-type.result"]
+
+
+def test_fmount_creates_absent_hd_node(run_amiga_case):
+    results = run_amiga_case("diskdevice-dynamic-fmount-hd")
+    assert "DN0 type=0" not in results["dynamic-hd-pre.result"]
+    assert "FMOUNT HD RC=0" in results["dynamic-hd-mount.result"]
+    assert "DN0 type=0 task=00000000" in results["dynamic-hd-post-add.result"]
+    assert "blocksPerTrack=22" in results["dynamic-hd-post-add.result"]
+    assert "DIR RC=0" in results["dynamic-hd-dir.result"]
+    assert "HD.TXT" in results["dynamic-hd-dir.result"].upper()
+    assert "DN0 type=0 task=00000000" not in results["dynamic-hd-post-dir.result"]
+    assert "TYPE RC=0" in results["dynamic-hd-type.result"]
+    assert "FUJINET HD ADF READ PASSED" in results["dynamic-hd-type.result"]
