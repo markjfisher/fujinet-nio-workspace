@@ -30,6 +30,18 @@ C:Echo "DYNAMIC HD DIR RC=$RC" >DH0:dynamic-hd-dir-rc.result
 C:Type DY0:HD.TXT >DH0:dynamic-hd-type.result
 C:Echo "DYNAMIC HD TYPE RC=$RC" >DH0:dynamic-hd-type-rc.result
 C:doslistdiag --find-only >DH0:dynamic-post-restart.result
+C:Echo "=== BEFORE DD RETIREMENT ==="
+C:dynamicdosnode --die >DH0:dynamic-dd-die.result
+C:Echo "=== AFTER DD RETIREMENT RC=$RC ==="
+C:fujinet-mount 11 0 RO >DH0:dynamic-dd-mount.result
+C:dynamicdosnode --switch-dd >DH0:dynamic-dd-update.result
+C:doslistdiag >DH0:dynamic-dd-prestart.result
+C:Echo "=== BEFORE DD RESTART DIR ==="
+C:Dir DY0: >DH0:dynamic-dd-dir.result
+C:Echo "DYNAMIC DD RESTART DIR RC=$RC" >DH0:dynamic-dd-dir-rc.result
+C:Type DY0:KNOWN.TXT >DH0:dynamic-dd-type.result
+C:Echo "DYNAMIC DD RESTART TYPE RC=$RC" >DH0:dynamic-dd-type-rc.result
+C:doslistdiag --find-only >DH0:dynamic-dd-post-restart.result
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:dynamic-load.result
 C:Type DH0:dynamic-node.result
@@ -50,6 +62,15 @@ C:Type DH0:dynamic-hd-dir-rc.result
 C:Type DH0:dynamic-hd-type.result
 C:Type DH0:dynamic-hd-type-rc.result
 C:Type DH0:dynamic-post-restart.result
+C:Type DH0:dynamic-dd-die.result
+C:Type DH0:dynamic-dd-mount.result
+C:Type DH0:dynamic-dd-update.result
+C:Type DH0:dynamic-dd-prestart.result
+C:Type DH0:dynamic-dd-dir.result
+C:Type DH0:dynamic-dd-dir-rc.result
+C:Type DH0:dynamic-dd-type.result
+C:Type DH0:dynamic-dd-type-rc.result
+C:Type DH0:dynamic-dd-post-restart.result
 C:Echo "RESULTS-END"
 C:FLS host:/amiga-e2e-complete/diskdevice-dynamic-dd >NIL:
 C:Echo "E2E COMPLETE"

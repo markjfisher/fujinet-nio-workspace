@@ -75,10 +75,16 @@ progression are specified in the associated
       that `TD_GETGEOMETRY` rewrites `Surfaces`, `BlocksPerTrack`, `LowCyl`, or
       `HighCyl` from a static MountList.
 
-- [ ] Choose and test the mounting strategy for variable media: known geometry
+- [x] Choose and test the mounting strategy for variable media: known geometry
       profiles, dynamically constructed DOS device nodes, or a verified linear
       logical geometry. The choice must preserve existing filesystem layout
       and allocation semantics.
+
+persistent dynamic DeviceNode
++ profile-driven DosEnvec
++ ACTION_DIE to retire active handler
++ update DosEnvec only while dn_Task == 0
++ natural restart on next access
 
 - [ ] Replace the eight fixed standard-ADF MountLists as the universal story.
       Static `DN0`–`DN7` files may remain as explicit DD-ADF compatibility

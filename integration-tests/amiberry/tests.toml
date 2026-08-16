@@ -57,6 +57,15 @@ results = [
   "dynamic-hd-type.result",
   "dynamic-hd-type-rc.result",
   "dynamic-post-restart.result",
+  "dynamic-dd-die.result",
+  "dynamic-dd-mount.result",
+  "dynamic-dd-update.result",
+  "dynamic-dd-prestart.result",
+  "dynamic-dd-dir.result",
+  "dynamic-dd-dir-rc.result",
+  "dynamic-dd-type.result",
+  "dynamic-dd-type-rc.result",
+  "dynamic-dd-post-restart.result",
 ]
 
 [[test]]

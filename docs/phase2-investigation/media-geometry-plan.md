@@ -3155,3 +3155,372 @@ h. post-restart task state;
 i. focused Amiberry result.
 
 If DD → HD succeeds, stop there.
+
+## ... good response:
+
+The isolated DD → HD transition succeeded on the same persistent dynamic `DY0` DeviceNode. No node removal, recreation, cleanup, duplicate-node, FMOUNT, or production changes were made.
+
+**a. DD Baseline**
+
+The test first established the existing DD path:
+
+```text
+DosEnvec:
+SizeBlock       = 128
+Surfaces        = 2
+BlocksPerTrack  = 11
+LowCyl          = 0
+HighCyl         = 79
+DosType         = 0x444f5300
+```
+
+The underlying NIO media was the DD fixture:
+
+```text
+sector_size  = 512
+sector_count = 1760
+```
+
+The baseline passed:
+
+```text
+Dir DY0:                 RC=0
+Type DY0:KNOWN.TXT       RC=0
+FUJINET ADF READ PASSED
+dn_Task != 0
+```
+
+**b. DD Handler Retirement**
+
+The already-proven read-only retirement path was used:
+
+```text
+DIE pre_present=1 pre_task=00c3805c
+DIE action_result=-1 ioerr=0
+DIE poll=0 present=1 task=00000000
+```
+
+The node remained registered and became inactive:
+
+```text
+DY0 present = yes
+dn_Task     = 0
+```
+
+No `RemDosEntry()` call was made.
+
+**c. HD NIO Geometry**
+
+The existing HD fixture was mounted through the same NIO/device path. The retained media descriptor reported:
+
+```text
+sector_size  = 512
+sector_count = 3520
+```
+
+The HD fixture uses the recognized `DOS\0` filesystem identity and contains the distinct HD file/content.
+
+**d. Inactive Node Environment Update**
+
+While `DY0` had `dn_Task == 0`, the existing node’s startup environment was updated in place:
+
+```text
+de_SizeBlock       = 128
+de_Surfaces        = 2
+de_SectorPerBlock  = 1
+de_BlocksPerTrack  = 22
+de_LowCyl          = 0
+de_HighCyl         = 79
+de_DosType         = 0x444f5300
+```
+
+The helper verified the inactive state while applying the update:
+
+```text
+HD_UPDATE inactive=1 task=00000000
+```
+
+The complete pre-restart HD environment inspection confirmed `BlocksPerTrack=22` and the expected remaining environment values.
+
+**e. Pre-Restart State**
+
+Before restarting the handler:
+
+```text
+DY0 type=0 task=00000000
+```
+
+The node remained registered with its existing `dn_Startup`; only the inactive environment values were changed.
+
+**f. HD `Dir DY0:` Result**
+
+The existing node was accessed without recreation:
+
+```text
+Dir DY0:
+DYNAMIC HD DIR RC=0
+```
+
+The directory contained the distinct HD fixture file:
+
+```text
+HD.TXT
+```
+
+**g. HD `Type DY0:HD.TXT` Result**
+
+The HD-specific file was read successfully:
+
+```text
+DYNAMIC HD TYPE RC=0
+FUJINET HD ADF READ PASSED
+```
+
+**h. Post-Restart Task State**
+
+After the HD `Dir DY0:` access, the subsequent DOS-list inspection showed:
+
+```text
+DY0 type=0 task=<nonzero>
+```
+
+The test explicitly verified that:
+
+```text
+DY0 type=0 task=00000000
+```
+
+was absent after restart. `DN0` remained present.
+
+The proven lifecycle is now:
+
+```text
+DD DY0 active
+ACTION_DIE
+DY0 remains registered, dn_Task=0
+HD media mounted
+inactive DY0 DosEnvec changed to HD geometry
+Dir DY0:
+fresh handler starts
+HD directory read succeeds
+HD Type succeeds
+dn_Task becomes nonzero
+```
+
+**i. Focused Amiberry Result**
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+
+1 passed, 130 warnings
+```
+
+The warnings are existing Pillow deprecation warnings from the Amiberry harness.
+
+The test stopped after DD → HD. No HD → DD transition was attempted.
+
+## ... more tweaks
+
+Proceed with one final symmetry test for the dynamic-node geometry architecture:
+
+HD → DD transition on the same persistent DY0 DeviceNode.
+
+Do not make production FMOUNT changes yet.
+Do not remove/recreate DY0.
+Do not call RemDosEntry().
+Do not add any new lifecycle mechanism.
+
+Reuse exactly the now-proven flow:
+
+current DY0 = active HD handler
+ACTION_DIE
+verify DY0 remains present and dn_Task == 0
+
+
+remount standard DD media through the same NIO/device path
+verify retained NIO geometry:
+    sector_size  = 512
+    sector_count = 1760
+
+
+rebuild/apply the DD DosEnvec using the existing classifier/builder:
+    de_SizeBlock       = 128
+    de_Surfaces        = 2
+    de_BlocksPerTrack  = 11
+    de_LowCyl          = 0
+    de_HighCyl         = 79
+    de_DosType         = recognized DD DosType
+
+
+inspect DY0 before restart:
+    dn_Task == 0
+    BlocksPerTrack == 11
+
+
+Dir DY0:
+    RC=0
+    KNOWN.TXT visible
+
+
+Type DY0:KNOWN.TXT
+    RC=0
+    FUJINET ADF READ PASSED
+
+
+inspect DY0 after restart:
+    dn_Task != 0
+
+Keep visible screen breadcrumbs and machine-readable assertions.
+
+The test should prove the full cycle:
+
+DD -> HD -> DD
+
+on one persistent dynamic node.
+
+Do not modify production code in this turn.
+
+If the reverse transition passes, stop there and report:
+
+1. retirement result;
+2. DD NIO geometry;
+3. exact environment changes back to DD;
+4. pre-restart task/environment;
+5. DD Dir result;
+6. DD Type result;
+7. post-restart task;
+8. focused test result.
+
+Do not proceed to FMOUNT integration in the same turn.
+
+## tweaks resolution
+
+The HD → DD symmetry test passed on the same persistent dynamic `DY0` DeviceNode. No node removal, recreation, `RemDosEntry()`, allocation freeing, duplicate-node testing, or production changes were made.
+
+**1. HD Retirement Result**
+
+The test started from the active HD state, then used the proven retirement path:
+
+```text
+DIE pre_present=1 pre_task=<nonzero>
+DIE action_result=-1 ioerr=0
+DIE poll=0 present=1 task=00000000
+```
+
+`DY0` remained registered and became inactive before the DD environment was changed.
+
+**2. DD NIO Geometry**
+
+The existing DD fixture was mounted through the same NIO/device path:
+
+```text
+sector_size  = 512
+sector_count = 1760
+```
+
+**3. Environment Changes Back to DD**
+
+While the existing `DY0` node had `dn_Task == 0`, its retained startup environment was updated to:
+
+```text
+de_SizeBlock       = 128
+de_Surfaces        = 2
+de_SectorPerBlock  = 1
+de_BlocksPerTrack  = 11
+de_LowCyl          = 0
+de_HighCyl         = 79
+de_DosType         = 0x444f5300
+```
+
+The helper reported:
+
+```text
+DD_UPDATE inactive=1 task=00000000
+```
+
+The pre-restart DOS-list inspection confirmed the DD geometry, including:
+
+```text
+blocksPerTrack=11
+```
+
+The rest of the verified environment remained unchanged.
+
+**4. Pre-Restart State**
+
+Before restarting the DD handler:
+
+```text
+DY0 type=0 task=00000000
+```
+
+`DY0` remained registered with its existing `DeviceNode`, `FileSysStartupMsg`, and updated DD DosEnvec.
+
+**5. DD `Dir DY0:` Result**
+
+The existing persistent node was accessed without recreation:
+
+```text
+Dir DY0:
+DYNAMIC DD RESTART DIR RC=0
+```
+
+The directory contained:
+
+```text
+KNOWN.TXT
+```
+
+**6. DD `Type DY0:KNOWN.TXT` Result**
+
+The DD-specific file read succeeded:
+
+```text
+DYNAMIC DD RESTART TYPE RC=0
+FUJINET ADF READ PASSED
+```
+
+**7. Post-Restart Task State**
+
+After the DD `Dir DY0:` access, the final DOS-list inspection confirmed:
+
+```text
+DY0 type=0 task=<nonzero>
+```
+
+The test asserts that:
+
+```text
+DY0 type=0 task=00000000
+```
+
+is absent after restart.
+
+`DN0` remained present throughout the transition.
+
+**8. Focused Test Result**
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_dynamic_dd_dos_node --run-amiga -q
+
+1 passed, 168 warnings
+```
+
+The warnings are existing Pillow deprecation warnings from the Amiberry harness.
+
+The complete persistent-node cycle is now proven:
+
+```text
+DD active
+ACTION_DIE
+DD inactive
+switch to HD
+HD active
+ACTION_DIE
+HD inactive
+switch back to DD
+DD active again
+```
+
+No FMOUNT integration was started.
+
