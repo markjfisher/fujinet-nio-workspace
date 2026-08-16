@@ -5714,3 +5714,326 @@ Files changed:
 
 The next controlled step is to add the native resident-command test and a focused Amiberry sequence that mounts DD on `DN0:`, reads `KNOWN.TXT`, inspects HD catalogue slot 14, confirms `512x3520` and the HD profile, then verifies the live DD handler and media state are unchanged.
 
+## Ask to add tests...
+
+Finish validation of the new safe INSPECT_CATALOG path before any FMOUNT lifecycle integration.
+
+Do not modify production FMOUNT yet.
+Do not add ACTION_DIE, DosEnvec updates, dynamic-node creation, or DD→HD replacement.
+
+The goal of this turn is to prove the inspection bridge end-to-end under Amiberry.
+
+1. Add the missing native resident-command test
+
+Add a focused native driver test for FUJINET_DISK_CMD_INSPECT_CATALOG.
+
+Use the fake client so the test can prove:
+
+command resolves catalogue slot
+-> calls client->inspect()
+-> returns raw inspection result
+
+Explicitly assert that it does not mutate the resident unit:
+
+mounted state unchanged
+sector_size unchanged
+sector_count unchanged
+change_count unchanged
+changed/media flags unchanged
+mapping unchanged
+
+Also prove the fake mount callback is not invoked by this command.
+
+2. Add an exact nio-lib protocol test if practical
+
+Add a focused test around fn_disk_inspect_context(...) that verifies the exact request/response contract for command 0x0F:
+
+request:
+version
+flags
+image-type override
+sector-size hint
+boot-byte count
+URI
+
+
+response:
+version
+detected type
+sector size
+sector count
+boot-byte count
+boot bytes
+
+If the existing nio-lib test framework makes this disproportionately difficult, report that explicitly, but do not skip the Amiberry test.
+
+3. Add a dedicated Amiberry inspection case
+
+Add a focused test separate from FMOUNT geometry transition work.
+
+Suggested case name:
+
+diskdevice-inspect-catalog
+Baseline
+
+Start with the normal DD fixture mounted on live DN0:.
+
+Establish:
+
+Dir DN0: succeeds
+Type DN0:KNOWN.TXT succeeds
+FUJINET ADF READ PASSED
+
+Capture before-inspection state:
+
+dn_Task
+sector_size
+sector_count
+change counter
+changed state if exposed
+current DosEnvec / BPT if readily available
+
+dn_Task must be nonzero before the inspection.
+
+Inspect the HD candidate
+
+Invoke:
+
+diskinspect <HD catalogue slot>
+
+using the existing HD fixture/catalogue slot.
+
+Assert the resident command returns:
+
+sector_size = 512
+sector_count = 3520
+media profile = HD
+blocks_per_track = 22
+expected DOS type
+
+The DD/HD and filesystem decisions must come from the already-existing Amiga classifiers.
+
+Post-inspection non-mutation proof
+
+Without inhibiting, retiring, remounting, or otherwise touching DN0:, capture its state again.
+
+Required assertions:
+
+same dn_Task as before inspection
+sector_size still 512
+sector_count still 1760
+change counter unchanged
+changed/media state unchanged
+existing DosEnvec still DD / BPT=11
+
+Then run again:
+
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+Required:
+
+Dir RC=0
+Type RC=0
+FUJINET ADF READ PASSED
+
+No requester and no stall.
+
+This is the core acceptance criterion.
+
+4. Also inspect DD candidate if cheap
+
+If the same helper/test can inspect the DD catalogue slot too, assert:
+
+512 x 1760
+DD
+expected DosType
+
+This is useful but secondary to proving HD inspection leaves live DD untouched.
+
+5. Rerun the existing production FMOUNT regression
+
+After the inspection bridge changes:
+
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+
+must remain green unchanged.
+
+This is a regression check only; do not modify its lifecycle logic.
+
+# Deliverable
+
+Report:
+
+- native resident-command test result;
+- nio-lib protocol test result, if added;
+- pre-inspection live DN0 state;
+- HD inspection result;
+- post-inspection live DN0 state;
+- post-inspection Dir/Type result;
+- requester/stall status;
+- unchanged FMOUNT test result;
+- exact files changed.
+
+If all of that passes, stop. The next task will finally consume this proven inspection path inside production FMOUNT for DD↔HD transitions.
+
+
+## reponse...
+
+Validation is partially complete. The end-to-end Amiberry acceptance and unchanged FMOUNT regression pass, but the requested focused native resident-command unit test was not added, so the task is not fully complete.
+
+**Completed Evidence**
+
+- Exact `fn_disk_inspect_context()` wire-contract test passes:
+
+```text
+make test-disk-context
+independent DiskDevice contexts remain isolated
+```
+
+The test verifies command `0x0F` request fields:
+
+```text
+version
+reserved flags = 0
+image type override = Auto
+sector hint = 0
+boot-byte count = 512
+URI = mem:/candidate.adf
+```
+
+It also verifies the response decodes:
+
+```text
+version
+image type = Raw
+sector size = 512
+sector count = 3520
+boot-byte count = 4
+boot bytes = DOS\0
+```
+
+- Focused Amiberry safe-inspection test passes:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py::test_catalog_inspection_preserves_live_dd_handler -q --run-amiga
+1 passed, 61 warnings in 28.74s
+```
+
+The test performs:
+
+```text
+FMOUNT 11 DN0: RO
+Mount DN0:
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+diskinspect 0 14   # HD candidate
+diskinspect 0 11   # DD candidate
+
+Dir DN0:
+Type DN0:KNOWN.TXT
+```
+
+Assertions proved:
+
+- Pre-inspection:
+  - `DN0` handler task is nonzero.
+  - DD unit status is `change=1 absent=0 protected=1`.
+  - `KNOWN.TXT` is visible.
+  - `FUJINET ADF READ PASSED` is returned.
+- HD inspection:
+  - `sector_size=512`
+  - `sector_count=3520`
+  - Amiga media-profile classifier returns `profile=2` (HD).
+  - Amiga filesystem classifier returns `dostype=444f5300` (`DOS\0`).
+- DD inspection:
+  - `sector_size=512`
+  - `sector_count=1760`
+  - Amiga media-profile classifier returns `profile=1` (DD).
+  - DosType is `DOS\0`.
+- Post-inspection:
+  - `DN0` handler task remains nonzero.
+  - DosEnvec remains DD with `blocksPerTrack=11`.
+  - Unit status output is byte-for-byte unchanged.
+  - `Dir DN0:` returns RC=0.
+  - `Type DN0:KNOWN.TXT` returns RC=0 and `FUJINET ADF READ PASSED`.
+  - No requester or stall occurred.
+
+- Unchanged production FMOUNT regression passes:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+1 passed, 131 warnings in 51.41s
+```
+
+This retains the existing DD A-to-B-to-A replacement behavior.
+
+**Still Missing**
+
+The requested native resident-device command test for `FUJINET_DISK_CMD_INSPECT_CATALOG` was not implemented. The existing native driver suite passed, but it does not yet directly assert that the resident command:
+
+- resolves a catalogue slot;
+- calls `client->inspect()`;
+- returns raw inspection data;
+- does not call the fake `mount()` callback;
+- leaves mounted state, sector size/count, change count, flags, and mappings unchanged.
+
+That direct native isolation test is the remaining validation gap.
+
+**Files Added or Modified During This Validation**
+
+- `repos/fujinet-nio-lib/tests/disk_context_test.c`
+  - Exact `DiskCommand::Inspect` request/response wire validation.
+- `integration-tests/amiberry/startup/diskdevice-inspect-catalog.sequence`
+  - Dedicated active-DD/live-handler safe-inspection scenario.
+- `integration-tests/amiberry/test_diskdevice_adf.py`
+  - Assertions for DD live-state preservation and HD/DD candidate facts.
+- `integration-tests/amiberry/tests.toml`
+  - `diskdevice-inspect-catalog` case registration.
+
+The working tree also contains an unrelated pre-existing modification:
+
+```text
+docs/phase2-investigation/media-geometry-plan.md
+```
+
+No production FMOUNT lifecycle code was modified in this validation turn.
+
+## test request
+
+Add the one remaining focused native test for FUJINET_DISK_CMD_INSPECT_CATALOG.
+
+Do not change production behavior.
+
+The Amiberry inspection test and nio-lib wire-contract test already pass. This task is only to lock down the resident command’s isolation contract.
+
+Add a native driver test using the fake client that:
+
+1. prepares an existing mounted unit with known state;
+2. configures catalogue-slot resolution for a candidate URI;
+3. invokes FUJINET_DISK_CMD_INSPECT_CATALOG;
+4. verifies fake client->inspect() was called with the resolved URI;
+5. verifies fake client->mount() was NOT called;
+6. verifies the inspection payload returned the expected:
+     image type
+     sector size
+     sector count
+     boot bytes
+7. verifies the resident unit state is unchanged:
+     mounted state
+     sector size
+     sector count
+     read-only/protection state
+     changed flag
+     change counter
+     slot/mapping state
+
+If the fake client currently lacks counters/recorded arguments for inspect() and mount(), add only the minimal test instrumentation needed.
+
+Run the focused native test and the existing native driver suite.
+
+Do not modify FMOUNT or Amiberry tests in this turn.
+
+Report the test name and result only after it passes.
+

@@ -235,6 +235,31 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-inspect-catalog"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/diskdevice-inspect-catalog.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-inspect-catalog"
+results = [
+  "inspect-mount.result",
+  "inspect-pre-dir.result",
+  "inspect-pre-type.result",
+  "inspect-pre-dos.result",
+  "inspect-pre-status.result",
+  "inspect-hd.result",
+  "inspect-dd.result",
+  "inspect-post-dos.result",
+  "inspect-post-status.result",
+  "inspect-post-dir.result",
+  "inspect-post-type.result",
+]
+
+[[test]]
 name = "diskdevice-mapping-failure"
 project = "apps"
 app = "wifitest"

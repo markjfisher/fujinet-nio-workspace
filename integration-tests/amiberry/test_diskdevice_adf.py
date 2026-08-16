@@ -97,3 +97,25 @@ def test_hd_adf_mount_geometry_dir_and_type(run_amiga_case):
     assert "DIR RC=0" in results["hd-dir.result"]
     assert "FUJINET HD ADF READ PASSED" in results["hd-type.result"]
     assert "STATUS drive=0 change=1 absent=0 protected=1" in results["hd-status.result"]
+
+
+def test_catalog_inspection_preserves_live_dd_handler(run_amiga_case):
+    results = run_amiga_case("diskdevice-inspect-catalog")
+    assert "Mounted slot 11 on DN0:" in results["inspect-mount.result"]
+    assert "DIR RC=0" in results["inspect-pre-dir.result"]
+    assert "KNOWN.TXT" in results["inspect-pre-dir.result"].upper()
+    assert "TYPE RC=0" in results["inspect-pre-type.result"]
+    assert "FUJINET ADF READ PASSED" in results["inspect-pre-type.result"]
+    assert "DN0 type=0 task=00000000" not in results["inspect-pre-dos.result"]
+    assert "STATUS drive=0 change=1 absent=0 protected=1" in results["inspect-pre-status.result"]
+    assert "INSPECT RC=0 size=512 count=3520 profile=2 dostype=444f5300" in results["inspect-hd.result"]
+    assert "INSPECT HD RC=0" in results["inspect-hd.result"]
+    assert "INSPECT RC=0 size=512 count=1760 profile=1 dostype=444f5300" in results["inspect-dd.result"]
+    assert "INSPECT DD RC=0" in results["inspect-dd.result"]
+    assert "DN0 type=0 task=00000000" not in results["inspect-post-dos.result"]
+    assert "blocksPerTrack=11" in results["inspect-post-dos.result"]
+    assert results["inspect-pre-status.result"] == results["inspect-post-status.result"]
+    assert "DIR RC=0" in results["inspect-post-dir.result"]
+    assert "KNOWN.TXT" in results["inspect-post-dir.result"].upper()
+    assert "TYPE RC=0" in results["inspect-post-type.result"]
+    assert "FUJINET ADF READ PASSED" in results["inspect-post-type.result"]

@@ -1,0 +1,20 @@
+C:LoadModule DEVS:fujinet-disk.device
+C:fmount 11 DN0: RO >DH0:inspect-mount.result
+C:Mount DN0: FROM DEVS:DN0
+C:Dir DN0: >DH0:inspect-pre-dir.result
+C:Echo "DIR RC=$RC" >>DH0:inspect-pre-dir.result
+C:Type DN0:KNOWN.TXT >DH0:inspect-pre-type.result
+C:Echo "TYPE RC=$RC" >>DH0:inspect-pre-type.result
+C:doslistdiag >DH0:inspect-pre-dos.result
+C:fujinet-mount --status 0 >DH0:inspect-pre-status.result
+C:diskinspect 0 14 >DH0:inspect-hd.result
+C:Echo "INSPECT HD RC=$RC" >>DH0:inspect-hd.result
+C:diskinspect 0 11 >DH0:inspect-dd.result
+C:Echo "INSPECT DD RC=$RC" >>DH0:inspect-dd.result
+C:doslistdiag >DH0:inspect-post-dos.result
+C:fujinet-mount --status 0 >DH0:inspect-post-status.result
+C:Dir DN0: >DH0:inspect-post-dir.result
+C:Echo "DIR RC=$RC" >>DH0:inspect-post-dir.result
+C:Type DN0:KNOWN.TXT >DH0:inspect-post-type.result
+C:Echo "TYPE RC=$RC" >>DH0:inspect-post-type.result
+C:FLS host:/amiga-e2e-complete/diskdevice-inspect-catalog >NIL:
