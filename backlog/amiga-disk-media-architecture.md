@@ -269,8 +269,9 @@ geometry or DosEnvec change
 
 ## FMOUNT Production Status
 
-Production integration is not complete. `FMOUNT` does not yet claim to create
-dynamic nodes as the production/user-facing path.
+Production `FMOUNT` now supports standard existing-node DD/HD ADF replacement.
+It obtains candidate facts through the non-mutating inspection command before
+selecting a lifecycle path; it does not create dynamic nodes in this release.
 
 The intended flow separates candidate inspection from committing replacement to
 the active unit. The currently available NIO mount operation is stateful: it
@@ -293,10 +294,10 @@ inspection primitive while that unit has an active DOS handler.
 7. Persist the catalogue-to-unit assignment only after the selected operation
    has succeeded.
 
-Failure and recovery semantics for geometry-changing production replacement
-remain to be designed and tested. In particular, production must define what
-happens when media mounting succeeds but classification, handler retirement,
-environment update, or first access fails.
+Failure and recovery semantics after a successful geometry-changing media
+commit remain incomplete. In particular, production does not yet roll back a
+successful commit if the subsequent inactive DosEnvec update or first access
+fails.
 
 ## Static MountLists
 

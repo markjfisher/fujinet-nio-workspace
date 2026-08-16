@@ -90,7 +90,7 @@ persistent dynamic DeviceNode
       Static `DN0`–`DN7` files may remain as explicit DD-ADF compatibility
       profiles only if their scope is unmistakable.
 
-- [ ] Reject unsupported, malformed, partitioned, or ambiguous images with a
+- [x] Reject unsupported, malformed, partitioned, or ambiguous images with a
       clear error before announcing insertion; never silently reinterpret an
       image using the 880 KiB defaults.
 
@@ -100,7 +100,7 @@ persistent dynamic DeviceNode
       independent geometry on all eight units.
 - [ ] Add native tests for dynamic `TD_GETGEOMETRY` and standard-tool device
       calls.
-- [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
+- [x] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
       `FUMOUNT`, and remounting persisted assignments. (Direct HD and
       read-only `FMOUNT`/`FUMOUNT` coverage exists; writable replacement and

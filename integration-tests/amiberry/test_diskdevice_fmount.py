@@ -32,6 +32,21 @@ def test_fmount_fumount_standard_adf(run_amiga_case):
     assert back_present[2:] == (0, 1)
     assert "Mounted slot 11 on DN0:" in results["fmount-ba-mount.result"]
     assert "FUJINET ADF READ PASSED" in results["fmount-ba-type.result"]
+    assert "FMOUNT HD RC=0" in results["fmount-hd-mount.result"]
+    assert "Mounted slot 14 on DN0:" in results["fmount-hd-mount.result"]
+    assert "DIR HD RC=0" in results["fmount-hd-dir.result"]
+    assert "HD.TXT" in results["fmount-hd-dir.result"].upper()
+    assert "TYPE HD RC=0" in results["fmount-hd-type.result"]
+    assert "FUJINET HD ADF READ PASSED" in results["fmount-hd-type.result"]
+    assert "DN0 type=0 task=00000000" not in results["fmount-hd-dos.result"]
+    assert "blocksPerTrack=22" in results["fmount-hd-dos.result"]
+    assert "FMOUNT DD RETURN RC=0" in results["fmount-dd-return-mount.result"]
+    assert "DIR DD RETURN RC=0" in results["fmount-dd-return-dir.result"]
+    assert "KNOWN.TXT" in results["fmount-dd-return-dir.result"].upper()
+    assert "TYPE DD RETURN RC=0" in results["fmount-dd-return-type.result"]
+    assert "FUJINET ADF READ PASSED" in results["fmount-dd-return-type.result"]
+    assert "DN0 type=0 task=00000000" not in results["fmount-dd-return-dos.result"]
+    assert "blocksPerTrack=11" in results["fmount-dd-return-dos.result"]
     assert "FMOUNT FAILED RC=10" in results["fmount-failed-replace.result"]
     assert "FUJINET ADF READ PASSED" in results["fmount-fail-type.result"]
     assert "FMOUNT RW RC=0" in results["fmount-rw-mount.result"]

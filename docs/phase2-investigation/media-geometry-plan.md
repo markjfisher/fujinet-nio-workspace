@@ -6079,3 +6079,419 @@ All Amiga Exec boundary contract tests passed
 ```
 
 The testable shared helper `fujinet_disk_inspect_catalog()` is now used by the resident `FUJINET_DISK_CMD_INSPECT_CATALOG` command, preserving production behavior while allowing the native test to lock down its no-mount/no-state-mutation contract.
+
+## More terra task.. closing the loop
+
+Integrate the now-proven safe INSPECT_CATALOG path into production Amiga FMOUNT and prove standard-tool DD → HD → DD replacement.
+
+Do not redesign candidate inspection. That layer is signed off.
+
+Do not implement HDF, RDB, nonstandard geometry, or node removal.
+
+1. Preserve the current known-good DD→DD path
+
+The existing production same-geometry lifecycle is already passing:
+
+active DNx handler
+Inhibit(TRUE)
+MOUNT_CATALOG
+close device/request resources
+Inhibit(FALSE)
+
+Preserve this behavior for compatible DD→DD replacement.
+
+The existing test_diskdevice_fmount.py A→B→A case must continue to pass unchanged.
+
+2. Inspect the candidate first
+
+Before changing the live unit:
+
+FUJINET_DISK_CMD_INSPECT_CATALOG
+
+Obtain:
+
+image type
+sector size
+sector count
+boot bytes
+
+Apply the existing Amiga:
+
+fujinet_disk_classify_media_profile()
+fujinet_disk_classify_filesystem()
+
+Support only the currently proven:
+
+RAW 512 x 1760 -> DD
+RAW 512 x 3520 -> HD
+DOS\0 / DOS\1
+
+Unsupported or ambiguous media must fail before the live slot is changed.
+
+3. Snapshot the current DNx state safely
+
+While holding LDF_READ | LDF_DEVICES, copy only the scalar values needed for the decision:
+
+node present
+handler active
+existing BlocksPerTrack
+existing Surfaces
+existing LowCyl
+existing HighCyl
+existing DosType
+
+Do not retain or dereference DOS-list-derived pointers after unlocking.
+
+4. Choose one of exactly two production paths
+
+Compatible environment
+
+If the existing DosEnvec is compatible with the candidate:
+
+active handler:
+    Inhibit(TRUE)
+
+
+commit MOUNT_CATALOG
+
+
+active handler:
+    Inhibit(FALSE)
+
+Do not alter the DosEnvec.
+
+Geometry/DosEnvec change
+
+If the candidate requires a different environment:
+
+if handler active:
+    ACTION_DIE
+    confirm dn_Task == 0
+
+
+only after retirement:
+    MOUNT_CATALOG
+
+
+reacquire DNx
+confirm dn_Task == 0
+update its DosEnvec to the candidate profile/DosType
+
+
+leave node registered
+
+The next normal access must naturally start the fresh handler.
+
+Do not use RemDosEntry().
+Do not manually set dn_Task.
+
+5. Keep existing-node production scope first
+
+For this task, use the existing installed DN0: node.
+
+Do not simultaneously solve absent-node/dynamic-node creation unless the focused tests require it.
+
+Dynamic MakeDosNode() creation is already proven separately and can be integrated afterward.
+
+6. Failure ordering
+
+Required invariants:
+
+inspection/classification failure
+    -> fail before touching live media
+
+
+ACTION_DIE retirement failure
+    -> fail before MOUNT_CATALOG
+
+
+same-geometry Inhibit failure
+    -> fail before MOUNT_CATALOG
+
+
+DosEnvec must never be modified while dn_Task != 0
+
+Do not claim complete rollback semantics for a failure after a successful geometry-changing MOUNT_CATALOG; if that remains unresolved, document it explicitly.
+
+7. Production Amiberry proof
+
+Extend the standard-tool FMOUNT path to prove:
+
+DD slot -> DN0:
+Dir/Type DD succeeds
+BPT=11
+
+
+FMOUNT HD slot -> DN0:
+Dir DN0:
+HD.TXT visible
+Type HD.TXT succeeds
+expected HD content
+BPT=22
+dn_Task becomes nonzero
+
+
+FMOUNT DD slot -> DN0:
+Dir DN0:
+KNOWN.TXT visible
+Type KNOWN.TXT succeeds
+FUJINET ADF READ PASSED
+BPT=11
+dn_Task becomes nonzero
+
+Use distinct DD and HD fixture contents.
+
+Explicitly assert command return codes.
+
+Also rerun the unchanged DD A→B→A same-geometry test.
+
+8. Wider validation
+
+After focused tests pass, run:
+
+native Amiga driver tests
+nio-lib relevant tests
+test_diskdevice_fmount.py
+relevant diskdevice-adf cases
+
+Then run the broader relevant Amiberry suite if practical.
+
+# Deliverable
+
+Report:
+
+- candidate-inspection use in FMOUNT;
+- safe current-node snapshot implementation;
+- same-geometry lifecycle;
+- geometry-change lifecycle;
+- DD→HD→DD standard-tool evidence;
+- unchanged DD A→B→A regression result;
+- any failure/recovery limitation still outstanding;
+- files changed;
+- which Phase 2 backlog boxes can now genuinely be checked.
+
+Stop after production DD↔HD is proven. Do not start HDF/RDB or nonstandard media.
+
+
+## Response
+
+Implemented and validated production existing-node DD-to-HD-to-DD replacement through standard Amiga `FMOUNT`.
+
+**Production FMOUNT**
+
+`repos/nio-core-apps/apps/platform/amiga/fmount.c` now:
+
+1. Opens `fujinet-disk.device`.
+2. Calls `FUJINET_DISK_CMD_INSPECT_CATALOG` before changing the live unit.
+3. Applies the established Amiga classifiers:
+   - `fujinet_disk_classify_media_profile()`
+   - `fujinet_disk_classify_filesystem()`
+4. Snapshots only scalar `DNx:` fields while `LDF_READ | LDF_DEVICES` is held:
+   - node present;
+   - active handler/task;
+   - surfaces;
+   - blocks per track;
+   - low/high cylinder;
+   - DosType.
+5. Releases the DOS lock before making lifecycle decisions.
+
+No DOS-list-derived pointer is retained or dereferenced after unlock.
+
+**Same-Geometry Lifecycle**
+
+Compatible existing environments retain the proven behavior unchanged:
+
+```text
+Inhibit(TRUE)
+MOUNT_CATALOG
+CloseDevice / DeleteExtIO / DeletePort
+Inhibit(FALSE)
+```
+
+No DosEnvec fields are modified for compatible DD-to-DD replacement.
+
+The DD bootstrap case remains explicit:
+
+- An absent node may receive only a standard DD initial commit.
+- HD and any incompatible geometry require an existing installed node.
+- This task does not add dynamic node creation.
+
+**Geometry-Change Lifecycle**
+
+For incompatible DD/HD environments:
+
+```text
+INSPECT_CATALOG
+classify geometry and DosType
+snapshot current node fields
+
+if active:
+    ACTION_DIE
+    poll until dn_Task == 0
+
+MOUNT_CATALOG
+
+reacquire DNx under DOS lock
+confirm dn_Task == 0
+update inactive DosEnvec:
+    Surfaces
+    BlocksPerTrack
+    LowCyl
+    HighCyl
+    DosType
+
+next normal DNx access starts fresh handler
+```
+
+The implementation:
+
+- Does not use `RemDosEntry()`.
+- Does not manually modify `dn_Task`.
+- Does not modify DosEnvec while a handler is active.
+- Fails before `MOUNT_CATALOG` if candidate inspection/classification fails, `Inhibit()` fails, or `ACTION_DIE` retirement does not complete.
+
+**DD-to-HD-to-DD Evidence**
+
+Extended the real standard-tool `diskdevice-fmount` Amiberry case.
+
+Validated sequence:
+
+```text
+FMOUNT 11 DN0: RO
+Dir DN0:
+Type DN0:KNOWN.TXT
+```
+
+DD evidence:
+
+```text
+KNOWN.TXT visible
+FUJINET ADF READ PASSED
+BPT=11
+```
+
+Transition:
+
+```text
+FMOUNT 14 DN0: RO
+Dir DN0:
+Type DN0:HD.TXT
+```
+
+HD evidence:
+
+```text
+FMOUNT HD RC=0
+HD.TXT visible
+FUJINET HD ADF READ PASSED
+BPT=22
+DN0 handler task nonzero after normal access
+```
+
+Return transition:
+
+```text
+FMOUNT 11 DN0: RO
+Dir DN0:
+Type DN0:KNOWN.TXT
+```
+
+DD-return evidence:
+
+```text
+FMOUNT DD RETURN RC=0
+KNOWN.TXT visible
+FUJINET ADF READ PASSED
+BPT=11
+DN0 handler task nonzero after normal access
+```
+
+Focused result:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+1 passed, 155 warnings in 60.58s
+```
+
+**DD A-to-B-to-A Regression**
+
+The unchanged legacy DD same-geometry replacement remains part of the same focused standard-tool case and passed:
+
+```text
+DD A -> DD B -> DD A
+```
+
+It still verifies:
+
+- active handler-safe replacement;
+- `SECOND.TXT` from the B fixture;
+- original `KNOWN.TXT` from the A fixture;
+- advancing change counters;
+- no requester.
+
+**Validation**
+
+Passed:
+
+```text
+make -C repos/fujinet-nio-driver amiga
+```
+
+```text
+All Amiga driver contract tests passed
+All Amiga FIFO policy tests passed
+All Amiga Exec boundary contract tests passed
+```
+
+```text
+make -C repos/fujinet-nio-lib test-disk-context
+independent DiskDevice contexts remain isolated
+```
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_adf.py -q --run-amiga
+5 passed, 448 warnings in 172.30s
+```
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+1 passed, 155 warnings in 60.58s
+```
+
+**Files Changed**
+
+Workspace:
+
+- `backlog/amiga-diskdevice-phase-2.md`
+- `backlog/amiga-disk-media-architecture.md`
+- `integration-tests/amiberry/startup/diskdevice-fmount.sequence`
+- `integration-tests/amiberry/test_diskdevice_fmount.py`
+- `integration-tests/amiberry/tests.toml`
+
+`repos/nio-core-apps`:
+
+- `apps/platform/amiga/fmount.c`
+- `include/platform/amiga/fujinet_disk_iface.h`
+- `makefiles/compiler-amigagcc.mk`
+
+The previously existing unrelated modification remains untouched:
+
+- `docs/phase2-investigation/media-geometry-plan.md`
+
+**Phase 2 Boxes Now Satisfied**
+
+Marked complete:
+
+- Reject unsupported, malformed, partitioned, or ambiguous images before announcing insertion, without silently falling back to DD defaults.
+- Amiberry standard-tool DD and HD catalogue-slot mounting through `FMOUNT`, access via `DN0:`, and standard DD/HD remount behavior.
+
+**Remaining Limitation**
+
+Rollback remains incomplete after a successful geometry-changing `MOUNT_CATALOG`:
+
+- If inactive DosEnvec update fails after a successful new-media commit, or
+- if the first new handler access fails,
+
+production does not yet restore the former media/environment transactionally.
+
+Static MountLists remain installed as the DD bootstrap/compatibility path. HDF, RDB, nonstandard geometry, node removal, and dynamic-node creation were not started.

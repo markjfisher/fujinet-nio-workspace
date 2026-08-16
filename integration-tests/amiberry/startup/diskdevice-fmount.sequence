@@ -20,6 +20,20 @@ C:FMOUNT 11 DN0: RO >DH0:fmount-ba-mount.result
 C:fujinet-mount --status 0 >DH0:fmount-ba-present.result
 C:Wait 1 SECS
 C:Type DN0:KNOWN.TXT >DH0:fmount-ba-type.result
+C:FMOUNT 14 DN0: RO >DH0:fmount-hd-mount.result
+C:Echo "FMOUNT HD RC=$RC" >>DH0:fmount-hd-mount.result
+C:Dir DN0: >DH0:fmount-hd-dir.result
+C:Echo "DIR HD RC=$RC" >>DH0:fmount-hd-dir.result
+C:Type DN0:HD.TXT >DH0:fmount-hd-type.result
+C:Echo "TYPE HD RC=$RC" >>DH0:fmount-hd-type.result
+C:doslistdiag >DH0:fmount-hd-dos.result
+C:FMOUNT 11 DN0: RO >DH0:fmount-dd-return-mount.result
+C:Echo "FMOUNT DD RETURN RC=$RC" >>DH0:fmount-dd-return-mount.result
+C:Dir DN0: >DH0:fmount-dd-return-dir.result
+C:Echo "DIR DD RETURN RC=$RC" >>DH0:fmount-dd-return-dir.result
+C:Type DN0:KNOWN.TXT >DH0:fmount-dd-return-type.result
+C:Echo "TYPE DD RETURN RC=$RC" >>DH0:fmount-dd-return-type.result
+C:doslistdiag >DH0:fmount-dd-return-dos.result
 C:FMOUNT 99 DN0: RO >DH0:fmount-failed-replace.result
 C:Echo "FMOUNT FAILED RC=$RC" >>DH0:fmount-failed-replace.result
 C:Wait 1 SECS
@@ -59,6 +73,14 @@ C:Type DH0:fmount-ab-type.result
 C:Type DH0:fmount-ba-mount.result
 C:Type DH0:fmount-ba-present.result
 C:Type DH0:fmount-ba-type.result
+C:Type DH0:fmount-hd-mount.result
+C:Type DH0:fmount-hd-dir.result
+C:Type DH0:fmount-hd-type.result
+C:Type DH0:fmount-hd-dos.result
+C:Type DH0:fmount-dd-return-mount.result
+C:Type DH0:fmount-dd-return-dir.result
+C:Type DH0:fmount-dd-return-type.result
+C:Type DH0:fmount-dd-return-dos.result
 C:Type DH0:fmount-failed-replace.result
 C:Type DH0:fmount-fail-type.result
 C:Type DH0:fmount-rw-mount.result
