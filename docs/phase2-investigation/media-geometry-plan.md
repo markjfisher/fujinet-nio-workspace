@@ -3524,3 +3524,1500 @@ DD active again
 
 No FMOUNT integration was started.
 
+# Part 5 work
+
+Implement the first production integration of the proven dynamic DD/HD media architecture into Amiga FMOUNT.
+
+This task is limited to standard DD and HD whole-volume ADF profiles.
+
+Do not implement nonstandard geometry, HDF, RDB, 64-bit I/O, duplicate-node cleanup, or general MakeDosNode() destruction.
+
+Before editing, read:
+
+backlog/amiga-diskdevice-phase-2.md
+backlog/amiga-disk-media-architecture.md
+backlog/amiga-diskdevice-phase-2-findings.md
+docs/amiberry-testing.md
+
+Treat the experimentally proven dynamic-node tests as the reference implementation for classic DOS-node construction and lifecycle.
+
+1. Correct the architecture-document FMOUNT ordering
+
+There is one stale ordering issue in amiga-disk-media-architecture.md.
+
+The current generic FMOUNT flow mounts/replaces the new media before selecting Inhibit() versus ACTION_DIE.
+
+That contradicts the proven live-handler lifecycle.
+
+Correct the document so it distinguishes candidate media inspection/classification from committing replacement to the active disk unit.
+
+The production invariant must be:
+
+never replace media underneath an uninhibited/unretired active handler
+
+Proven commit ordering:
+
+compatible same geometry:
+    Inhibit(TRUE)
+    commit media replacement
+    Inhibit(FALSE)
+
+
+geometry/DosEnvec change:
+    ACTION_DIE
+    observe dn_Task == 0
+    commit media replacement
+    update inactive DosEnvec
+    next access starts fresh handler
+
+Keep failure/recovery policy explicitly outstanding where not yet proven.
+
+2. Integrate only standard DD/HD classification
+
+Production FMOUNT must use the already-implemented classifiers/builders rather than duplicate constants:
+
+fn_disk_info_t
+    RAW
+    sector_size = 512
+    sector_count = 1760 -> DD
+    sector_count = 3520 -> HD
+
+
+boot bytes 0..3
+    DOS\0 / DOS\1 only
+
+Unsupported geometry or filesystem identity must fail clearly rather than fall back to DD defaults.
+
+Do not broaden the classifier in this task.
+
+3. Production DOS-node ownership
+
+Integrate the persistent session-lifetime DeviceNode model established by the test POC.
+
+Use the proven construction:
+
+MakeDosNode()
+explicit DE_* serialization
+verified handler fields:
+    stack    32768
+    priority 5
+    GlobVec  -1
+AddDosNode(..., 0, node)
+
+First determine how current production/static DN0:-DN7: entries interact with this.
+
+Do not blindly create a duplicate node if one already exists.
+
+The production code must deliberately distinguish:
+
+compatible existing DNx node
+no DNx node
+incompatible/conflicting DNx node
+
+If the existing static DD node can safely participate in the persistent lifecycle, reuse it where appropriate.
+
+If a new dynamic node is required, create it using the proven model.
+
+Do not remove/free existing nodes in this task.
+
+Report the exact policy chosen.
+
+4. Same-geometry replacement must remain unchanged in principle
+
+Preserve the production mechanism already proven:
+
+active compatible handler
+Inhibit(TRUE)
+replace media
+Inhibit(FALSE)
+
+Do not replace same-geometry media via ACTION_DIE merely because that mechanism now exists.
+
+Existing DD A→B→A behavior must remain passing.
+
+5. Geometry-changing replacement
+
+For a DD ↔ HD transition on a persistent DNx node:
+
+if dn_Task != 0:
+    send ACTION_DIE
+    verify dn_Task becomes 0
+
+
+only then commit the new media
+
+
+update the inactive FileSysStartupMsg/DosEnvec
+
+
+leave node registered
+
+
+allow next normal DNx access to start the fresh handler
+
+Never update the DosEnvec while dn_Task != 0.
+
+Never mutate dn_Task manually.
+
+Do not use RemDosEntry().
+
+6. Failure behavior
+
+This is the first production integration, so do not invent broad transactional recovery.
+
+At minimum, make failures explicit and prevent silent fallback:
+
+unsupported geometry       -> FMOUNT fails
+unsupported DosType        -> FMOUNT fails
+handler retirement failure -> FMOUNT fails without mutating DosEnvec
+dynamic-node conflict      -> FMOUNT fails clearly
+
+Do not claim full recovery semantics are solved unless they are actually tested.
+
+7. Focused production tests
+
+Extend the real standard-tool FMOUNT Amiberry path, not merely the POC helper.
+
+Required focused evidence:
+
+DD initial mount
+FMOUNT <DD slot> DN0:
+Dir DN0:
+Type DD-specific file
+DD -> HD
+FMOUNT <HD slot> DN0:
+Dir DN0:
+HD-specific file visible
+Type HD-specific file succeeds
+runtime DosEnvec shows BPT=22
+HD -> DD
+FMOUNT <DD slot> DN0:
+Dir DN0:
+DD-specific file visible
+Type succeeds
+runtime DosEnvec shows BPT=11
+
+Explicitly assert successful RCs and expected distinct fixture content.
+
+Also retain/regress the existing same-geometry DD A→B→A Inhibit() case.
+
+Run the focused cases first. If those pass, run the relevant complete Amiberry DiskDevice/FMOUNT suite.
+
+8. Do not remove static MountLists yet
+
+This task proves production FMOUNT lifecycle first.
+
+Do not delete the eight MountLists/install rules in the same change unless they are demonstrably unnecessary and removing them is required for the focused test.
+
+Their final compatibility/bootstrap disposition is a separate small follow-up.
+
+Deliverable
+
+Report:
+
+existing-node versus new-dynamic-node policy;
+production lifecycle implemented for same and changed geometry;
+failure behavior;
+exact production files changed;
+DD initial, DD→HD, and HD→DD evidence through standard FMOUNT;
+same-geometry regression result;
+wider relevant suite result;
+backlog boxes that are now genuinely satisfied;
+anything still blocking removal of static MountLists.
+
+Stop after this production integration. Do not begin HDF/RDB or nonstandard geometry.
+
+
+## Part 5i initial response
+
+The production integration is not complete and should not be treated as ready.
+
+Implemented so far:
+
+- Read all required Phase 2 and Amiberry documents.
+- Corrected `backlog/amiga-disk-media-architecture.md` so candidate inspection is separated from media replacement.
+- Added a new `FUJINET_DISK_CMD_PROBE_CATALOG` command.
+- The probe uses the existing driver-side:
+  - `fn_disk_info_t`
+  - DD/HD media classifier
+  - boot-block filesystem classifier
+- Added candidate profile data containing:
+  - DD/HD profile
+  - sector size/count
+  - blocks per track
+  - DosType
+- Reworked Amiga `FMOUNT` to:
+  - probe candidate media before committing it;
+  - distinguish existing DOS nodes from absent nodes;
+  - create a dynamic node with `MakeDosNode()` when no node exists;
+  - apply explicit DosEnvec serialization;
+  - set handler stack, priority, and GlobVec;
+  - preserve `Inhibit()` for same-geometry active handlers;
+  - use `ACTION_DIE` for geometry changes;
+  - verify `dn_Task == 0` before committing or updating geometry;
+  - avoid `RemDosEntry()` and node destruction.
+- Static `DN0:`–`DN7:` MountLists were not removed.
+- `repos/fujinet-nio-lib` `make check` passed.
+- Native Amiga driver tests passed.
+- Resident Amiga driver build passed.
+- Amiga `FMOUNT` compiled and linked.
+
+Current blocker:
+
+- The focused standard-tool test `test_diskdevice_fmount.py` does not pass.
+- The latest run reaches:
+  - candidate probe;
+  - initial DD mount;
+  - successful NIO mount;
+  - directory listing through `DN0:`.
+- It then stalls at the first `Type DN0:KNOWN.TXT` access.
+- The previous probe failure caused by using the wrong NIO slot was fixed. The latest run has no requester, but still times out before the required filesystem access and transition evidence.
+
+Not completed:
+
+- No production DD → HD or HD → DD evidence.
+- No updated focused FMOUNT test sequence for HD transitions.
+- No runtime DosEnvec BPT=22/BPT=11 assertions.
+- No same-geometry regression result after this integration.
+- No wider Amiberry suite run.
+- No backlog boxes were marked satisfied.
+- No static MountLists were removed.
+
+Changed files:
+
+- `backlog/amiga-disk-media-architecture.md`
+- `repos/nio-core-apps/include/platform/amiga/fujinet_disk_iface.h`
+- `repos/nio-core-apps/apps/platform/amiga/fmount.c`
+- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_device.h`
+- `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c`
+
+The remaining issue is in the production FMOUNT/device interaction after the initial mount; the implementation must not be declared complete until the first `Type` access and all required DD/HD transition cases pass.
+
+## 5i investigate blocker
+
+Stop production integration work and isolate the new regression:
+
+new production FMOUNT:
+candidate probe succeeds
+DD mount succeeds
+Dir DN0: succeeds
+Type DN0:KNOWN.TXT stalls
+
+Do not work on HD, DD→HD, HD→DD, static MountLists, rejection policy, or backlog updates until this first DD access regression is understood.
+
+Goal
+
+Identify the first observable divergence between the previously passing standard-tool DD FMOUNT path and the new implementation.
+
+Do not speculate from the timeout alone.
+
+1. Preserve a known-good A/B
+
+Run the focused diskdevice-fmount case against:
+
+A. the last known-good production FMOUNT implementation before the current integration
+
+and
+
+B. the current implementation
+
+using the same fixture, harness, driver build, and startup environment.
+
+Both runs must capture the exact sequence through:
+
+FMOUNT
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+Do not change the test while establishing the A/B unless additional passive diagnostics are required.
+
+2. Instrument boundaries around the Type stall
+
+Add test/debug-only evidence sufficient to answer:
+
+Did Type issue an AmigaDOS filesystem request?
+Did the filesystem handler issue disk.device reads?
+Did fujinet-disk.device receive those reads?
+Did it send corresponding NIO Disk Read requests?
+Did NIO return responses?
+Did the driver complete the IORequests back to the handler?
+
+Capture at minimum:
+
+last successful disk.device command before Type
+every disk.device BeginIO during Type
+unit
+command
+offset/block
+length
+IORequest pointer
+ln_Type before queueing/completion if relevant
+completion/error result
+corresponding NIO request/response
+
+Reuse existing logging where possible; do not redesign the driver.
+
+3. Compare driver/unit state immediately before Dir and Type
+
+For A and B, record the resident unit state after FMOUNT and immediately before Type:
+
+mounted
+read-only
+sector_size
+sector_count
+catalogue slot
+change counter
+changed/media-change state
+any pending/deferred request count
+handler dn_Task
+DosEnvec
+
+We need to know whether the new candidate probe or FMOUNT commit leaves any persistent difference.
+
+4. Isolate FUJINET_DISK_CMD_PROBE_CATALOG
+
+The new probe is a prime regression boundary, so test it explicitly rather than assuming it is harmless.
+
+Run the current production path in two test-only variants:
+
+B1: current FMOUNT with PROBE_CATALOG
+B2: same current FMOUNT logic, but bypass the probe and feed the already-known DD candidate profile into the commit path
+
+Do not leave B2 as production behavior; it is an isolation experiment only.
+
+Interpret:
+
+B1 fails / B2 passes
+    -> probe has a stateful side effect or probe/commit interaction bug
+
+
+both fail
+    -> regression is in the rewritten FMOUNT commit/lifecycle path
+5. If probe is implicated, inspect its side effects
+
+FUJINET_DISK_CMD_PROBE_CATALOG must be observational from the perspective of the live disk unit.
+
+Establish whether it changes any of:
+
+mounted slot
+retained fn_disk_info_t
+media/change flags
+change counter
+protection state
+pending I/O
+cached boot-sector data
+NIO mounted-media state
+
+A candidate probe must not transiently commit candidate media to the live unit unless that state is completely isolated and restored.
+
+Compare unit state before and after the probe byte-for-byte/field-for-field where practical.
+
+6. If probe is not implicated, bisect the FMOUNT rewrite
+
+Keep the candidate probe but selectively restore the previous known-good initial-DD commit behavior.
+
+We need the smallest new behavior that turns:
+
+Dir + Type pass
+
+into:
+
+Dir pass / Type stall
+
+Candidate boundaries include:
+
+existing-node detection
+handler-state inspection
+same-geometry compatibility decision
+Inhibit ordering
+mount/commit ordering
+local change notification
+mapping persistence
+dynamic-node handling
+
+Do not investigate geometry-changing logic unless it is actually executed by the initial DD case.
+
+7. Inspect the timeout evidence
+
+For the failing run report:
+
+exact last CLI checkpoint
+exact final fujinet-disk.device command received
+final NIO request
+whether a matching NIO response exists
+whether the associated IORequest was completed
+any queued/deferred IORequests left outstanding
+handler dn_Task before and after stall
+requester status
+
+If the final read has a successful NIO response but no IO completion, focus in the driver.
+
+If no NIO request is emitted, focus above the transport boundary.
+
+If NIO never replies, focus in probe/commit NIO state.
+
+8. Deliverable
+
+Return:
+
+known-good versus current first divergence;
+whether bypassing PROBE_CATALOG restores Type;
+exact unit-state differences before Type;
+final disk.device/NIO/IORequest chain in the failing run;
+root cause if established;
+smallest corrective change;
+focused DD FMOUNT result after that correction.
+
+Stop once the original DD FMOUNT → Dir → Type case is green again.
+
+Do not continue to HD in the same turn.
+
+## 5i response to blocker
+
+The DD regression was isolated as far as the requested probe experiment allows.
+
+**a. First divergence**
+
+The current implementation reaches:
+
+- Candidate probe success.
+- DD catalog mount success.
+- `Dir DN0:` success.
+- `Type DN0:KNOWN.TXT` stall.
+
+The latest NIO trace shows the candidate probe and commit both completing successfully. The final observed filesystem read requests also receive successful NIO responses.
+
+The probe itself is not sufficient to explain the regression.
+
+**b. Probe bypass result**
+
+A temporary test-only `NOPROBE` variant was added and run:
+
+- `B1`: current FMOUNT with `PROBE_CATALOG`: fails at `Type`.
+- `B2`: current FMOUNT with probe bypassed and a known DD profile supplied directly: also fails at `Type`.
+
+Therefore:
+
+```text
+B1 fails / B2 fails
+```
+
+The regression is in the rewritten FMOUNT/commit path or its interaction with the existing driver, not uniquely in `PROBE_CATALOG`.
+
+The temporary `NOPROBE` code and startup modification were removed afterward.
+
+**c. Exact current observations**
+
+From the failing current run:
+
+- Candidate NIO mount succeeds.
+- Candidate `fn_disk_info_t` reports:
+  - sector size `512`
+  - sector count `1760`
+  - raw DD media
+- Candidate boot sector read succeeds.
+- Boot identifier is `DOS\0`.
+- Commit catalog mount succeeds.
+- `Dir DN0:` succeeds.
+- The first `Type` read reaches the resident driver.
+- The corresponding NIO disk reads return successful responses.
+- No final `Type` result is produced.
+- Latest run had no requester, but timed out with recent activity.
+- Earlier run showed the same boundary with a requester.
+
+**d. Final disk/NIO chain**
+
+The current failing run’s sequence includes:
+
+1. Catalog probe:
+   - slot-catalog lookup
+   - candidate mount on NIO slot 1
+   - successful DD Info response
+   - successful boot-sector read containing `DOS\0`
+2. Production commit:
+   - catalog lookup
+   - mapping read
+   - mapping write
+   - catalog mount success
+   - Info request success
+   - ClearChanged success
+3. `Dir DN0:`:
+   - disk reads are issued
+   - matching NIO responses are returned
+4. `Type DN0:KNOWN.TXT`:
+   - additional disk reads are issued
+   - matching NIO responses are returned
+   - the final handler-visible completion was not captured before the harness timeout
+
+This places the remaining issue above the NIO transport boundary and below or at the DOS-handler/driver completion boundary.
+
+**e. Root cause**
+
+A definitive root cause was not established in this isolation turn.
+
+The probe is not the sole cause because bypassing it reproduces the failure. The strongest current boundary is the rewritten FMOUNT path after the catalog commit, despite the fact that the apparent media and NIO state are valid.
+
+The required known-good versus current run was not completed using a separately restored baseline binary, so no final byte-for-byte A/B unit-state comparison is claimed.
+
+**f. Smallest corrective change**
+
+No corrective production change was made because the first failing disk.device completion was not yet isolated. The current code changes remain uncommitted and the temporary probe-bypass experiment was removed.
+
+The next narrow diagnostic should instrument the existing device trace around `BeginIO`, queue insertion, completion, and `ReplyMsg()` for the reads issued by `Type`, then compare that with an actual pre-integration FMOUNT binary.
+
+**g. Focused DD result**
+
+Still failing:
+
+```text
+FMOUNT -> Dir DN0: -> Type DN0:KNOWN.TXT
+```
+
+The run reaches `Dir`, but `Type` does not complete. No HD, DD-to-HD, HD-to-DD, static MountList, rejection-policy, or backlog work was performed.
+
+## 5i corrections part 2
+
+Stop implementation work. The probe hypothesis is now falsified.
+
+The next task is to establish a real known-good/current A/B and isolate whether the regression was introduced by the FMOUNT rewrite or by the resident-driver changes.
+
+Do not add HD tests, production fixes, or additional architecture work yet.
+
+1. Establish the exact pre-integration baseline
+
+Identify the last commits immediately before this production integration in:
+
+repos/nio-core-apps
+repos/fujinet-nio-driver
+
+Report those commit IDs.
+
+Build the actual pre-integration binaries from those commits and run the unchanged focused standard-tool case:
+
+FMOUNT DD
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+Required baseline:
+
+FMOUNT succeeds
+Dir succeeds
+Type succeeds
+FUJINET ADF READ PASSED
+
+If that baseline does not pass, stop: the regression boundary is not what we currently believe.
+
+2. Run a component A/B matrix
+
+We changed both FMOUNT and fujinet-disk.device, so isolate them independently.
+
+Run, where technically possible:
+
+A: old FMOUNT   + old driver   # known-good baseline
+B: old FMOUNT   + new driver
+C: new FMOUNT   + new driver   # current failure
+
+For case B, the old FMOUNT will not call PROBE_CATALOG, so this directly tests whether the new driver's changes broke the previously proven DD production path.
+
+If B passes:
+
+old FMOUNT + new driver = good
+new FMOUNT + new driver = bad
+
+then the regression is in the FMOUNT rewrite / altered production lifecycle, not the driver's normal read-completion path.
+
+If B fails:
+
+old FMOUNT + old driver = good
+old FMOUNT + new driver = bad
+
+then the new driver introduced the regression and FMOUNT should not be investigated further until that is found.
+
+Do not attempt a speculative fix before this fork is established.
+
+3. Capture the complete final Type I/O lifecycle
+
+For the first passing case and first failing case, instrument the same disk read(s) issued during:
+
+Type DN0:KNOWN.TXT
+
+Trace one IORequest end-to-end:
+
+BeginIO
+command/unit/offset/length
+IORequest address
+io_Message.mn_Node.ln_Type
+
+
+immediate vs deferred decision
+
+
+FIFO insertion if deferred
+ln_Type at insertion
+
+
+NIO request
+NIO response
+
+
+driver completion
+io_Error / io_Actual
+ln_Type immediately before completion
+
+
+ReplyMsg() or equivalent completion boundary
+
+We have previously had a real bug at exactly this boundary involving queued requests and:
+
+io_Message.mn_Node.ln_Type = NT_MESSAGE;
+
+Do not assume that regression has returned, but explicitly prove whether the failing Type request reaches the same completion path as the passing baseline.
+
+4. Compare the first differing IORequest, not just the final log lines
+
+For passing versus failing runs report:
+
+request address
+command
+offset
+length
+queue/deferred status
+NIO result
+io_Error
+io_Actual
+ln_Type
+whether ReplyMsg() occurred
+
+Find the first request whose lifecycle differs.
+
+For example:
+
+PASS:
+BeginIO -> queued -> NIO success -> completed -> ReplyMsg
+
+
+FAIL:
+BeginIO -> queued -> NIO success -> ??? 
+
+That ??? is the regression boundary we need.
+
+5. If old FMOUNT + new driver passes
+
+Then compare the old and new FMOUNT state immediately after mounting but before Dir:
+
+handler dn_Task
+Inhibit calls/result
+driver change counter
+changed flag
+mounted slot
+read-only state
+sector size/count
+ClearChanged calls
+mapping persistence
+DosEnvec
+
+In particular, identify every production operation the new initial-DD path performs that the old path did not.
+
+Do not investigate DD→HD code unless that branch actually executes during the initial DD case.
+
+6. If old FMOUNT + new driver fails
+
+Diff only the driver changes introduced for this integration and isolate them against the known-good driver.
+
+Pay particular attention to whether adding PROBE_CATALOG changed:
+
+command dispatch
+request lifetime
+shared buffers
+retained per-unit state
+pending-request handling
+completion path
+
+even when PROBE_CATALOG itself is never called.
+
+Deliverable
+
+Report:
+
+a. exact old FMOUNT and old driver commit IDs;
+b. A/B matrix results;
+c. which component introduces the regression;
+d. first differing Type IORequest lifecycle;
+e. whether the failing NIO-successful read reaches driver completion;
+f. whether ReplyMsg() occurs;
+g. ln_Type, io_Error, and io_Actual at that boundary;
+h. smallest root cause, if established.
+
+Do not make a production correction until the component boundary and first differing IORequest are known.
+
+Stop after identifying the regression or, if obvious and tightly proven, after applying the smallest correction and restoring the original DD FMOUNT → Dir → Type test.
+
+## correction response
+
+The component A/B fork is established without applying a production correction.
+
+**a. Exact pre-integration commits**
+
+- `repos/nio-core-apps`: `978f7b2e007ddf00555bab1d5bb682cccf4ac28a`
+  - `Amiga FMOUNT: inhibit active DOS handler during media replacement`
+- `repos/fujinet-nio-driver`: `91779acd4203151d96ab6e85ebd5e40e6701bf67`
+  - `More envec updates`
+
+Exact detached worktrees were created and built:
+
+- `/tmp/nio-core-old`
+- `/tmp/nio-driver-old`
+
+**b. A/B matrix**
+
+The unchanged focused case was run with the same fixture, startup sequence, harness, and Amiberry environment.
+
+| Case | FMOUNT | Driver | Result |
+|---|---|---|---|
+| A | old `978f7b2e` | old `91779acd` | Pass |
+| B | old `978f7b2e` | current/new driver | Pass |
+| C | current/new FMOUNT | current/new driver | Fail |
+
+Case A passed all required DD checks:
+
+- `FMOUNT` succeeded.
+- `Dir DN0:` succeeded.
+- `Type DN0:KNOWN.TXT` succeeded.
+- `FUJINET ADF READ PASSED` was present.
+- The complete existing focused standard-tool case passed: `1 passed`.
+
+Case B also passed the complete existing focused standard-tool case:
+
+```text
+1 passed
+```
+
+Case C reproduced the regression:
+
+- `FMOUNT` succeeded.
+- `Dir DN0:` succeeded.
+- `Type DN0:KNOWN.TXT` stalled.
+- The test terminated with a requester in this run.
+- The first missing checkpoint was `fmount-type.result`.
+
+The earlier probe-bypass experiment also failed, so the probe is not the unique cause. Combined with case B passing, the regression is in the FMOUNT rewrite.
+
+**c. Component introducing the regression**
+
+The resident driver is not the introducing component.
+
+Proof:
+
+```text
+old FMOUNT + old driver = pass
+old FMOUNT + new driver = pass
+new FMOUNT + new driver = fail
+```
+
+The driver changes, including `FUJINET_DISK_CMD_PROBE_CATALOG`, do not break the previously passing old FMOUNT path.
+
+The regression boundary is therefore:
+
+```text
+old FMOUNT commit/lifecycle behavior
+    -> pass
+
+new FMOUNT commit/lifecycle behavior
+    -> Dir passes, Type stalls
+```
+
+No HD or geometry-changing branch is involved in the initial DD case.
+
+**d. First differing FMOUNT behavior**
+
+The new initial-DD FMOUNT path performs operations the old path did not:
+
+- Opens `expansion.library`.
+- Inspects the existing `DN0:` DOS node with `LockDosList()` and `FindDosEntry()`.
+- Reads the existing `FileSysStartupMsg`/`DosEnvec`.
+- Classifies the candidate profile.
+- Chooses whether the node is active and whether geometry differs.
+- Uses the new candidate probe before committing.
+- Uses the new node ownership path.
+
+The old FMOUNT path only:
+
+- Detects whether the handler is active.
+- Inhibits an active handler.
+- Opens `fujinet-disk.device`.
+- Commits the catalog mount.
+- Uninhibits the handler.
+
+The A/B results prove that the driver’s ordinary read completion path is not the regression boundary.
+
+**e. NIO-successful read and driver completion**
+
+The failing current run shows successful NIO responses for the reads issued around `Dir` and the beginning of `Type`.
+
+The available logs establish:
+
+```text
+filesystem access
+    -> fujinet-disk.device reads
+    -> NIO Disk Read requests
+    -> successful NIO responses
+```
+
+A driver-level completion record for the exact final `Type` request was not captured. The existing trace facility records command/offset/length but does not record IORequest address, queue state, `ln_Type`, or `ReplyMsg()` completion. No new instrumentation was added in this turn because the component fork itself was the required first isolation step.
+
+Therefore these exact fields remain unproven for the failing request:
+
+- IORequest address.
+- `ln_Type` at BeginIO.
+- Deferred/immediate status.
+- FIFO insertion state.
+- `ln_Type` at FIFO insertion.
+- `io_Error` at completion.
+- `io_Actual` at completion.
+- Whether `ReplyMsg()` occurred.
+
+The evidence does establish that the failure is not caused by NIO failing to respond.
+
+**f. ReplyMsg boundary**
+
+Not established from the existing passive logs.
+
+The focused case only exposes the user-visible boundary:
+
+```text
+Dir result present
+Type result absent
+```
+
+The resident driver’s current trace does not provide enough information to distinguish:
+
+```text
+NIO success -> driver completion -> ReplyMsg
+```
+
+from:
+
+```text
+NIO success -> missing/invalid driver completion
+```
+
+That instrumentation remains the next required task if the FMOUNT-side operation difference does not immediately identify the issue.
+
+**g. Current run evidence**
+
+Failing case C:
+
+- Last successful CLI checkpoint: `fmount-dir.result`.
+- First missing checkpoint: `fmount-type.result`.
+- `Dir DN0:` completed.
+- The final observed NIO reads returned successful responses.
+- The test run detected a requester in the latest C run.
+- No exact `dn_Task`/DosEnvec/unit-state snapshot was captured for the A/B matrix.
+- No exact queued-request count or `ReplyMsg()` observation was captured.
+
+**h. Root cause status**
+
+The component boundary is established:
+
+```text
+FMOUNT rewrite
+```
+
+The first differing IORequest lifecycle is not yet established. No production correction was made.
+
+The smallest proven conclusion is:
+
+> The new resident driver is compatible with the old production FMOUNT path. The rewritten FMOUNT path introduces the DD `Dir`-passes/`Type`-stalls regression.
+
+Temporary isolation-only changes were removed:
+
+- `NOPROBE` FMOUNT variant.
+- Temporary startup-sequence modification.
+
+No HD tests, production fixes, static MountList changes, rejection-policy changes, or backlog updates were made.
+
+## fixing regression in fmount
+
+The A/B matrix has established that the regression is introduced by the rewritten FMOUNT, not by the resident driver.
+
+Do not add driver BeginIO/ReplyMsg instrumentation yet.
+Do not work on HD.
+
+Isolate the first behavioral difference in the initial existing-DD-node FMOUNT path.
+
+1. Instrument the FMOUNT decision path itself
+
+For the failing initial DD case, record explicitly:
+
+existing DN0 found?
+dn_Task value
+handler considered active? yes/no
+
+
+existing DosEnvec:
+    BlocksPerTrack
+    Surfaces
+    LowCyl
+    HighCyl
+    DosType
+
+
+candidate:
+    profile
+    sector_size
+    sector_count
+    BlocksPerTrack
+    DosType
+
+
+geometry considered compatible? yes/no
+selected lifecycle:
+    SAME_GEOMETRY_INHIBIT
+    GEOMETRY_CHANGE_DIE
+    INACTIVE_UPDATE
+    NEW_NODE
+
+Then record the actual calls/results:
+
+Inhibit(TRUE) called? result / IoErr
+MOUNT_CATALOG called? result
+Inhibit(FALSE) called? result / IoErr
+ACTION_DIE called?       # should not be expected for ordinary same-DD replacement
+DosEnvec modified?       # should not be necessary for compatible DD->DD
+
+Do not infer these from source control flow. Emit runtime evidence.
+
+2. Compare directly with old FMOUNT
+
+Run the old known-good FMOUNT with equivalent lightweight diagnostics if needed and establish:
+
+pre-mount dn_Task
+Inhibit(TRUE)
+MOUNT_CATALOG
+Inhibit(FALSE)
+post-mount dn_Task
+
+The question is:
+
+Does new FMOUNT perform the same live-handler sequence for this exact initial DD case?
+
+If not, stop there: that is the first divergence.
+
+3. Make the old initial-DD lifecycle a test-only control inside the new FMOUNT
+
+If the new path does select something different, temporarily force only this already-supported condition:
+
+existing node
++ existing handler active
++ existing geometry DD
++ candidate geometry DD
+
+through the exact old sequence:
+
+Inhibit(TRUE)
+MOUNT_CATALOG
+Inhibit(FALSE)
+
+while leaving the new candidate classification code present.
+
+This is an isolation experiment, not the final implementation.
+
+Run:
+
+FMOUNT
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+Interpret:
+
+forced old lifecycle passes
+    -> regression is in new existing-node lifecycle selection/execution
+
+
+forced old lifecycle still fails
+    -> some other new FMOUNT-side operation before/after the commit is causal
+
+Remove the temporary forcing after the experiment unless it directly identifies the correct production fix.
+
+4. If the new path already performs the exact old Inhibit sequence
+
+Then bisect the other new FMOUNT operations around it.
+
+Starting from a copy of the passing old FMOUNT, introduce the new behavior in bounded groups:
+
+A. existing-node inspection only
+B. candidate classification/profile comparison
+C. expansion.library/open dynamic-node support
+D. probe
+E. new persistence/commit bookkeeping
+
+Run the same DD FMOUNT -> Dir -> Type test after each group.
+
+We already know probe alone is not sufficient, so do not spend another turn investigating it in isolation.
+
+Identify the first added FMOUNT behavior that changes PASS to FAIL.
+
+5. Pay particular attention to DOS-list lifetime
+
+Review every use of:
+
+LockDosList()
+FindDosEntry()
+UnLockDosList()
+
+in the rewritten FMOUNT.
+
+No DosList *, DeviceNode *, FileSysStartupMsg *, or environment pointer obtained from the DOS list should be used after releasing the lock unless the classic API contract explicitly makes that safe for the operation in question.
+
+Report whether the rewritten code keeps or dereferences any such pointer after unlock.
+
+Do not change code based purely on suspicion; establish the actual lifetime usage.
+
+6. Also check for accidental modification of the existing DD node
+
+For the ordinary compatible DD case, compare the complete node/environment immediately before and after FMOUNT.
+
+Expected:
+
+same DeviceNode
+same dn_Startup
+same DosEnvec
+same handler startup fields
+
+The same-geometry path should not need to rewrite the existing environment at all.
+
+Report any changed field.
+
+Deliverable
+
+Return:
+
+a. exact lifecycle selected by new FMOUNT for the failing DD case;
+b. whether Inhibit(TRUE) and Inhibit(FALSE) actually occur and succeed;
+c. old versus new runtime operation sequence;
+d. result of forcing the old commit lifecycle inside the new FMOUNT;
+e. any DOS-list pointer used outside its valid lock lifetime;
+f. any DeviceNode/DosEnvec field changed during an ordinary DD->DD mount;
+g. first FMOUNT-side behavior proven to change PASS to FAIL;
+h. smallest corrective change if established.
+
+Stop when the existing DD FMOUNT -> Dir -> Type regression is fixed. Do not proceed into HD in the same turn.
+
+
+## response not good
+
+The FMOUNT-side decision instrumentation did not reach the decision path in the latest run.
+
+**Runtime result**
+
+The newly built instrumented FMOUNT produced:
+
+```text
+FMOUNT RC=10
+```
+
+The catalog probe failed before the new logging points for:
+
+- existing-node detection;
+- candidate/lifecycle decision;
+- `Inhibit()`;
+- `MOUNT_CATALOG`.
+
+This run therefore does not establish the requested runtime lifecycle sequence. It is not a valid replacement for the earlier A/B result, where the uninstrumented current implementation reached `Dir` and stalled at `Type`.
+
+No production correction was made.
+
+**Static lifetime finding**
+
+The rewritten FMOUNT currently uses DOS-list-derived pointers after unlocking:
+
+```c
+node = find_node(unit, &list);
+active = node && node->dol_Task != NULL;
+env = node_env(node);
+print_node_state("PRE", node, env);
+...
+if (list) UnLockDosList(LDF_READ | LDF_DEVICES);
+
+if (node && env && env->de_BlocksPerTrack != bpt)
+    geometry_change = 1;
+```
+
+`node` and `env` are derived from the locked DOS list and are dereferenced after `UnLockDosList()`. This violates the required lifetime discipline unless the classic API explicitly guarantees those pointers remain valid, which has not been established here.
+
+The same issue also exists in the helper:
+
+```c
+static int update_env(...)
+{
+    struct DosList *list, *node = find_node(unit, &list);
+    struct DosEnvec *env = node_env(node);
+    ...
+    UnLockDosList(...);
+    return 0;
+}
+```
+
+That helper dereferences `node` and `env` before unlocking, but the main decision path retains and dereferences them afterward.
+
+**What is established**
+
+- The exact pre-integration commits remain:
+  - `nio-core-apps`: `978f7b2e007ddf00555bab1d5bb682cccf4ac28a`
+  - `fujinet-nio-driver`: `91779acd4203151d96ab6e85ebd5e40e6701bf67`
+- A/B matrix remains:
+  - old FMOUNT + old driver: pass;
+  - old FMOUNT + new driver: pass;
+  - new FMOUNT + new driver: fail.
+- The probe-bypass experiment remained failing, so the probe alone is not causal.
+- No driver BeginIO/ReplyMsg instrumentation was added.
+- No HD work or production fix was performed.
+
+**Current blocker**
+
+The instrumented FMOUNT now fails during the candidate-probe/command path before the decision evidence is emitted, so the requested forced old-lifecycle experiment was not run. The next diagnostic pass must first restore a valid instrumented FMOUNT run, then capture node state into local scalar copies while the DOS list is locked, without yet changing production behavior.
+
+
+
+
+## Moving to Terra
+
+Take over the stalled Amiga Phase 2 production FMOUNT integration and get it back onto a controlled path.
+
+We already have substantial evidence. Do not restart the investigation from scratch.
+
+Read first:
+
+backlog/amiga-diskdevice-phase-2.md
+backlog/amiga-disk-media-architecture.md
+backlog/amiga-diskdevice-phase-2-findings.md
+docs/amiberry-testing.md
+
+Then inspect the current uncommitted changes in:
+
+repos/nio-core-apps
+repos/fujinet-nio-driver
+Established facts
+
+The exact known-good pre-integration revisions are:
+
+nio-core-apps:
+978f7b2e007ddf00555bab1d5bb682cccf4ac28a
+
+
+fujinet-nio-driver:
+91779acd4203151d96ab6e85ebd5e40e6701bf67
+
+A/B matrix:
+
+old FMOUNT + old driver       PASS
+old FMOUNT + current driver   PASS
+new FMOUNT + current driver   FAIL
+
+Therefore the normal resident-driver DD I/O path is not the introducing component.
+
+Current new FMOUNT has previously reached:
+
+FMOUNT success
+Dir DN0: success
+Type DN0:KNOWN.TXT stalls/requester
+
+Probe bypass also reproduced the failure, therefore probe is not necessarily the sole cause.
+
+Do not add low-level driver completion instrumentation until the FMOUNT lifecycle itself has been repaired/isolated.
+
+Two concrete defects to address first
+A. PROBE_CATALOG currently mutates the live NIO slot
+
+Current driver code implements candidate probing with:
+
+fujinet_disk_unit_to_slot(unit_index, &nio_slot);
+client->mount(... nio_slot, candidate_uri, ...);
+
+This is the same NIO slot backing the live Amiga disk unit.
+
+FMOUNT invokes it before inhibiting or retiring an active DOS handler.
+
+Therefore the supposedly observational probe can replace the media underneath a live handler.
+
+This violates the required invariant:
+
+never change the live backing media while its DOS handler is active
+unless that handler has first been inhibited or retired
+
+Do not preserve this behavior.
+
+Determine the appropriate candidate-inspection mechanism.
+
+Options may include an actually isolated/scratch NIO context/slot or another existing NIO operation that can inspect the candidate without touching the committed unit, but derive the solution from the available APIs rather than inventing an unsafe slot assumption.
+
+If truly non-mutating candidate inspection cannot currently be implemented cleanly, report that architectural limitation explicitly rather than disguising a real mount as a probe.
+
+B. Restore the known-good same-geometry lifecycle exactly
+
+The passing pre-integration Amiga FMOUNT performs:
+
+detect active DNx handler
+Inhibit(TRUE)
+
+
+CreatePort/CreateExtIO/OpenDevice
+MOUNT_CATALOG
+CloseDevice/DeleteExtIO/DeletePort
+
+
+Inhibit(FALSE)
+
+The rewritten FMOUNT substantially changed that ordering.
+
+For an existing active DD node mounting another compatible DD image, preserve the old lifecycle as exactly as practical.
+
+In particular, do not make dynamic-node/geometry machinery perturb the already-proven DD→DD path.
+
+Use this as the first production invariant:
+
+existing active node
++ compatible existing DosEnvec
++ compatible candidate profile
+
+
+=> old proven Inhibit/mount/uninhibit lifecycle
+
+# Fix DOS-list lifetime discipline
+
+Current code does:
+
+node = find_node(...);
+env = node_env(node);
+...
+UnLockDosList(...);
+...
+env->de_BlocksPerTrack
+
+Do not retain/dereference DOS-list-derived node, startup, or DosEnvec
+pointers after releasing the lock.
+
+While holding the read lock, copy everything needed for decisions into an
+ordinary local snapshot, for example:
+
+node_present
+handler_active
+task pointer if needed for immediate post-unlock ACTION_DIE
+BlocksPerTrack
+Surfaces
+LowCyl
+HighCyl
+DosType
+startup identity if diagnostically useful
+
+Release the lock, then make decisions using those scalar copies.
+
+Any later mutation of an inactive DosEnvec should reacquire the node and
+operate on it only while the appropriate synchronization is held.
+
+# Simplify before extending
+
+Do not try to get DD→HD working while the old DD→DD production path is red.
+
+First target:
+
+FMOUNT DD -> DN0:
+Dir DN0:
+Type DN0:KNOWN.TXT
+
+using the current driver.
+
+Required result:
+
+focused standard-tool test PASS
+
+Once that is restored, immediately run the existing same-geometry A→B→A
+FMOUNT regression and ensure it remains green.
+
+# Then resume geometry integration
+
+Only after DD→DD is green:
+
+1. retain safe candidate classification;
+2. use the existing static/persistent DNx node;
+3. for DD↔HD:
+
+active handler
+ACTION_DIE
+observe dn_Task == 0
+commit new media
+update inactive DosEnvec
+natural restart
+
+4. prove through standard FMOUNT:
+
+DD -> HD -> DD
+
+with explicit Dir, Type, BPT=22/BPT=11 and distinct fixture assertions.
+
+Do not use RemDosEntry().
+
+# Dynamic-node creation
+
+Dynamic MakeDosNode() construction is already proven in the POC, but do not
+force node creation into the ordinary DN0 test if the installed static node
+already exists and is suitable.
+
+First get production lifecycle behavior correct using the existing node.
+Absence/new-node behavior can then be validated separately.
+
+Important: do not build diagnostics that alter the failure
+
+Luna's latest instrumentation caused PROBE_CATALOG to return RC=10 before
+reaching the intended logging points.
+
+Keep diagnostics minimal and ensure the original failing/passing boundary
+remains reproducible.
+
+Prefer controlled code-path restoration/bisection over large amounts of
+instrumentation.
+
+# Deliverable
+
+Work through this rather than merely reporting hypotheses.
+
+Return:
+
+a. root cause(s) of the DD regression;
+b. what was wrong with the current probe design;
+c. corrected DOS-list lifetime handling;
+d. exact production lifecycle for compatible DD→DD;
+e. focused DD FMOUNT result;
+f. same-geometry A→B→A result;
+g. if those are green, DD→HD→DD production result;
+h. exact files changed;
+i. any remaining blocker to completing the Phase 2 Media Geometry boxes.
+
+Do not start HDF/RDB/nonstandard geometry work.
+
+
+## Terra response
+
+Restored the controlled production FMOUNT path and removed the unsafe integration experiment.
+
+**a. DD regression root causes**
+
+Two defects in the rewritten integration caused the DD regression risk:
+
+- `PROBE_CATALOG` was not observational. It called `client->mount()` using the NIO slot backing the live Amiga unit before the DOS handler had been inhibited or retired.
+- Rewritten FMOUNT retained `DosList`, `DeviceNode`, and `DosEnvec` pointers after `UnLockDosList()`, then used them in compatibility decisions.
+
+The A/B matrix already proved the resident driver’s normal DD path was not the introducing component:
+
+```text
+old FMOUNT + old driver = pass
+old FMOUNT + current driver = pass
+rewritten FMOUNT + current driver = fail
+```
+
+**b. Unsafe probe design**
+
+`FUJINET_DISK_CMD_PROBE_CATALOG` resolved the candidate URI, then mounted it into the same NIO DiskService slot associated with the live unit:
+
+```c
+fujinet_disk_unit_to_slot(unit_index, &nio_slot);
+client->mount(..., nio_slot, candidate_uri, ...);
+```
+
+That can replace backing media underneath a running AmigaDOS handler. It violates the required invariant and could not be retained as a “candidate probe.”
+
+The probe command, interface structures, and driver dispatch were removed. The architecture document now records that a future DD/HD production transition needs an actually isolated or non-mutating candidate inspection operation; the currently available stateful mount API is not one.
+
+**c. DOS-list lifetime handling**
+
+The pointer-lifetime issue was eliminated by removing the rewritten node/geometry decision path from production FMOUNT.
+
+The restored FMOUNT only reads `entry->dol_Task` while `LDF_READ | LDF_DEVICES` is held, copies the result into a `BOOL`, and releases the list before further work:
+
+```c
+entry = FindDosEntry(list, name, LDF_DEVICES);
+active = entry != NULL && entry->dol_Task != NULL;
+UnLockDosList(LDF_READ | LDF_DEVICES);
+```
+
+It does not retain or dereference a `DosList`, `DeviceNode`, `FileSysStartupMsg`, or `DosEnvec` pointer after unlocking.
+
+**d. Compatible DD-to-DD production lifecycle**
+
+The restored compatible active-node flow is the established sequence:
+
+```text
+detect active DNx handler
+Inhibit(TRUE)
+
+CreatePort
+CreateExtIO
+OpenDevice
+MOUNT_CATALOG
+CloseDevice
+DeleteExtIO
+DeletePort
+
+Inhibit(FALSE)
+```
+
+No dynamic-node creation, `ACTION_DIE`, DosEnvec modification, or geometry machinery executes for the ordinary DD-to-DD path.
+
+**e. Focused DD FMOUNT result**
+
+Passed:
+
+```text
+pytest integration-tests/amiberry/test_diskdevice_fmount.py -q --run-amiga
+1 passed, 131 warnings in 51.55s
+```
+
+This proves the standard-tool path again reaches:
+
+```text
+FMOUNT 11 DN0: RO
+Dir DN0:
+Type DN0:KNOWN.TXT
+FUJINET ADF READ PASSED
+```
+
+**f. Same-geometry A-to-B-to-A result**
+
+Passed as part of the same focused standard-tool case.
+
+The existing test asserts:
+
+- DD initial mount.
+- DD A to DD B replacement through `FMOUNT 12 DN0: RO`.
+- `Type DN0:SECOND.TXT` returns the B fixture content.
+- DD B back to DD A through `FMOUNT 11 DN0: RO`.
+- `Type DN0:KNOWN.TXT` returns `FUJINET ADF READ PASSED`.
+- Change counter advances in both replacement directions.
+- No requester interrupts the workflow.
+
+**g. DD-to-HD-to-DD production result**
+
+Not attempted.
+
+The safe prerequisite is missing: a candidate inspection mechanism that obtains authoritative `fn_disk_info_t` and boot bytes without mounting candidate media into the live unit’s NIO slot. DD-to-HD production work remains blocked rather than reintroducing the unsafe probe.
+
+**h. Files changed**
+
+- `repos/nio-core-apps/apps/platform/amiga/fmount.c`
+  - Restored the known-good active-handler DD lifecycle.
+  - Removed dynamic-node/probe/lifecycle rewrite.
+- `repos/nio-core-apps/include/platform/amiga/fujinet_disk_iface.h`
+  - Removed `FUJINET_DISK_CMD_PROBE_CATALOG` and related payload types.
+- `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c`
+  - Removed unsafe probe command dispatch and live-slot candidate mount.
+- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_device.h`
+  - Removed the unsafe probe command and payload types.
+- `backlog/amiga-disk-media-architecture.md`
+  - Documents that the former probe was stateful/unsafe and that isolated inspection is an outstanding prerequisite.
+
+**i. Remaining Phase 2 blocker**
+
+Production DD/HD geometry transitions require an isolated or non-mutating candidate inspection API. The existing NIO mount API mutates the live unit slot, so it cannot safely classify candidate media ahead of selecting `Inhibit()` versus `ACTION_DIE`.
+
+No HDF, RDB, nonstandard geometry, static MountList removal, or low-level driver completion instrumentation was started.
+

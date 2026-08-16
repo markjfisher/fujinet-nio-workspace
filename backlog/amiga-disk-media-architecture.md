@@ -272,18 +272,25 @@ geometry or DosEnvec change
 Production integration is not complete. `FMOUNT` does not yet claim to create
 dynamic nodes as the production/user-facing path.
 
-The intended flow is:
+The intended flow separates candidate inspection from committing replacement to
+the active unit. The currently available NIO mount operation is stateful: it
+mounts into the same NIO slot backing an Amiga unit. It is not a valid candidate
+inspection primitive while that unit has an active DOS handler.
 
-1. Resolve the catalogue slot and mount it on the NIO unit.
-2. Read the committed `fn_disk_info_t` descriptor.
-3. Classify the geometry on the Amiga side.
-4. Classify the boot-block filesystem identity separately.
-5. Compare the new environment with the existing node's active/inactive
-   environment.
-6. Use `Inhibit()` for compatible same-geometry replacement.
-7. Use `ACTION_DIE`, `dn_Task==0`, environment update, and natural restart for
-   geometry-changing replacement.
-8. Persist the catalogue-to-unit assignment only after the selected operation
+1. Obtain candidate facts through a future isolated/non-mutating NIO inspection
+   operation. A temporary implementation that mounted the candidate into the
+   live unit slot was removed because it could replace media below an active
+   DOS handler.
+2. Classify the geometry and filesystem identity on the Amiga side.
+3. Compare the candidate environment with the existing node's active/inactive
+   environment and select the lifecycle path.
+4. Never replace media underneath an uninhibited/unretired active handler.
+5. For compatible same-geometry replacement, use `Inhibit(TRUE)`, commit the
+   media replacement, then use `Inhibit(FALSE)`.
+6. For a geometry or DosEnvec change, use `ACTION_DIE`, observe `dn_Task==0`,
+   commit the media replacement, update the inactive DosEnvec, and allow the
+   next access to start a fresh handler.
+7. Persist the catalogue-to-unit assignment only after the selected operation
    has succeeded.
 
 Failure and recovery semantics for geometry-changing production replacement
