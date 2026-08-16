@@ -22,14 +22,29 @@ end-to-end tests from the selected production design and from future work.
 - DD -> HD -> DD transitions on one persistent dynamic node.
 - Same-geometry A -> B -> A replacement using `Inhibit()` without handler
   recreation or requester.
+- Generic non-mutating NIO Disk Inspect, including DD/HD classification and
+  filesystem identity, is implemented and tested.
+- Amiga `INSPECT_CATALOG` consumes that operation without changing live unit
+  state, including status, change state, geometry, and handler state.
+- Production `FMOUNT` inspects and classifies the candidate before selecting
+  the existing-node or absent-node lifecycle.
+- Production `FMOUNT` dynamically creates an absent `DNx:` after a successful
+  candidate mount and geometry build.
+- Direct initial DD and HD `FMOUNT` both work with no static MountLists
+  installed; first normal filesystem access starts the handler naturally.
+- Dynamic nodes use the public SDK `fujinet_disk_serialize_dos_envec()` ABI.
+- `nio-core-apps` and `nio-apps` consume the public Amiga DiskDevice SDK rather
+  than driver-private headers or source files.
+- The complete current Amiberry suite is green.
 
-### Selected, Not Yet Production-Integrated
+### Selected and Production-Integrated
 
 - Dynamic `DN0:`-`DN7:` creation and update from `FMOUNT`.
 - Persistent session-lifetime dynamic DOS nodes.
 - Separate same-geometry and geometry-changing replacement paths.
 - Classification on the Amiga side from authoritative NIO capacity facts.
-- Retirement of static MountLists as the universal user-facing configuration.
+- Static MountLists are no longer the universal user-facing configuration; the
+  eight files remain explicit DD compatibility/bootstrap assets only.
 
 ### Future or Unproven
 
@@ -237,8 +252,9 @@ HD inactive
 DD active
 ```
 
-This validates the selected variable-media mounting strategy. It remains a
-test-only architecture result; production `FMOUNT` integration is outstanding.
+This validates the selected variable-media mounting strategy. Production
+`FMOUNT` now uses the same inspect/classify, `ACTION_DIE`, inactive-node update,
+and natural-restart strategy for geometry-changing replacement.
 
 ## Same-Geometry Replacement
 
@@ -269,19 +285,19 @@ geometry or DosEnvec change
 
 ## FMOUNT Production Status
 
-Production `FMOUNT` now supports standard existing-node DD/HD ADF replacement.
-It obtains candidate facts through the non-mutating inspection command before
-selecting a lifecycle path; it does not create dynamic nodes in this release.
+Production `FMOUNT` supports standard DD/HD ADF mounting and replacement.
+It obtains candidate facts through the generic non-mutating NIO Disk Inspect
+operation, exposed to Amiga as `INSPECT_CATALOG`, before selecting a lifecycle
+path. Inspection does not change live unit state.
 
 The intended flow separates candidate inspection from committing replacement to
 the active unit. The currently available NIO mount operation is stateful: it
 mounts into the same NIO slot backing an Amiga unit. It is not a valid candidate
 inspection primitive while that unit has an active DOS handler.
 
-1. Obtain candidate facts through a future isolated/non-mutating NIO inspection
-   operation. A temporary implementation that mounted the candidate into the
-   live unit slot was removed because it could replace media below an active
-   DOS handler.
+1. Obtain candidate facts through `INSPECT_CATALOG`, backed by generic
+   non-mutating NIO Disk Inspect. The candidate is not mounted into the live
+   unit slot.
 2. Classify the geometry and filesystem identity on the Amiga side.
 3. Compare the candidate environment with the existing node's active/inactive
    environment and select the lifecycle path.
@@ -294,6 +310,17 @@ inspection primitive while that unit has an active DOS handler.
 7. Persist the catalogue-to-unit assignment only after the selected operation
    has succeeded.
 
+For an absent node, production uses this order:
+
+1. Inspect and classify the candidate.
+2. Commit `MOUNT_CATALOG`.
+3. Build and serialize the profile-driven DosEnvec through the public SDK.
+4. Create and add the persistent node.
+5. Let the first normal `Dir`/`Type` access start the handler.
+
+Both direct initial DD and direct initial HD are tested with static MountLists
+removed.
+
 Failure and recovery semantics after a successful geometry-changing media
 commit remain incomplete. In particular, production does not yet roll back a
 successful commit if the subsequent inactive DosEnvec update or first access
@@ -301,13 +328,11 @@ fails.
 
 ## Static MountLists
 
-Static `DN0:`-`DN7:` MountLists remain part of the installed DD compatibility
-and bootstrap story. They are not the universal architecture.
-
-Dynamic persistent nodes are the proven long-term mechanism, but replacing the
-static files in the production/user-facing path remains outstanding. The
-static files must remain available until the production FMOUNT path owns node
-creation, transition, failure recovery, and compatibility behavior.
+Static `DN0:`-`DN7:` MountLists are explicit DD compatibility/bootstrap assets
+only. They are no longer required by the standard `FMOUNT` path: production
+FMOUNT can inspect, mount, construct, and add an absent node for both DD and HD
+media. They remain available for compatibility and low-level diagnostics, but
+are not the universal user-facing configuration.
 
 ## HDF and RDB Future Work
 
@@ -344,12 +369,16 @@ embedded filesystem handling is currently proven.
 
 ## Delivery Progression
 
-1. Production-integrated dynamic DD and HD ADF profiles.
+1. Production-integrated dynamic DD and HD ADF profiles. **Complete.**
 2. Production failure/recovery semantics for geometry-changing replacement.
 3. Nonstandard whole-volume images with validated logical geometry.
 4. Whole-partition HDF with explicit metadata.
 5. Whole-disk RDB HDF with automatic partition discovery.
 6. Large-media/64-bit I/O and performance work.
+
+The current production boundary is standard DD/HD ADF whole-volume media.
+Failure/recovery after a successful geometry-changing commit, nonstandard
+geometry, HDF/RDB, and large-media behavior remain future work.
 
 The intended user model remains one stable command such as:
 

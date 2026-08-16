@@ -86,9 +86,10 @@ persistent dynamic DeviceNode
 + update DosEnvec only while dn_Task == 0
 + natural restart on next access
 
-- [ ] Replace the eight fixed standard-ADF MountLists as the universal story.
-      Static `DN0`–`DN7` files may remain as explicit DD-ADF compatibility
-      profiles only if their scope is unmistakable.
+- [x] Replace the eight fixed standard-ADF MountLists as the universal story.
+      Static `DN0`–`DN7` files remain explicit DD-ADF compatibility/bootstrap
+      assets only; the standard `FMOUNT` path does not require them and creates
+      absent nodes dynamically.
 
 - [x] Reject unsupported, malformed, partitioned, or ambiguous images with a
       clear error before announcing insertion; never silently reinterpret an
@@ -134,3 +135,60 @@ utility or a hidden 1760-sector fallback.
       failed three of five normal runs; `6c9bf6af`, whose only relevant
       production change is setting queued request `ln_Type = NT_MESSAGE`,
       passed three of three. See `amiga-diskdevice-phase-2-findings.md`.
+
+## Remaining Verification Gap Analysis
+
+The following items remain unchecked because the current evidence does not
+cover the complete wording of each acceptance criterion.
+
+### Host geometry and all-unit coverage
+
+- Existing evidence: the production classifier and focused Amiberry cases
+  prove the 512-byte DD/HD profiles, malformed URI rejection, and per-unit
+  geometry in the exercised units.
+- Missing coverage: host-level tests for every inferred-geometry boundary and
+  hint interaction, malformed image sizes, and independent geometry on all
+  eight units.
+- Smallest closure: add a table-driven host classifier test for valid DD, valid
+  HD, unsupported sizes, conflicting hints, and eight unit descriptors.
+
+### Native geometry and standard-tool calls
+
+- Existing evidence: native driver contract, FIFO, and Exec-boundary tests
+  pass; Amiberry covers FMOUNT and the dynamic-node geometry path.
+- Missing coverage: native assertions for production `TD_GETGEOMETRY` on DD
+  and HD plus a native standard-tool request boundary case.
+- Smallest closure: extend the native driver fixture with DD/HD geometry and
+  one standard-tool request assertion.
+
+### Standard-tool DD/HD eject and persistence matrix
+
+- Existing evidence: the full current Amiberry suite is green; it covers
+  inspect-first FMOUNT, existing-node DD -> HD -> DD, same-geometry DD A -> B
+  -> A with `Inhibit()`, absent-node DD and HD creation without static
+  MountLists, filesystem startup, writable replacement, and mapping
+  persistence across the focused cases.
+- Missing coverage: one complete standard-tool case whose assertions jointly
+  prove DD and HD `FMOUNT`, `FUMOUNT`, and persisted remount behavior.
+- Smallest closure: add one sequence and assertions for DD mount/FUMOUNT/
+  reload followed by HD mount/FUMOUNT/reload.
+
+### Stage 8 durability across every supported geometry
+
+- Existing evidence: DD writable durability, replacement, queue, change
+  notification, and timeout regressions pass; HD read-only access and DD/HD
+  geometry transitions pass.
+- Missing coverage: writable durability, concurrent access, replacement, and
+  change-notification assertions repeated specifically for HD media.
+- Smallest closure: add a writable HD Amiberry sequence mirroring the proven DD
+  copy/update/remount/status and notification checkpoints.
+
+### Supported-media documentation
+
+- Existing evidence: this backlog and the architecture document define
+  standard DD/HD ADF profiles and list HDF/RDB, nonstandard geometries,
+  filesystem validation, and large-media I/O as unsupported or future work.
+- Missing coverage: a single support statement tying those limits to the
+  permanent FMOUNT/SDK interface and named test evidence.
+- Smallest closure: add a supported-media table naming DD/HD ADF as production
+  supported and all other current families as rejected or unimplemented.
