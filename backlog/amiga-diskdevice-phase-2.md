@@ -97,9 +97,15 @@ persistent dynamic DeviceNode
 
 ## Verification
 
-- [ ] Add host/native tests covering raw-image geometry inference, hint
+- [x] Add host/native tests covering raw-image geometry inference, hint
       interactions, malformed sizes, and independent retained geometry on all
-      eight driver units.
+      eight driver units. `repos/fujinet-nio/tests/test_disk_device_protocol.cpp`
+      proves raw DD (`512 x 1760`) and HD (`512 x 3520`) ADF inference,
+      inferred geometry winning over a conflicting 256-byte hint, and rejection
+      of truncated and unsupported 1680-sector ADFs. The native
+      `amiga/tests/test_fujinet_disk_driver.c` fixture mounts alternating DD/HD
+      geometry on units 0..7, changes unit 0, and queries units 1..7 to prove
+      retained independent geometry/state.
 - [ ] Add native tests for dynamic `TD_GETGEOMETRY` and standard-tool device
       calls.
 - [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
@@ -145,18 +151,9 @@ cover the complete wording of each acceptance criterion.
 
 ### Geometry inference and all-unit coverage
 
-- Existing evidence: NIO inspection and Amiga classification tests prove the
-  standard 512-byte DD/HD profiles, and focused Amiberry cases prove retained
-  per-unit geometry for the units exercised by those workflows.
-- Missing coverage: direct tests of raw-image geometry inference and hint
-  interaction, malformed or unsupported raw sizes, and explicit proof that
-  units 0 through 7 retain independent committed geometry.
-- Smallest closure:
-  - extend the NIO/DiskService host tests with table-driven raw-image cases for
-    DD, HD, unsupported/malformed sizes, and conflicting hints;
-  - extend the driver native fixture with eight units carrying deliberately
-    different committed geometry/state and assert that querying or changing
-    one unit does not alter the others.
+- Closed by the host and native tests named in the completed verification
+  checkbox above. Broader nonstandard geometry and hint combinations remain
+  outside this checkbox and are tracked under the architecture's future work.
 
 ### Native geometry and standard-tool calls
 
