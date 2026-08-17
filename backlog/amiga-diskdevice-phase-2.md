@@ -1,6 +1,6 @@
 # Amiga DiskDevice Phase 2 — general media and standard tools
 
-Status: `IN PROGRESS`
+Status: `COMPLETE`
 
 ## Goal
 
@@ -130,8 +130,11 @@ persistent dynamic DeviceNode
       concurrent resident-device requests and exercise two registered change
       interrupts, removal, repeated notification, and abort cleanup against DD
       and HD mounts respectively.
-- [ ] Document the exact supported media families and distinguish current
-      limitations from permanent interfaces.
+- [x] Document the exact supported media families and distinguish current
+      limitations from permanent interfaces. The architecture now includes a
+      user workflow, exact DD/high-density-floppy and OFS/FFS support matrix,
+      classified implementation limits and public contracts, and a staged
+      HDF/RDB roadmap. HDF/RDB remains explicitly outside Phase 2.
 
 ## Exit criteria
 
@@ -139,6 +142,12 @@ Users mount and eject supported Amiga disk images with the standard
 `FMOUNT`/`FUMOUNT` tools. Catalogue selection, device-unit state, persistence,
 geometry, and AmigaDOS mounting remain consistent without a competing mount
 utility or a hidden 1760-sector fallback.
+
+**Phase 2 is complete.** Standard DD and high-density-floppy ADF media are the
+current production boundary. Nonstandard whole-volume media, whole-partition
+HDF, RDB partition discovery, partition bindings, embedded filesystem policy,
+and large/64-bit media are post-Phase-2 roadmap work, not incomplete Phase 2
+acceptance items.
 
 ## Validated Baseline
 
@@ -158,10 +167,10 @@ utility or a hidden 1760-sector fallback.
       production change is setting queued request `ln_Type = NT_MESSAGE`,
       passed three of three. See `amiga-diskdevice-phase-2-findings.md`.
 
-## Remaining Verification Gap Analysis
+## Verification Gap Analysis
 
-The following items remain unchecked because the current evidence does not
-cover the complete wording of each acceptance criterion.
+All Phase 2 acceptance gaps are closed. The sections below record the evidence
+and the boundary between completed work and future media support.
 
 ### Geometry inference and all-unit coverage
 
@@ -204,10 +213,12 @@ cover the complete wording of each acceptance criterion.
 
 ### Supported-media documentation
 
-- Existing evidence: this backlog and the architecture document define
-  standard DD/HD ADF profiles and list HDF/RDB, nonstandard geometries,
-  filesystem validation, and large-media I/O as unsupported or future work.
-- Missing coverage: a single support statement tying those limits to the
-  permanent FMOUNT/SDK interface and named test evidence.
-- Smallest closure: add a supported-media table naming DD/HD ADF as production
-  supported and all other current families as rejected or unimplemented.
+- Closed by `amiga-disk-media-architecture.md`. Its Phase 2 support table names
+  standard 512 x 1760 DD floppy ADF and 512 x 3520 high-density floppy ADF,
+  each with `DOS\0` OFS or `DOS\1` FFS, as the only currently supported media.
+  It separately identifies rejected nonstandard/DOS-family variants and
+  unimplemented HDF/RDB media.
+- The same document records the normal `FMOUNT`/`FUMOUNT`/`FMOUNTRESTORE` user
+  workflow, classifies current implementation policy versus public interface
+  contracts and extension points, and moves all partitioned-media work into a
+  staged post-Phase-2 HDF/RDB roadmap.

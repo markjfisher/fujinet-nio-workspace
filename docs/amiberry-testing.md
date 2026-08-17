@@ -191,6 +191,33 @@ last checkpoint reached by an interrupted run. The case directory also
 contains `amiberry.log`, `fujinet-nio.log`, the framebuffer screenshot, and
 the generated HDF.
 
+### Disk-media acceptance evidence
+
+The current Amiga production support boundary is standard DD and
+high-density-floppy ADF media. The focused cases supporting that statement are:
+
+| Case | Evidence |
+| --- | --- |
+| `diskdevice-fmount` | Standard-command DD access, replacement, failed-replacement preservation, writable copy, eject/remount durability, and mapping state |
+| `diskdevice-hd-stage8` | Standard-command high-density-floppy replacement and writable eject/remount durability |
+| `diskdevice-hd-adf` | 512 x 3520 geometry plus the resident concurrent-access and change-notification boundary |
+| `diskdevice-dynamic-fmount-dd` / `diskdevice-dynamic-fmount-hd` | Initial DD/high-density-floppy mount with no static MountList |
+| `diskdevice-fmount-restore` | Fresh-process restoration of simultaneous DD and high-density-floppy mappings, followed by standard eject and mapping removal |
+| `diskdevice-fmount-restore-invalid` | Invalid persisted catalogue entry fails without creating a DOS node |
+
+Run only the relevant case while investigating a support claim, for example:
+
+```sh
+pytest integration-tests/amiberry/test_diskdevice_fmount.py \
+  -k 'hd_stage8' -vv --run-amiga
+pytest integration-tests/amiberry/test_diskdevice_fmount_restore.py \
+  -vv --run-amiga
+```
+
+These cases do not establish support for whole-partition HDF or whole-disk RDB
+images. The test HDF containing AmigaOS and retained result files is the
+emulator's local boot/storage medium, not media mounted through `DNx:`.
+
 For cases whose mounted handlers continue producing protocol traffic, set a
 unique `completion_log` marker in `integration-tests/amiberry/tests.toml` and
 emit its successful NIO operation only after the guest has displayed all
