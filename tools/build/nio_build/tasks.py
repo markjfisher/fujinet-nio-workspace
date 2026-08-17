@@ -205,28 +205,57 @@ class Build:
             raise SystemExit(f"Amiga test application not found: {app}")
         return app_name, app
 
-    def amiga_test_adf(self) -> None:
+    @staticmethod
+    def amiga_test_adf_parser() -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog="amiga-test-adf",
+            description="Build an Amiga test ADF containing one nio app.",
+        )
+        parser.add_argument(
+            "--label", metavar="NAME",
+            help="volume label to write (default: preserve Workbench label, or use app name for --blank)",
+        )
+        parser.add_argument(
+            "--blank", action="store_true",
+            help="create a blank formatted ADF with the app in C: and no Workbench files",
+        )
+        parser.epilog = (
+            "The normal image is a bootable Workbench derivative. A --blank image is\n"
+            "a formatted, non-bootable ADF intended for fmount/TNFS media tests.\n"
+            "The application is selected with AMIGA_TEST_APP (default: wifitest)."
+        )
+        return parser
+
+    @classmethod
+    def amiga_test_adf_help(cls, _build: "Build") -> str:
+        return cls.amiga_test_adf_parser().format_help()
+
+    def amiga_test_adf(self, args: list[str] | None = None) -> None:
+        parsed = self.amiga_test_adf_parser().parse_args(args or [])
         app_name, app = self.amiga_test_app()
         base_adf = Path(self.ctx.env.get("AMIBERRY_WORKBENCH_ADF", ""))
-        if not base_adf.is_file():
+        if not parsed.blank and not base_adf.is_file():
             raise SystemExit(
                 f"Amiga Workbench ADF not found: {base_adf}\n"
                 "Set AMIBERRY_WORKBENCH_ADF to a licensed Workbench 3.2 ADF."
             )
         output = self.ctx.image_dir / f"amiga-{app_name}.adf"
-        self.runner.run(
-            "amiga-test-adf",
-            [
-                self.ctx.root / "scripts" / "build-amiga-test-adf",
-                "--base-adf", base_adf,
-                "--app", app,
-                "--app-name", app_name,
-                "--output", output,
-            ],
-        )
+        command = [
+            self.ctx.root / "scripts" / "build-amiga-test-adf",
+            "--app", app,
+            "--app-name", app_name,
+            "--output", output,
+        ]
+        if not parsed.blank:
+            command.extend(["--base-adf", base_adf])
+        if parsed.label:
+            command.extend(["--label", parsed.label])
+        if parsed.blank:
+            command.append("--blank")
+        self.runner.run("amiga-test-adf", command)
         self.ctx.env["AMIBERRY_ADF"] = str(output)
 
-    def amiga_test_disk(self) -> None:
+    def amiga_test_disk(self, *, all_apps: bool = False, with_driver: bool = False) -> None:
         app_name, app = self.amiga_test_app()
         # Keep one useful interactive image containing both the selected test
         # app and the complete core utility set.  The selected app still
@@ -253,6 +282,17 @@ class Build:
             "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
             "--output", output,
         ]
+        if all_apps:
+            disk_args.extend([
+                "--extra-app-dir", self.p("NIO_APPS") / "build" / "amiga" / "bin",
+            ])
+        if with_driver:
+            driver_root = self.p("FUJINET_NIO_DRIVER")
+            disk_args.extend([
+                "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
+                "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
+                "--load-driver",
+            ])
         startup_script = self.ctx.env.get("AMIGA_TEST_STARTUP_SCRIPT", "")
         if startup_script:
             startup_path = Path(startup_script).expanduser()
@@ -343,7 +383,20 @@ class Build:
             "--config", "--profile-file", dest="profile_file", metavar="PATH",
             help="alternate workbenches YAML file",
         )
-        parser.epilog = "Amiberry options go after '--', for example --external-nio."
+        parser.add_argument(
+            "--all-apps", action="store_true",
+            help="install all Amiga applications from nio-apps and nio-core-apps",
+        )
+        parser.add_argument(
+            "--with-driver", action="store_true",
+            help="install fujinet-disk.device and fujinet-mount (dynamic mounts only)",
+        )
+        parser.epilog = (
+            "Amiberry options go after '--', for example --external-nio.\n"
+            "The --all-apps and --with-driver options build a convenient interactive\n"
+            "playground image; fmount discovers media dynamically, so static MountLists\n"
+            "are not installed."
+        )
         return parser
 
     @classmethod
@@ -387,7 +440,10 @@ class Build:
             self.ctx.env["AMIBERRY_UAE_CONFIG"] = profile["uae_config"]
 
         if profile.get("build_test_disk", False):
-            self.amiga_test_disk()
+            self.amiga_test_disk(
+                all_apps=parsed.all_apps,
+                with_driver=parsed.with_driver,
+            )
         else:
             disk = Path(profile.get("disk", ""))
             if not disk.is_file():
@@ -804,7 +860,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("apps-msdos", "Build nio-apps MS-DOS test apps", Build.apps_msdos),
         t("apps-atari", "Build nio-apps Atari test apps", Build.apps_atari),
         t("apps-amiga", "Build nio-apps Amiga test apps", Build.apps_amiga),
-        t("amiga-test-adf", "Build an AmigaOS test ADF containing the selected nio-apps test app", Build.amiga_test_adf),
+        t("amiga-test-adf", "Build an AmigaOS test ADF containing the selected nio-apps test app", lambda b: b.amiga_test_adf([]), consumes_args=True, help_text=Build.amiga_test_adf_help),
         t("amiga-test-disk", "Build an AmigaOS HDF containing the selected nio-apps test app", Build.amiga_test_disk),
         t("apps-bbc", "Build nio-apps BBC test apps", Build.apps_bbc),
         t("core-apps-all", "Build all nio-core-apps targets", Build.core_apps_all),

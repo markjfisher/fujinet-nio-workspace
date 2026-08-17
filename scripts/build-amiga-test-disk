@@ -47,6 +47,8 @@ def main() -> int:
                         help="directory of additional executables to install in C:")
     parser.add_argument("--disk-device", type=Path,
                         help="native fujinet-disk.device to install in DEVS:")
+    parser.add_argument("--load-driver", action="store_true",
+                        help="load fujinet-disk.device during startup")
     parser.add_argument("--disk-mount-tool", type=Path,
                         help="fujinet-mount command to install in C:")
     parser.add_argument("--disk-mountlist", action="append", type=Path,
@@ -118,16 +120,23 @@ def main() -> int:
                     continue
                 run_xdf(args.output, "write", str(app), f"C/{app.name}")
                 installed_names.add(app.name)
-        if args.startup_script or not args.interactive:
+        if args.startup_script or not args.interactive or args.load_driver:
             if args.startup_script:
                 if not args.startup_script.is_file():
                     raise SystemExit(f"startup script not found: {args.startup_script}")
                 test_commands = args.startup_script.read_text(encoding="ascii")
+            elif args.interactive:
+                test_commands = ""
             else:
                 command = args.command or args.app_name
                 test_commands = (
                     "C:Assign T: RAM:\n"
                     f"C:{command} >DH0:{args.app_name}.result\n"
+                )
+            if args.load_driver:
+                test_commands = (
+                    "C:LoadModule DEVS:fujinet-disk.device\n"
+                    + test_commands
                 )
 
             # Keep the licensed Workbench startup preamble.  It creates and

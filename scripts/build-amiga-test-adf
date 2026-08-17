@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a bootable Amiga test ADF from a licensed Workbench image."""
+"""Create an Amiga test ADF from a licensed Workbench image or blank filesystem."""
 
 from __future__ import annotations
 
@@ -26,30 +26,55 @@ def run_xdf(image: Path, *commands: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-adf", required=True, type=Path)
+    parser.add_argument("--base-adf", type=Path,
+                        help="licensed Workbench ADF to use as the base image")
     parser.add_argument("--app", required=True, type=Path)
     parser.add_argument("--app-name", default="wifitest")
+    parser.add_argument("--label", help="Amiga volume label")
+    parser.add_argument("--blank", action="store_true",
+                        help="create a blank formatted ADF instead of copying Workbench")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
-    for path, label in ((args.base_adf, "base ADF"), (args.app, "application")):
+    if args.blank and args.base_adf:
+        raise SystemExit("--blank cannot be used with --base-adf")
+    if not args.blank and not args.base_adf:
+        raise SystemExit("--base-adf is required unless --blank is used")
+
+    paths = [(args.app, "application")]
+    if args.base_adf:
+        paths.insert(0, (args.base_adf, "base ADF"))
+    for path, label in paths:
         if not path.is_file():
             raise SystemExit(f"{label} not found: {path}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.base_adf, args.output)
+    if args.blank:
+        args.output.unlink(missing_ok=True)
+        run_xdf(args.output, "create")
+        run_xdf(args.output, "format", args.label or args.app_name, "ffs")
+        run_xdf(args.output, "makedir", "C")
+    else:
+        shutil.copy2(args.base_adf, args.output)
+        if args.label:
+            run_xdf(args.output, "relabel", args.label)
 
-    with tempfile.TemporaryDirectory(prefix="amiga-test-adf-") as temp:
-        startup = Path(temp) / "Startup-Sequence"
-        startup.write_text(
-            "C:Assign T: RAM:\n"
-            f"C:{args.app_name} >T:{args.app_name}.result\n"
-            "C:EndCLI\n",
-            encoding="ascii",
-        )
+    run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
 
-        run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
-        run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
+    if not args.blank:
+        with tempfile.TemporaryDirectory(prefix="amiga-test-adf-") as temp:
+            startup = Path(temp) / "Startup-Sequence"
+            startup.write_text(
+                "C:Assign T: RAM:\n"
+                f"C:{args.app_name} >T:{args.app_name}.result\n"
+                "C:EndCLI\n",
+                encoding="ascii",
+            )
+
+            # The licensed Workbench image already contains its own startup
+            # sequence, so remove it before installing the test launcher.
+            run_xdf(args.output, "delete", "S/Startup-Sequence")
+            run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")
 
     print(f"Built Amiga test ADF: {args.output}")
     return 0

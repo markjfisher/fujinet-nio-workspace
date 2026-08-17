@@ -100,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
                 build.amiga_run(targets, build_adf=True)
             elif target == "amiga-workbench":
                 build.amiga_workbench(targets)
+            elif target == "amiga-test-adf":
+                build.amiga_test_adf(targets)
             elif target == "amiga-tests":
                 build.amiga_tests(targets)
             return 0

@@ -76,6 +76,44 @@ The test-image builder removes Workbench's optional `WBStartup/Welcome`
 program, so the first-run "Welcome to the Amiga Preinstallation Environment"
 requester does not interrupt automated or interactive tests.
 
+For a single interactive playground image containing every Amiga application
+from `nio-apps`, every Amiga utility from `nio-core-apps`, and the resident
+FujiNet disk driver, use:
+
+```sh
+./scripts/build.sh amiga-workbench --all-apps --with-driver -- --external-nio
+```
+
+The image includes `DEVS:fujinet-disk.device` and `C:fujinet-mount`, but no
+static `DN0`-`DN7` MountLists. `fmount` inspects the selected media and creates
+the DOS node dynamically. The generated HDF is the local interactive image at
+`build/images/amiga-wifitest.hdf`; it is not a TNFS-mounted media image. With
+`--with-driver`, its startup sequence also runs
+`C:LoadModule DEVS:fujinet-disk.device` before Workbench loads, so the driver
+is ready after a warm start without opening a shell manually.
+
+## Building ADF media for TNFS
+
+`amiga-test-adf` preserves the licensed Workbench filesystem by default. Give
+each image a unique volume label when creating media for `fmount`:
+
+```sh
+AMIGA_TEST_APP=sizetest \
+  ./scripts/build.sh amiga-test-adf --label SIZETEST
+```
+
+For a formatted, non-bootable ADF containing only the selected application
+under `C:`, use `--blank`:
+
+```sh
+AMIGA_TEST_APP=sizetest \
+  ./scripts/build.sh amiga-test-adf --blank --label SIZETEST
+```
+
+The output is `build/images/amiga-sizetest.adf`. Blank images contain no
+Workbench files or startup sequence; they are intended as media for
+`fmount`, not as disks to boot directly.
+
 Named Amiberry environments are defined in
 `configs/amiga/workbenches.yaml`. The default profile is `wb3.2`; select an
 older or custom environment with `AMIGA_WORKBENCH_CONFIG`. Direct-image
