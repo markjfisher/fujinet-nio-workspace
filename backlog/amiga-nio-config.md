@@ -19,17 +19,26 @@ later packet-native transports.
   `config-nio/mappings` contract through the resident driver.
 - The existing Amiga `fujinet-nio-lib` application target remains usable
   independently of the resident driver target.
+- The supported-media and standard-command contract is documented in
+  `docs/amiga/disk-media-architecture.md`.
 
 ## Work
 
 - [ ] Define the Amiga UI and input conventions without changing Slot Catalog,
       HostService, AppStore, or DiskDevice wire contracts.
 - [ ] Port host/path selection and sparse catalogue browsing/editing.
-- [ ] Display catalogue slots separately from active `DNx:` runtime mounts.
-- [ ] Read and write the shared eight-entry `config-nio/mappings` value.
+- [ ] Display catalogue slots separately from active `DNx:` device state and
+      saved mappings.
+- [ ] Read the version-1 eight-entry `config-nio/mappings` value for display,
+      but do not mutate it independently of the resident device lifecycle.
 - [ ] Mount, replace, and eject selected catalogue media on drives 0–7 with
-      explicit RO/RW mode.
-- [ ] Preserve boot/runtime mounts that do not have synthetic catalogue slots.
+      explicit RO/RW mode through the same public resident-device operations
+      used by `FMOUNT`/`FUMOUNT`.
+- [ ] Prove UI actions update live device state, change counters, protection,
+      and saved mappings atomically; use `FMOUNTRESTORE` semantics for startup
+      restoration rather than creating a second restore path.
+- [ ] Surface unsupported-media and stale-mapping failures without creating a
+      DOS node or desynchronising the displayed state.
 - [ ] Add native builds, deterministic host tests, and Amiberry interaction
       coverage for configuration persistence and remount after restart.
 - [ ] Document installation, keys, limitations, and compatible revisions.
@@ -39,3 +48,5 @@ later packet-native transports.
 An Amiga user can configure hosts and catalogue URIs, assign any populated
 catalogue slot to any `DN0:`–`DN7:` drive, persist those assignments, and use
 the resulting disks through normal AmigaDOS commands over the RS-232 backend.
+The UI must remain a client of the established mount lifecycle, not an
+independent writer of mapping state.

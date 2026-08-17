@@ -7,6 +7,8 @@ This is the cross-repository work queue for the FujiNet-NIO workspace.
 - One Markdown file represents one coherent goal or deliverable.
 - Keep detailed implementation notes in the repository that owns the code;
   keep this file focused on scope, order, dependencies, and acceptance.
+- Keep durable cross-repository Amiga user and architecture documentation in
+  `../docs/amiga/`; backlog files should contain actionable unchecked work.
 - Use only these statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, and `DONE`.
 - A task is `DONE` only when its acceptance criteria are met, tests have been
   run where applicable, and the user has reviewed or accepted the result.

@@ -142,7 +142,8 @@ The workflow-oriented build surface is documented in
 - Atari libraries, apps, boot disk, and emulator-side FujiNet build
 - Amiga `fujinet-nio-lib`, `nio-apps`, and `nio-core-apps` applications
 
-Legacy aliases remain available under `--list --all` during migration:
+Legacy aliases remain available under `--list --all` pending the compatibility
+audit tracked in `backlog/build-orchestration-followups.md`:
 
 ```sh
 scripts/build.sh msdos-image
@@ -186,7 +187,7 @@ scripts/build.sh msdos-dev-curses
 
 That ensures the POSIX TCP FujiNet exists, builds `FUJINET.SYS`, MS-DOS apps,
 the boot disks, the QEMU image, then runs QEMU with `--display curses`. See
-[docs/msdos-qemu-nio-curses.md](docs/msdos-qemu-nio-curses.md).
+[docs/msdos/qemu-nio-curses.md](docs/msdos/qemu-nio-curses.md).
 
 While QEMU is running, drive keys through the QEMU monitor from another terminal:
 

@@ -36,33 +36,29 @@ Use `backlog/` for active workspace-level goals and move completed goal files
 to `completed/`. Keep repository-specific implementation details in the
 owning repository's documentation.
 
-## Amiga DiskDevice Phase 2 handoff
+## Amiga DiskDevice status and future media work
 
-Stage 8 and its hardening work are complete. Do not reopen the standard-ADF
-implementation or replay its history unless a regression is found. Phase 2 is
-the active goal:
+Stage 8, its hardening work, and DiskDevice Phase 2 are complete. Do not reopen
+their implementation or replay their history unless a regression is found.
+The completed acceptance record is
+`completed/amiga-diskdevice-phase-2.md`; the durable user and architecture
+contract is `docs/amiga/disk-media-architecture.md`.
 
-- Standard `nio-core-apps` `FMOUNT`/`FUMOUNT` must replace the transitional
-  `fujinet-mount` end-user workflow.
-- Amiga units `DN0:`–`DN7:` must continue to map to catalogue slots 1–8.
-- Remove the driver's fixed 880 KiB/1760-sector assumption and use successful
-  NIO `Info` geometry independently for each unit.
-- Define DD/HD ADF support separately from partitioned RDB/HDF media.
-- Preserve Stage 8 writable, replacement, persistence, queue, notification,
-  and timeout regressions for every supported geometry.
+Current production support is standard DD and high-density-floppy ADF media.
+The standard `FMOUNT`/`FUMOUNT`/`FMOUNTRESTORE` workflow owns normal mounting,
+eject, replacement, and persisted restoration. Amiga units `DN0:`–`DN7:` map
+independently to the resident driver's eight DiskDevice slots; catalogue media
+selection is not restricted to catalogue entries 1–8.
 
-The Phase 2 acceptance criteria and unchecked work are authoritative in:
+Future whole-volume HDF and partitioned RDB work is tracked in
+`backlog/amiga-hdf-rdb-support.md`. Do not treat it as unfinished Phase 2 or
+broaden media support without satisfying that task's staged validation.
 
-```text
-backlog/amiga-diskdevice-phase-2.md
-backlog/amiga-disk-media-architecture.md
-```
-
-For a scratch-session startup, read only these files first:
+For an HDF/RDB scratch session, read only these files first:
 
 1. `AGENTS.md`
-2. `backlog/amiga-diskdevice-phase-2.md`
-3. `backlog/amiga-disk-media-architecture.md`
+2. `backlog/amiga-hdf-rdb-support.md`
+3. `docs/amiga/disk-media-architecture.md`
 4. `repos/fujinet-nio-driver/amiga/README.md`
 5. `repos/fujinet-nio-driver/amiga/WRITE_MEDIA_POLICY.md`
 
@@ -76,7 +72,7 @@ git -C repos/fujinet-nio-driver log --oneline -5
 git -C repos/fujinet-nio-lib log --oneline -5
 ```
 
-Before implementation, identify the owning repository from the Phase 2 ticket:
+Before implementation, identify the owning repository from the active ticket:
 
 - `repos/nio-core-apps`: standard `FMOUNT`/`FUMOUNT` command behavior.
 - `repos/fujinet-nio-driver`: Amiga resident device, dynamic geometry,
@@ -84,15 +80,19 @@ Before implementation, identify the owning repository from the Phase 2 ticket:
 - `repos/fujinet-nio-lib`: shared DiskDevice/session contracts and target
   transport only when a library change is required.
 - Workspace `integration-tests/amiberry`: cross-repository acceptance tests.
-- Workspace `backlog/`: goal status and acceptance evidence only.
+- Workspace `backlog/`: active goal scope, dependencies, checkboxes, and exit
+  criteria only.
+- Workspace `docs/amiga/`: durable user and architecture documentation.
+- Workspace `completed/`: closed acceptance records and historical evidence.
 
-Use the smallest context sufficient for the ticket. Quote the relevant Phase 2
+Use the smallest context sufficient for the ticket. Quote the relevant active
 checkbox and read only the owning implementation file, its focused tests, and
-the associated architecture section. Do not load the completed Stage 8
-backlog or full session history unless the ticket explicitly concerns a
-regression or a contract established there.
+the associated architecture section. Do not load completed Stage 8/Phase 2
+history unless the ticket explicitly concerns a regression or an established
+contract.
 
-Phase 2 validation remains environment-sensitive. Source the environment first;
+Amiga validation remains environment-sensitive. Source the environment first;
 when changing `repos/fujinet-nio-lib`, run the complete `make check`; for Amiga
-changes, run the native driver tests/build and the focused Amiberry case before
-the complete `scripts/build.sh amiga-tests` gate.
+changes, run the native driver tests/build and focused Amiberry cases before a
+complete `scripts/build.sh amiga-tests` gate when the active acceptance task
+requires it.

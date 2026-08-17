@@ -11,14 +11,19 @@ validated over RS-232.
 ## Dependencies
 
 - Stage 8 and Amiga DiskDevice Phase 2 are complete and reviewed.
-- The Amiga `nio-config` port is complete enough to configure and exercise the
-  platform without depending on a faster transport.
+- The existing `serial.device` FujiBus/SLIP implementation remains the
+  compatibility baseline; faster channels must not fork service payloads or
+  application APIs.
+
+The Amiga `nio-config` port is useful for end-user configuration but is not a
+transport prerequisite: standard commands and the existing integration
+harness can validate a backend independently.
 
 ## Work
 
 - [ ] Define channel capabilities and packet envelope requirements for the
-      Pico/native link.
-- [ ] Develop the Pico/native packet backend.
+      first selected packet-native hardware link.
+- [ ] Select the first target hardware and develop its packet-native backend.
 - [ ] Develop additional faster-channel backends behind the shared session
       interface where hardware warrants them.
 - [ ] Prove backend parity with the RS-232 protocol and multi-drive suites.

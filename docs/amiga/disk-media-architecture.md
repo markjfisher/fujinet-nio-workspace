@@ -429,10 +429,12 @@ FMOUNT can inspect, mount, construct, and add an absent node for both DD and HD
 media. They remain available for compatibility and low-level diagnostics, but
 are not the universal user-facing configuration.
 
-## HDF and RDB Future Work
+## HDF and RDB Architecture Boundaries
 
-HDF/RDB support is the next media programme, not unfinished Phase 2 work. It
-must preserve the completed DD/high-density-floppy behavior while adding a
+HDF/RDB support is a future media programme, not unfinished Phase 2 work. Its
+active checklist is tracked in
+[`backlog/amiga-hdf-rdb-support.md`](../../backlog/amiga-hdf-rdb-support.md).
+It must preserve the completed DD/high-density-floppy behavior while adding a
 partition-aware model. “HDF” is only a container convention; support must
 distinguish two materially different layouts:
 
@@ -445,12 +447,12 @@ distinguish two materially different layouts:
   priorities, and possibly filesystem binaries come from validated RDB data;
   filesystem I/O is relative to each partition, not image sector zero.
 
-### Stage 1: discovery contract and fixtures
+### Discovery and inspection
 
-Build a host-side corpus covering valid and corrupt whole-volume HDFs, RDBs,
-multiple partitions, unusual but valid bounds, and writable images. Define a
-neutral inspection result that distinguishes raw whole-volume media from an
-RDB disk and describes zero or more partitions without mutating runtime state.
+A useful discovery contract must distinguish raw whole-volume media from an
+RDB disk and describe zero or more partitions without mutating runtime state.
+Its validation corpus needs valid and corrupt whole-volume HDFs, RDBs,
+multiple partitions, unusual but valid bounds, and writable images.
 
 The existing Disk Inspect request and its media type/sector size/sector count/
 boot-byte result remain valid and backward compatible. They are sufficient for
@@ -460,13 +462,13 @@ identifiers, byte/LBA bounds, DosType, complete relevant DosEnvec values, boot
 priority, and metadata provenance. Do not overload the existing boot-byte
 array with RDB records.
 
-### Stage 2: validated RDB parser and media policy
+### Validated RDB parsing and media policy
 
-Implement RDB discovery independently of mounting. Validate `RDSK` and `PART`
-checksums, linked-list termination, block sizes, cylinder/sector arithmetic,
-partition bounds, overlap policy, and all offsets before exposing a
-partition. Define whether unsupported or corrupt partitions reject the whole
-disk or are reported individually as unusable.
+RDB discovery belongs outside mounting. `RDSK` and `PART` checksums,
+linked-list termination, block sizes, cylinder/sector arithmetic, partition
+bounds, overlap policy, and all offsets must be valid before a partition is
+exposed. Policy must state whether an unsupported or corrupt partition rejects
+the whole disk or is reported individually as unusable.
 
 Sector size must be authoritative from inspection/RDB evidence. The current
 Amiga driver supports 512-byte blocks only; retain that as the initial HDF/RDB
@@ -475,9 +477,9 @@ metadata contract. Audit 32-bit sector counts, LBAs, Amiga byte offsets, and
 multiplication before setting a maximum supported image size. Add versioned
 64-bit operations if the safe range of current commands is insufficient.
 
-### Stage 3: partition binding and DOS-node ownership
+### Partition binding and DOS-node ownership
 
-Introduce an explicit binding between a mounted host image and a selected
+The model needs an explicit binding between a mounted host image and a selected
 partition. The recommended direction is one shared, inspected disk object with
 one logical binding per exposed partition; each binding applies a validated
 base LBA and length and owns the Amiga DOS-node identity for that partition.
@@ -507,9 +509,9 @@ is to use an already available compatible AmigaOS filesystem and reject
 unknown DosTypes; loading embedded filesystem code requires a separate trust,
 memory-lifetime, and version-collision design.
 
-### Stage 4: read/write and lifecycle semantics
+### Read/write and lifecycle semantics
 
-Apply partition-relative bounds to every read, write, clear, and update before
+Partition-relative bounds apply to every read, write, clear, and update before
 translating to the host-image LBA. Multiple writable partitions of one image
 must share serialization, dirty state, flush ordering, and error reporting.
 Define whether ejecting one binding leaves sibling partitions mounted and
@@ -523,9 +525,9 @@ clearly specified recoverable state. Preserve current notification, concurrent
 access, timeout, failed-replacement, writable durability, and RO enforcement
 for every exposed partition.
 
-### Stage 5: persistence and standard commands
+### Persistence and standard commands
 
-Keep `FMOUNT`, `FUMOUNT`, and `FMOUNTRESTORE` as the user-facing workflow.
+`FMOUNT`, `FUMOUNT`, and `FMOUNTRESTORE` remain the user-facing workflow.
 Version the current mapping record so a binding can identify at least the
 catalogue slot, RO/RW mode, and a stable partition selector. A selector based
 only on display name or ordinal is fragile when an RDB changes; prefer an
@@ -536,9 +538,9 @@ Version-1 DD/high-density-floppy mappings must continue to restore exactly as
 they do now. Decide whether `FUMOUNT DNx:` removes one partition binding or an
 entire disk group, and provide an explicit group operation if both are needed.
 
-### Stage 6: acceptance testing
+### Acceptance strategy
 
-Add layers in this order:
+Acceptance should build in these layers:
 
 1. Host parser tests for valid/corrupt RDB chains, checksums, bounds, overlaps,
    sector sizes, partition identity, and fuzzed malformed metadata.
@@ -554,21 +556,6 @@ Add layers in this order:
 
 No HDF/RDB parser, partition binding, metadata contract, persistence version,
 or embedded-filesystem policy is currently implemented or implied by Phase 2.
-
-## Delivery Progression
-
-1. Production-integrated dynamic DD and HD ADF profiles. **Complete.**
-2. Harden failure/recovery after a successful geometry-changing replacement
-   commit. **Recommended first post-Phase-2 task.**
-3. Define the versioned disk/partition inspection and binding contracts.
-4. Add nonstandard whole-volume media only with validated logical geometry.
-5. Deliver whole-partition HDF with explicit metadata and one binding per
-   `DNx:`.
-6. Add whole-disk RDB discovery and explicit partition selection.
-7. Consider automatic multi-partition exposure after naming/group lifecycle is
-   proven.
-8. Add 64-bit I/O where required by an explicit supported-size target, then
-   address large-media performance.
 
 The current production boundary is standard DD/high-density-floppy ADF
 whole-volume media.

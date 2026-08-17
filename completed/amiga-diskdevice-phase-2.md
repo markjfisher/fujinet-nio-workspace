@@ -1,6 +1,6 @@
 # Amiga DiskDevice Phase 2 — general media and standard tools
 
-Status: `COMPLETE`
+Status: `DONE`
 
 ## Goal
 
@@ -16,7 +16,7 @@ user-facing convention to preserve.
 
 The media model, RDB/HDF distinction, intended user experience, and delivery
 progression are specified in the associated
-[`amiga-disk-media-architecture.md`](amiga-disk-media-architecture.md).
+[`disk-media-architecture.md`](../docs/amiga/disk-media-architecture.md).
 
 ## Dependencies
 
@@ -165,7 +165,7 @@ acceptance items.
 - [x] Historical A/B isolates the first stable fix: pre-fix driver `53716d3c`
       failed three of five normal runs; `6c9bf6af`, whose only relevant
       production change is setting queued request `ln_Type = NT_MESSAGE`,
-      passed three of three. See `amiga-diskdevice-phase-2-findings.md`.
+      passed three of three.
 
 ## Verification Gap Analysis
 
@@ -213,7 +213,7 @@ and the boundary between completed work and future media support.
 
 ### Supported-media documentation
 
-- Closed by `amiga-disk-media-architecture.md`. Its Phase 2 support table names
+- Closed by `../docs/amiga/disk-media-architecture.md`. Its Phase 2 support table names
   standard 512 x 1760 DD floppy ADF and 512 x 3520 high-density floppy ADF,
   each with `DOS\0` OFS or `DOS\1` FFS, as the only currently supported media.
   It separately identifies rejected nonstandard/DOS-family variants and
