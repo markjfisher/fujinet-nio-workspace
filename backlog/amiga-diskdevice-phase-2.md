@@ -113,12 +113,14 @@ persistent dynamic DeviceNode
       requests. It verifies DD `512/1760/80/2/22/11`, HD
       `512/3520/80/2/44/22`, repeated per-unit queries, and public
       `FUJINET_DISK_CMD_MOUNT` dispatch through the same ABI used by FMOUNT.
-- [ ] Add Amiberry tests mounting at least DD and HD images through catalogue
+- [x] Add Amiberry tests mounting at least DD and HD images through catalogue
       slots using `FMOUNT`, accessing them through `DNx:`, ejecting with
-      `FUMOUNT`, and remounting persisted assignments. Existing focused tests
-      prove the individual DD/HD mount, replacement, absent-node, writable, and
-      persistence behaviors, but the complete DD/HD standard-tool
-      mount/eject/persisted-remount matrix is not yet covered.
+      `FUMOUNT`, and remounting persisted assignments. The two-process
+      `diskdevice-fmount-restore` case terminates Amiberry after DD/HD FMOUNT
+      and access, preserves only the host AppStore mapping state, starts a
+      fresh AmigaOS process with no `FMOUNT` command in phase two, runs
+      `FMOUNTRESTORE`, verifies both `DNx:` filesystems, then FUMOUNTs both and
+      confirms the mapping record is clear.
 - [ ] Preserve Stage 8 writable durability, replacement, concurrent access,
       and change-notification regressions for every supported geometry.
 - [ ] Document the exact supported media families and distinguish current
@@ -168,20 +170,13 @@ cover the complete wording of each acceptance criterion.
 
 ### Standard-tool DD/HD eject and persistence matrix
 
-- Existing evidence: `FMOUNTRESTORE` now consumes the real 17-byte
-  `config-nio/mappings` record and invokes standard `FMOUNT` for each valid
-  DD/HD mapping. The focused `diskdevice-fmount-restore` Amiberry case proves
-  DD and HD FMOUNT/access, persisted-record restoration through the command,
-  restored filesystem access, and FUMOUNT removal. The companion stale-slot
-  case proves invalid persisted entries fail before FMOUNT can create a node.
-- Missing coverage: a fresh AmigaOS startup boundary between FMOUNT persistence
-  and FMOUNTRESTORE. The current headless test disk presents an interactive
-  requester for both `Reboot` and `Reboot FORCE`, preventing the second
-  Startup-Sequence phase from executing.
-- Smallest closure: extend the Amiberry harness with a two-boot/run boundary
-  that preserves the host AppStore directory and starts a fresh AmigaOS process
-  using the same test HDF, then run `FMOUNTRESTORE` without an intervening
-  FMOUNT.
+- Closed by the two-process `diskdevice-fmount-restore` case. Process A mounts
+  and accesses DD slot 11 and HD slot 14 using standard FMOUNT, then exits.
+  Process B is a fresh AmigaOS/Amiberry process sharing only the host AppStore;
+  its Startup-Sequence contains no FMOUNT command, uses FMOUNTRESTORE to mount
+  both saved assignments, verifies both filesystems, FUMOUNTs both, and proves
+  `config-nio/mappings` is clear. The companion stale-slot case confirms an
+  invalid persisted entry fails without creating a node.
 
 ### Stage 8 durability across every supported geometry
 

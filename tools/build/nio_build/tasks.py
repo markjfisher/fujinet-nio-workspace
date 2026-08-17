@@ -121,7 +121,7 @@ class Build:
     def amiga_driver_sdk(self) -> None:
         driver_amiga = self.p("FUJINET_NIO_DRIVER") / "amiga"
         self.runner.require_dir(driver_amiga)
-        self.runner.run("amiga-driver-sdk", ["make", "sdk"], cwd=driver_amiga)
+        self.runner.run("amiga-driver-sdk", ["make", "all", "sdk"], cwd=driver_amiga)
 
     def lib_tests(self) -> None:
         self.run_make("lib-tests", "FUJINET_NIO_LIB", "test")

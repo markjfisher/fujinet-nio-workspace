@@ -1,7 +1,6 @@
 C:Assign T: RAM:
 C:FailAt 30
 C:LoadModule DEVS:fujinet-disk.device
-C:Echo "RUN B LOADMODULE RC=$RC" >DH0:restore-load-b.result
 C:Wait 1 SECS
 C:FMOUNTRESTORE >DH0:restore-startup.result
 C:Echo "RESTORE RC=$RC" >>DH0:restore-startup.result
