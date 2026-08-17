@@ -121,8 +121,15 @@ persistent dynamic DeviceNode
       fresh AmigaOS process with no `FMOUNT` command in phase two, runs
       `FMOUNTRESTORE`, verifies both `DNx:` filesystems, then FUMOUNTs both and
       confirms the mapping record is clear.
-- [ ] Preserve Stage 8 writable durability, replacement, concurrent access,
-      and change-notification regressions for every supported geometry.
+- [x] Preserve Stage 8 writable durability, replacement, concurrent access,
+      and change-notification regressions for every supported geometry. The
+      existing `diskdevice-fmount` case retains the DD writable eject/remount
+      durability and A -> B -> A replacement checks. The focused
+      `diskdevice-hd-stage8` case proves the same operations on 512 x 3520 HD
+      media. The `diskdevice-adf` and `diskdevice-hd-adf` boundary runs submit
+      concurrent resident-device requests and exercise two registered change
+      interrupts, removal, repeated notification, and abort cleanup against DD
+      and HD mounts respectively.
 - [ ] Document the exact supported media families and distinguish current
       limitations from permanent interfaces.
 
@@ -180,13 +187,20 @@ cover the complete wording of each acceptance criterion.
 
 ### Stage 8 durability across every supported geometry
 
-- Existing evidence: DD writable durability, replacement, queue, change
-  notification, and timeout regressions pass; HD read-only access and DD/HD
-  geometry transitions pass.
-- Missing coverage: writable durability, concurrent access, replacement, and
-  change-notification assertions repeated specifically for HD media.
-- Smallest closure: add a writable HD Amiberry sequence mirroring the proven DD
-  copy/update/remount/status and notification checkpoints.
+- Closed by the existing DD `diskdevice-fmount` writable durability and
+  replacement assertions plus the focused HD `diskdevice-hd-stage8` case.
+  The HD case performs A -> B -> A same-geometry replacement, verifies each
+  mounted file, writes through the filesystem to writable HD media, ejects,
+  remounts, and reads the persisted file while asserting monotonic change
+  counters and protection/absence state.
+- Concurrent access and change-notification mechanics do not branch on media
+  geometry after a mount commits: they operate on the resident device's
+  per-unit FIFO and change-request list. The boundary diagnostic is therefore
+  reused rather than duplicated; it now accepts the mounted URI, and the
+  `diskdevice-adf` and `diskdevice-hd-adf` cases run that identical production
+  path with DD and HD media. Both assert `queue=1 multi=2`, four notification
+  operations, two simultaneous listeners, removal, repeat delivery, and abort
+  cleanup.
 
 ### Supported-media documentation
 

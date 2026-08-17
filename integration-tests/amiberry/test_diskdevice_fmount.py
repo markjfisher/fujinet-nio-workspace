@@ -68,3 +68,29 @@ def test_fmount_fumount_standard_adf(run_amiga_case):
     assert "FUMOUNT RC=0" in results["fumount-eject.result"]
     assert "absent=1" in results["fumount-status.result"]
     assert results["_mappings"] == "0100000000010d00000000000000000000"
+
+
+def test_hd_stage8_replacement_and_writable_durability(run_amiga_case):
+    results = run_amiga_case("diskdevice-hd-stage8")
+
+    a_status = _status(results["hd-stage8-a-status.result"])
+    b_status = _status(results["hd-stage8-b-status.result"])
+    a2_status = _status(results["hd-stage8-a2-status.result"])
+    assert a_status[2:] == b_status[2:] == a2_status[2:] == (0, 1)
+    assert a_status[1] < b_status[1] < a2_status[1]
+    assert "FUJINET HD ADF READ PASSED" in results["hd-stage8-a-type.result"]
+    assert "FUJINET SECOND HD PASSED" in results["hd-stage8-b-type.result"]
+    assert "FUJINET HD ADF READ PASSED" in results["hd-stage8-a2-type.result"]
+
+    assert "Mounted slot 18 on DN0:" in results["hd-stage8-rw-mount.result"]
+    assert "COPY HD RC=0" in results["hd-stage8-rw-copy.result"]
+    rw_status = _status(results["hd-stage8-rw-status.result"])
+    absent_status = _status(results["hd-stage8-rw-absent.result"])
+    present_status = _status(results["hd-stage8-rw-present.result"])
+    assert rw_status[2:] == (0, 0)
+    assert absent_status[2:] == (1, 1)
+    assert present_status[2:] == (0, 0)
+    assert rw_status[1] < absent_status[1] < present_status[1]
+    assert "Ejected DN0:" in results["hd-stage8-rw-fumount.result"]
+    assert "Mounted slot 18 on DN0:" in results["hd-stage8-rw-remount.result"]
+    assert "FUJINET HD WRITE PERSISTED" in results["hd-stage8-rw-persist.result"]

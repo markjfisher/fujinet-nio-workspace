@@ -593,6 +593,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
             create_standard_adf(amiga_environment, host_root / "writable.adf",
                                 "BASE.TXT", "FUJINET WRITABLE BASE\n")
             create_hd_adf(amiga_environment, host_root / "hd.adf")
+            create_hd_adf(amiga_environment, host_root / "hd-second.adf",
+                          "SECONDHD.TXT", "FUJINET SECOND HD PASSED\n")
+            create_hd_adf(amiga_environment, host_root / "hd-writable.adf",
+                          "BASEHD.TXT", "FUJINET WRITABLE HD BASE\n")
             if case.get("inhibit_poc"):
                 create_standard_adf(amiga_environment, host_root / "inhibit-a.adf",
                                     "KNOWN.TXT", "INHIBIT VOLUME A\n", "INHIBIT_A")
@@ -604,6 +608,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
             (catalog_dir / "slot-012.bin").write_bytes(b"\x01\x01host:/second.adf")
             (catalog_dir / "slot-013.bin").write_bytes(b"\x01\x00host:/writable.adf")
             (catalog_dir / "slot-014.bin").write_bytes(b"\x01\x01host:/hd.adf")
+            (catalog_dir / "slot-017.bin").write_bytes(b"\x01\x01host:/hd-second.adf")
+            (catalog_dir / "slot-018.bin").write_bytes(b"\x01\x00host:/hd-writable.adf")
             if case.get("restore_invalid_mapping"):
                 (catalog_dir / "mappings.bin").write_bytes(
                     b"\x01\x03\x63" + b"\x00" * 14

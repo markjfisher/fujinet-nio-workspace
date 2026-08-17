@@ -1,0 +1,26 @@
+C:Assign T: RAM:
+C:Echo "FUJINET HD WRITE PERSISTED" >DH0:hd-persist-source.txt
+C:LoadModule DEVS:fujinet-disk.device
+C:FMOUNT 14 DN0: RO >DH0:hd-stage8-a-mount.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-a-status.result
+C:Type DN0:HD.TXT >DH0:hd-stage8-a-type.result
+C:FMOUNT 17 DN0: RO >DH0:hd-stage8-b-mount.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-b-status.result
+C:Wait 1 SECS
+C:Type DN0:SECONDHD.TXT >DH0:hd-stage8-b-type.result
+C:FMOUNT 14 DN0: RO >DH0:hd-stage8-a2-mount.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-a2-status.result
+C:Wait 1 SECS
+C:Type DN0:HD.TXT >DH0:hd-stage8-a2-type.result
+C:FMOUNT 18 DN0: RW >DH0:hd-stage8-rw-mount.result
+C:Copy DH0:hd-persist-source.txt TO DN0:HDPERSIST.TXT
+C:Echo "COPY HD RC=$RC" >DH0:hd-stage8-rw-copy.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-rw-status.result
+C:Assign DN0: DISMOUNT
+C:FUMOUNT DN0: >DH0:hd-stage8-rw-fumount.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-rw-absent.result
+C:FMOUNT 18 DN0: RW >DH0:hd-stage8-rw-remount.result
+C:fujinet-mount --status 0 >DH0:hd-stage8-rw-present.result
+C:Type DN0:HDPERSIST.TXT >DH0:hd-stage8-rw-persist.result
+C:FLS host:/amiga-e2e-complete/diskdevice-hd-stage8 >NIL:
+C:Echo "E2E COMPLETE"

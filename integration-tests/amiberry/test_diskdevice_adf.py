@@ -91,12 +91,13 @@ def test_hd_adf_mount_geometry_dir_and_type(run_amiga_case):
     results = run_amiga_case("diskdevice-hd-adf")
 
     assert "LOAD RC=0" in results["hd-load.result"]
+    assert "EXEC BOUNDARY PASS commands=5 notifications=4 remove=1 queue=1 multi=2 cause=3" in results["hd-exec-boundary.result"]
     assert "sectorCount=3520" in results["hd-mount.result"]
     assert "HD MOUNT RC=0" in results["hd-mount.result"]
     assert "HD.TXT" in results["hd-dir.result"].upper()
     assert "DIR RC=0" in results["hd-dir.result"]
     assert "FUJINET HD ADF READ PASSED" in results["hd-type.result"]
-    assert "STATUS drive=0 change=1 absent=0 protected=1" in results["hd-status.result"]
+    assert "STATUS drive=0 change=7 absent=0 protected=1" in results["hd-status.result"]
 
 
 def test_catalog_inspection_preserves_live_dd_handler(run_amiga_case):

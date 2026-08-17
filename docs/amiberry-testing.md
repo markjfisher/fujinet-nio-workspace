@@ -175,6 +175,22 @@ capture the host desktop. Adjust the short capture delay with
 `AMIGA_E2E_SCREENSHOT_DELAY` when a test's guest display changes later in
 boot.
 
+To inspect guest result files after a focused pytest run, select the newest
+evidence directory and its case HDF, then use `xdftool type`:
+
+```sh
+RUN=$(/bin/ls -dt test-evidence/amiberry-* | head -1)
+HDF=$(find "$RUN" -type f -name '*diskdevice-fmount-restore*.hdf' | head -1)
+uvx --from amitools xdftool "$HDF" type restore-startup.result
+```
+
+Replace the HDF glob and result filename with the focused case and checkpoint
+you need. The same files are normally extracted and asserted by pytest; direct
+HDF inspection is useful for reviewing retained evidence or diagnosing the
+last checkpoint reached by an interrupted run. The case directory also
+contains `amiberry.log`, `fujinet-nio.log`, the framebuffer screenshot, and
+the generated HDF.
+
 For cases whose mounted handlers continue producing protocol traffic, set a
 unique `completion_log` marker in `integration-tests/amiberry/tests.toml` and
 emit its successful NIO operation only after the guest has displayed all

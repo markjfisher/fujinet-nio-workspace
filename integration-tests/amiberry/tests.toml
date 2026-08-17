@@ -129,11 +129,44 @@ completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-hd-adf"
 results = [
   "hd-load.result",
+  "hd-exec-boundary.result",
   "hd-mount.result",
   "hd-geometry.result",
   "hd-dir.result",
   "hd-type.result",
   "hd-status.result",
+]
+
+[[test]]
+name = "diskdevice-hd-stage8"
+project = "core-apps"
+app = "fmount"
+driver = true
+no_static_mountlists = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/diskdevice-hd-stage8.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-hd-stage8"
+results = [
+  "hd-stage8-a-mount.result",
+  "hd-stage8-a-status.result",
+  "hd-stage8-a-type.result",
+  "hd-stage8-b-mount.result",
+  "hd-stage8-b-status.result",
+  "hd-stage8-b-type.result",
+  "hd-stage8-a2-mount.result",
+  "hd-stage8-a2-status.result",
+  "hd-stage8-a2-type.result",
+  "hd-stage8-rw-mount.result",
+  "hd-stage8-rw-copy.result",
+  "hd-stage8-rw-status.result",
+  "hd-stage8-rw-fumount.result",
+  "hd-stage8-rw-absent.result",
+  "hd-stage8-rw-remount.result",
+  "hd-stage8-rw-present.result",
+  "hd-stage8-rw-persist.result",
 ]
 
 [[test]]
