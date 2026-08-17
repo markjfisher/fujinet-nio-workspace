@@ -14,23 +14,4 @@ C:Dir DN1: >DH0:restore-hd-before-dir.result
 C:Echo "HD DIR BEFORE RC=$RC" >>DH0:restore-hd-before-dir.result
 C:Type DN1:HD.TXT >DH0:restore-hd-before-type.result
 C:Echo "HD TYPE BEFORE RC=$RC" >>DH0:restore-hd-before-type.result
-C:Wait 1 SECS
-C:FMOUNTRESTORE >DH0:restore-startup.result
-C:Echo "RESTORE RC=$RC" >>DH0:restore-startup.result
-C:Dir DN0: >DH0:restore-dd-after-dir.result
-C:Echo "DD DIR AFTER RC=$RC" >>DH0:restore-dd-after-dir.result
-C:Type DN0:KNOWN.TXT >DH0:restore-dd-after-type.result
-C:Echo "DD TYPE AFTER RC=$RC" >>DH0:restore-dd-after-type.result
-C:Dir DN1: >DH0:restore-hd-after-dir.result
-C:Echo "HD DIR AFTER RC=$RC" >>DH0:restore-hd-after-dir.result
-C:Type DN1:HD.TXT >DH0:restore-hd-after-type.result
-C:Echo "HD TYPE AFTER RC=$RC" >>DH0:restore-hd-after-type.result
-C:FUMOUNT DN0: >DH0:restore-dd-fumount.result
-C:Echo "DD FUMOUNT RC=$RC" >>DH0:restore-dd-fumount.result
-C:FUMOUNT DN0: >DH0:restore-dd-absent.result
-C:Echo "DD SECOND FUMOUNT RC=$RC" >>DH0:restore-dd-absent.result
-C:FUMOUNT DN1: >DH0:restore-hd-fumount.result
-C:Echo "HD FUMOUNT RC=$RC" >>DH0:restore-hd-fumount.result
-C:FUMOUNT DN1: >DH0:restore-hd-absent.result
-C:Echo "HD SECOND FUMOUNT RC=$RC" >>DH0:restore-hd-absent.result
 C:FLS host:/amiga-e2e-complete/diskdevice-fmount-restore >NIL:

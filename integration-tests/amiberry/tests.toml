@@ -259,10 +259,20 @@ name = "diskdevice-fmount-restore"
 project = "core-apps"
 app = "fmountrestore"
 driver = true
+no_static_mountlists = true
 timeout = 150
 activity_timeout = 90
 no_activity_timeout = 45
 startup = "startup/diskdevice-fmount-restore.sequence"
+second_startup = "startup/diskdevice-fmount-restore-phase-two.sequence"
+first_results = [
+  "restore-dd-mount.result",
+  "restore-dd-before-dir.result",
+  "restore-dd-before-type.result",
+  "restore-hd-mount.result",
+  "restore-hd-before-dir.result",
+  "restore-hd-before-type.result",
+]
 completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-fmount-restore"
 results = [

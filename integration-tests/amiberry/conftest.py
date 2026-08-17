@@ -704,6 +704,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         termination_reason: str | None = None
         recent_activity = False
         runner_returncode: int | None = None
+        first_run_results: dict[str, str] = {}
 
         try:
             # ---------------------------------------------------------------
@@ -913,6 +914,49 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     not (quit_sent and runner_returncode == 250)):
                 raise subprocess.CalledProcessError(runner_returncode, runner.args)
 
+            if case.get("second_startup") and termination_reason == "completion_log":
+                first_results = set(case.get("first_results", []))
+                with tempfile.TemporaryDirectory(prefix="amiga-first-results-") as result_dir:
+                    for result_name in first_results:
+                        destination = Path(result_dir) / result_name.replace("/", "_")
+                        subprocess.run(
+                            [*xdf_command(test_env), str(image), "read", result_name, str(destination)],
+                            cwd=ROOT, env=test_env, check=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                        )
+                        first_run_results[result_name] = destination.read_text(encoding="latin-1")
+
+                second_build_cmd = list(build_cmd)
+                startup_index = second_build_cmd.index("--startup-script") + 1
+                second_build_cmd[startup_index] = SUITE / case["second_startup"]
+                subprocess.run(second_build_cmd, cwd=ROOT, env=amiga_environment, check=True)
+                for stale_name in ("amiberry.sock.path", "amiberry.log", "fujinet-nio.log", "bridge.log"):
+                    (run_dir / stale_name).unlink(missing_ok=True)
+                second_runner = subprocess.Popen(runner_args, cwd=ROOT, env=test_env)
+                second_deadline = time.monotonic() + activity_timeout
+                second_marker = False
+                second_offset = 0
+                while time.monotonic() < second_deadline:
+                    second_log = run_dir / "fujinet-nio.log"
+                    if second_log.is_file():
+                        second_text = read_log_text(second_log)
+                        second_marker, _ = scan_completion_log_chunk(
+                            second_text[second_offset:], completion_log, CompletionLogState()
+                        )
+                        second_offset = len(second_text)
+                        if second_marker:
+                            break
+                    if second_runner.poll() is not None:
+                        break
+                    time.sleep(0.2)
+                second_socket_file = run_dir / "amiberry.sock.path"
+                if second_socket_file.is_file():
+                    second_socket = Path(second_socket_file.read_text(encoding="utf-8").strip())
+                    _ipc_quit(second_socket)
+                _terminate_runner(second_runner)
+                if not second_marker:
+                    raise AssertionError("Amiberry second run did not reach its completion marker")
+
         finally:
             # Always ensure Amiberry and the runner are gone.
             if ipc_sock and not quit_sent:
@@ -948,6 +992,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
         results: dict[str, str] = {}
         with tempfile.TemporaryDirectory(prefix="amiga-results-") as result_dir:
             for result_name in ordered_results:
+                if result_name in first_run_results:
+                    results[result_name] = first_run_results[result_name]
+                    continue
                 destination = Path(result_dir) / result_name.replace("/", "_")
                 subprocess.run(
                     [*xdf_command(test_env), str(image), "read", result_name, str(destination)],
