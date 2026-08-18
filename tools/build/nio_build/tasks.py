@@ -315,6 +315,7 @@ class Build:
             disk_args,
         )
         self.ctx.env["AMIBERRY_DISK"] = str(output)
+        self.ctx.env["AMIBERRY_DISK_KIND"] = "harddrive"
 
     @staticmethod
     def amiga_target_parser(*, build_adf: bool) -> argparse.ArgumentParser:
@@ -453,7 +454,7 @@ class Build:
             self.ctx.env["AMIBERRY_UAE_CONFIG"] = profile["uae_config"]
 
         if profile.get("build_test_disk", False):
-            output = Path(profile.get("disk", "")) if profile.get("disk") else (
+            output = Path(profile.get("harddrive", profile.get("disk", ""))) if profile.get("harddrive", profile.get("disk")) else (
                 self.ctx.image_dir / "amiga-workbench.hdf"
             )
             self.amiga_test_disk(
@@ -466,10 +467,15 @@ class Build:
                 output=output,
             )
         else:
-            disk = Path(profile.get("disk", ""))
+            harddrive = profile.get("harddrive")
+            disk = Path(harddrive or profile.get("disk", ""))
             if not disk.is_file():
                 raise SystemExit(f"Amiga Workbench disk not found for profile {profile['name']}: {disk}")
             self.ctx.env["AMIBERRY_DISK"] = str(disk)
+            if harddrive or disk.suffix.lower() in {".hdf", ".vhd"}:
+                self.ctx.env["AMIBERRY_DISK_KIND"] = "harddrive"
+            else:
+                self.ctx.env["AMIBERRY_DISK_KIND"] = "floppy"
         self.amiga_run(runner_args, build_adf=False)
 
     def amiga_tests(self, args: list[str]) -> None:

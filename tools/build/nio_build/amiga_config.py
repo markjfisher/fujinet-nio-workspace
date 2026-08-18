@@ -45,7 +45,14 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
 
     result = dict(profile)
     environment = environment or {}
-    for key in ("disk", "kickstart", "fast_file_system", "uae_config"):
+    config_keys = [key for key in ("config_file", "uae_config") if key in result]
+    if len(config_keys) > 1:
+        raise SystemExit(
+            f"Amiga profile must use only one of config_file/uae_config: {selected}"
+        )
+    if config_keys:
+        result["uae_config"] = result.pop(config_keys[0])
+    for key in ("disk", "harddrive", "kickstart", "fast_file_system", "uae_config"):
         if key in result:
             result[key] = _expand(result[key], root, environment)
     archive_keys = [key for key in ("install_archives", "install_archive") if key in result]

@@ -120,7 +120,7 @@ command-line switches. For example:
 profiles:
   wb32-setup:
     build_test_disk: true
-    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-base.hdf
+    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb32-base.hdf
     kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
     all_apps: true
     with_driver: true
@@ -132,7 +132,7 @@ profiles:
 
   wb32-run:
     build_test_disk: false
-    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-run.hdf
+    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb32-run.hdf
     kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
     settings:
       cpu_type: 68040
@@ -191,17 +191,21 @@ AMIGA_WORKBENCH_CONFIG=my-profile \
 ./scripts/build.sh amiga-workbench -- --external-nio
 ```
 
-Each profile can specify `disk`, `kickstart`, `build_test_disk`, and an
+Each profile can specify `harddrive` or `disk`, `kickstart`, `build_test_disk`, and an
 Amiberry `settings` mapping such as `cpu_type`, `chipmem_size`, and
 `fastmem_size`. These values are directly mapped to `-s` key/value pairs
 and match the names found in typical UAE config files.
 
-For a generated profile (`build_test_disk: true`), `disk` is
-the output HDF path; if omitted, the default is
+For a generated profile (`build_test_disk: true`), `harddrive` is
+the output HDF/VHD path; if omitted, the default is
 `build/images/amiga-workbench.hdf`. For a direct profile
-(`build_test_disk: false`), `disk` is an existing image to reuse. An optional
-`uae_config` entry loads an existing Amiberry configuration before applying
-the profile settings.
+(`build_test_disk: false`), `harddrive` is an existing HDF/VHD image to reuse.
+Use `disk` for floppy/ADF profiles such as `wb1.3`. An optional
+`config_file` entry loads an existing Amiberry UAE configuration before
+applying the profile settings. `uae_config` remains accepted as a legacy alias.
+The profile settings are emitted as command-line `-s` overrides after the
+configuration file is loaded, so a profile only needs to list differences from
+the shared base configuration.
 
 The runner defaults SDL3 to `SDL_VIDEO_DRIVER=kmsdrm,wayland,x11`, while
 respecting either SDL video-driver variable if already set. SDL3 documents
@@ -214,7 +218,7 @@ Alternatively, build and run in two steps:
 AMIGA_TEST_INTERACTIVE=1 ./scripts/build.sh amiga-test-disk
 ./scripts/run-amiberry-nio \
   --external-nio \
-  --disk build/images/amiga-wifitest.hdf
+  --harddrive build/images/amiga-wifitest.hdf
 ```
 
 This command remains running. Amiberry should show the Workbench display;

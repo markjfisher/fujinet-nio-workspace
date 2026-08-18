@@ -41,6 +41,51 @@ class AmigaRunnerTests(unittest.TestCase):
         self.assertIn("fastmem_size=8", command)
         self.assertIn("serial_direct=true", command)
 
+    def test_vhd_harddrive_uses_amiberry_harddisk_option(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "workbench.vhd"
+            rom = root / "kickstart.rom"
+            ffs = root / "FastFileSystem"
+            for path in (disk, rom, ffs):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--harddrive", str(disk)]))
+                command = runner.amiberry_command(None)
+
+        self.assertIn("-W", command)
+        self.assertIn("DH0:" + str(disk), command)
+        self.assertNotIn("-0", command)
+
+    def test_uae_config_is_loaded_before_profile_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "workbench.hdf"
+            rom = root / "kickstart.rom"
+            ffs = root / "FastFileSystem"
+            uae_config = root / "base.uae"
+            for path in (disk, rom, ffs, uae_config):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+                "AMIBERRY_UAE_CONFIG": str(uae_config),
+                "AMIBERRY_EXTRA_SETTINGS": "cpu_model=68030;rtgmem_size=16",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--harddrive", str(disk)]))
+                command = runner.amiberry_command(None)
+
+        config_position = command.index(str(uae_config))
+        override_position = command.index("cpu_model=68030")
+        self.assertLess(config_position, override_position)
+
 
 if __name__ == "__main__":
     unittest.main()

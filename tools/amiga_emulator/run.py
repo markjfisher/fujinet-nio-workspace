@@ -117,7 +117,16 @@ class AmigaRunner:
         self.fast_file_system = env_path(
             "AMIBERRY_FAST_FILE_SYSTEM", str(os_root / "L/FastFileSystem")
         )
-        self.disk = Path(args.disk or os.environ.get("AMIBERRY_DISK", ""))
+        self.disk = Path(
+            args.harddrive
+            or args.disk
+            or os.environ.get("AMIBERRY_DISK", "")
+        )
+        configured_kind = os.environ.get("AMIBERRY_DISK_KIND", "")
+        self.disk_kind = configured_kind or (
+            "harddrive" if args.harddrive or self.disk.suffix.lower() in {".hdf", ".vhd"}
+            else "floppy"
+        )
         self.serial_mode = os.environ.get("AMIBERRY_SERIAL_MODE", "tcp")
         self.host = os.environ.get("AMIBERRY_HOST", "127.0.0.1")
         self.nio_host = os.environ.get("FUJINET_HOST", "127.0.0.1")
@@ -144,7 +153,7 @@ class AmigaRunner:
         require_command("socat")
         require_file(self.kickstart)
         require_file(self.disk, "Amiga disk")
-        if self.disk.suffix.lower() == ".hdf":
+        if self.disk_kind == "harddrive":
             require_file(self.fast_file_system)
         if self.serial_mode not in ("tcp", "pty"):
             raise SystemExit(f"Unknown Amiga serial mode: {self.serial_mode}")
@@ -262,7 +271,7 @@ class AmigaRunner:
 
     def amiberry_command(self, serial_device: str | None) -> list[str]:
         disk_args = ["-0", str(self.disk)]
-        if self.disk.suffix.lower() == ".hdf":
+        if self.disk_kind == "harddrive":
             disk_args = ["-W", f"DH0:{self.disk}"]
         settings: list[str] = []
         raw_settings = os.environ.get("AMIBERRY_EXTRA_SETTINGS", "")
@@ -273,14 +282,12 @@ class AmigaRunner:
         if uae_config:
             config_args = ["--config", uae_config]
         serial_port = serial_device or f"tcp://{self.host}:{self.amiga_port}"
-        command = [self.amiberry_bin, "--log", *config_args, "-G", "-w", "-1",
+        command = [self.amiberry_bin, "--log", *config_args, "-G",
                    "-r", str(self.rom_dir / "kickstart.rom"), *disk_args,
                    "-s", f"serial_port={serial_port}",
                    "-s", "serial_hardware_ctsrts=false",
                    "-s", "serial_status=false",
-                   "-s", "serial_direct=true",
-                   "-s", f"cpu_type={os.environ.get('AMIBERRY_CPU_TYPE', '68000')}",
-                   "-s", "cpu_compatible=true"]
+                   "-s", "serial_direct=true"]
         extra_floppy = os.environ.get("AMIBERRY_EXTRA_FLOPPY_0", "")
         if extra_floppy:
             command.extend(["-0", extra_floppy])
@@ -290,7 +297,7 @@ class AmigaRunner:
 
     def start_amiberry(self, serial_device: str | None) -> None:
         shutil.copy2(self.kickstart, self.rom_dir / "kickstart.rom")
-        if self.disk.suffix.lower() == ".hdf":
+        if self.disk_kind == "harddrive":
             shutil.copy2(self.fast_file_system, self.rom_dir / "FastFileSystem")
         print(f"Starting Amiberry with {self.disk}")
         self.amiberry = self.start_process(self.amiberry_command(serial_device), self.amiberry_log)
@@ -402,7 +409,9 @@ class AmigaRunner:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--disk", "--adf", dest="disk", help="Amiga ADF or HDF to boot")
+    media = parser.add_mutually_exclusive_group()
+    media.add_argument("--disk", "--adf", dest="disk", help="Amiga floppy ADF to boot")
+    media.add_argument("--harddrive", help="Amiga HDF or VHD hard drive to boot")
     parser.add_argument("--timeout", type=float, default=0, help="Stop after seconds; 0 means interactive")
     parser.add_argument("--pty", action="store_true", help="Use PTYs and the FujiNet RS232 profile")
     parser.add_argument("--tcp", action="store_true", help="Use Amiberry TCP serial mode (default)")

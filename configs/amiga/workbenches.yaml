@@ -1,81 +1,11 @@
-default: wb32
+default: wb32-run
 
 profiles:
-  wb32:
-    build_test_disk: true
-    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-base.hdf
-    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
-    all_apps: true
-    with_driver: true
-    settings:
-      cpu_type: 68040
-      cpu_model: 68040
-      cpu_speed: max
-      fpu_model: 68040
-      mmu_model: 68ec040
-      cpu_compatible: false
-      chipmem_size: 4
-      fastmem_size: 8
-      chipset: aga
-      immediate_blits: true
-      gfx_width: 728
-      gfx_height: 576
-      gfx_width_windowed: 728
-      gfx_height_windowed: 576
-      cycle_exact: true
-      cpu_cycle_exact: true
-      cpu_memory_cycle_exact: true
-      blitter_cycle_exact: true
-      floppy0type: 1
-      floppy1type: 1
-      nr_floppies: 1
-      floppy_speed: 0
-      sound_output: normal
-      sound_filter_type: enhanced
-      sound_volume_cd: 0
-      ide: a4000
-      chipset_compatible: A4000
-      kxmirror_e0: false
-      z3_autoconfig: true
-      eclocksync: Gayle
-      monitoremu: autodetect
-
   wb32-run:
     build_test_disk: false
-    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-run.hdf
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-pristine.vhd
     kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
-    settings:
-      cpu_type: 68040
-      cpu_model: 68040
-      cpu_speed: max
-      fpu_model: 68040
-      mmu_model: 68ec040
-      cpu_compatible: false
-      chipmem_size: 4
-      fastmem_size: 8
-      chipset: aga
-      immediate_blits: true
-      gfx_width: 728
-      gfx_height: 576
-      gfx_width_windowed: 728
-      gfx_height_windowed: 576
-      cycle_exact: true
-      cpu_cycle_exact: true
-      cpu_memory_cycle_exact: true
-      blitter_cycle_exact: true
-      floppy0type: 1
-      floppy1type: 1
-      nr_floppies: 1
-      floppy_speed: 0
-      sound_output: normal
-      sound_filter_type: enhanced
-      sound_volume_cd: 0
-      ide: a4000
-      chipset_compatible: A4000
-      kxmirror_e0: false
-      z3_autoconfig: true
-      eclocksync: Gayle
-      monitoremu: autodetect
+    config_file: ${NIO_WORKSPACE}/configs/amiga/base-68030.uae
 
   wb1.3:
     disk: ${HOME}/dev/amiga/AmigaForever/Amiga_Files/Shared/adf/amiga-os-134-workbench.adf
@@ -85,46 +15,3 @@ profiles:
       fastmem_size: 0
       cpu_compatible: true
       cachesize: 0
-
-  # with picasso
-  wb32p:
-    build_test_disk: true
-    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-picasso-base.hdf
-    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
-    all_apps: true
-    with_driver: true
-    install_archives:
-      - ${AF11}/Archives/Picasso96/Picasso96.lha
-    settings:
-      cpu_type: 68040
-      cpu_model: 68040
-      cpu_speed: max
-      fpu_model: 68040
-      mmu_model: 68ec040
-      cpu_compatible: false
-      chipmem_size: 4
-      fastmem_size: 8
-      chipset: aga
-      immediate_blits: true
-      gfx_width: 728
-      gfx_height: 576
-      gfx_width_windowed: 728
-      gfx_height_windowed: 576
-      cycle_exact: true
-      cpu_cycle_exact: true
-      cpu_memory_cycle_exact: true
-      blitter_cycle_exact: true
-      floppy0type: 1
-      floppy1type: 1
-      nr_floppies: 1
-      floppy_speed: 0
-      sound_output: normal
-      sound_filter_type: enhanced
-      sound_volume_cd: 0
-      ide: a4000
-      chipset_compatible: A4000
-      kxmirror_e0: false
-      z3_autoconfig: true
-      eclocksync: Gayle
-      monitoremu: autodetect
-
