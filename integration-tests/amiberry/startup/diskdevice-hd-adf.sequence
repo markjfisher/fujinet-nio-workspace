@@ -1,5 +1,5 @@
 C:Assign T: RAM:
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:Echo "LOAD RC=$RC" >DH0:hd-load.result
 C:fujinet-mount --boundary 6 host:/hd.adf >DH0:hd-exec-boundary.result
 C:fujinet-mount host:/hd.adf >DH0:hd-mount.result

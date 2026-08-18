@@ -114,6 +114,8 @@ class AmigaRunner:
             "AMIBERRY_KICKSTART",
             "${HOME}/dev/amiga/amigaOS3.2/ROM/kickCDTVa1000a500a2000a600.rom",
         )
+        rom_key = os.environ.get("AMIBERRY_ROM_KEY", "")
+        self.rom_key = Path(rom_key).expanduser() if rom_key else None
         os_root = env_path("AMIBERRY_OS_ROOT", "${HOME}/dev/amiga/amigaOS3.2")
         self.fast_file_system = env_path(
             "AMIBERRY_FAST_FILE_SYSTEM", str(os_root / "L/FastFileSystem")
@@ -153,6 +155,8 @@ class AmigaRunner:
         require_command(self.amiberry_bin)
         require_command("socat")
         require_file(self.kickstart)
+        if self.rom_key is not None:
+            require_file(self.rom_key, "Amiga Forever ROM key")
         require_file(self.disk, "Amiga disk")
         if self.disk_kind == "harddrive":
             require_file(self.fast_file_system)
@@ -297,10 +301,15 @@ class AmigaRunner:
             command.extend(["-s", setting])
         return command
 
-    def start_amiberry(self, serial_device: str | None) -> None:
+    def stage_rom_files(self) -> None:
         shutil.copy2(self.kickstart, self.rom_dir / "kickstart.rom")
+        if self.rom_key is not None:
+            shutil.copy2(self.rom_key, self.rom_dir / "rom.key")
         if self.disk_kind == "harddrive":
             shutil.copy2(self.fast_file_system, self.rom_dir / "FastFileSystem")
+
+    def start_amiberry(self, serial_device: str | None) -> None:
+        self.stage_rom_files()
         print(f"Starting Amiberry with {self.disk}")
         self.amiberry = self.start_process(self.amiberry_command(serial_device), self.amiberry_log)
         try:

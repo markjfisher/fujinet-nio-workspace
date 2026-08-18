@@ -1,5 +1,5 @@
 C:Assign T: RAM:
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:Echo "LOAD RC=$RC" >DH0:map-load.result
 C:fujinet-mount --uri 0 host:/standard.adf RO >DH0:map-direct.result
 C:Failat 30

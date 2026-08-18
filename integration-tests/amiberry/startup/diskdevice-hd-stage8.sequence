@@ -1,6 +1,6 @@
 C:Assign T: RAM:
 C:Echo "FUJINET HD WRITE PERSISTED" >DH0:hd-persist-source.txt
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:FMOUNT 14 DN0: RO >DH0:hd-stage8-a-mount.result
 C:fujinet-mount --status 0 >DH0:hd-stage8-a-status.result
 C:Type DN0:HD.TXT >DH0:hd-stage8-a-type.result

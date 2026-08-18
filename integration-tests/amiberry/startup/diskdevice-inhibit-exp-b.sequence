@@ -1,6 +1,6 @@
 C:Assign T: RAM:
 C:FailAt 21
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:fmount 11 0 RO >NIL:
 C:Dir DN0: >NIL:
 C:fmount_inhibit_exp_b DH0:exp-b-true.result 12 >NIL:

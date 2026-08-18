@@ -665,6 +665,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
             driver_root = ROOT / "repos/fujinet-nio-driver"
             build_cmd.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
+                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
             ])
             if not case.get("no_static_mountlists"):

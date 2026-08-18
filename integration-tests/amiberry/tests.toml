@@ -223,6 +223,26 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-loader"
+project = "apps"
+app = "wifitest"
+driver = true
+no_static_mountlists = true
+timeout = 45
+activity_timeout = 35
+no_activity_timeout = 25
+startup = "startup/diskdevice-loader.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-loader"
+results = [
+  "loader.result",
+  "loader-second.result",
+  "loader-mismatch.result",
+  "loader-invalid.result",
+  "loader-status.result",
+]
+
+[[test]]
 name = "diskdevice-inhibit-exp-b"
 project = "apps"
 app = "fmount_inhibit_exp_b"

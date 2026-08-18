@@ -88,9 +88,10 @@ The image includes `DEVS:fujinet-disk.device` and `C:fujinet-mount`, but no
 static `DN0`-`DN7` MountLists. `fmount` inspects the selected media and creates
 the DOS node dynamically. The generated HDF is the local interactive image at
 `build/images/amiga-workbench.hdf`; it is not a TNFS-mounted media image. With
-`--with-driver`, its startup sequence also runs
-`C:LoadModule DEVS:fujinet-disk.device` before Workbench loads, so the driver
-is ready after a warm start without opening a shell manually.
+`--with-driver`, its startup sequence runs the workspace-owned
+`C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device`
+before Workbench loads. It registers the resident directly, so the driver is
+ready without a warm restart and without AmigaOS 3.2's `LoadModule` command.
 
 Additional Amiga archives can be unpacked into the HDF while it is being
 assembled. For example, to stage the Picasso96 installer and its files:
@@ -209,6 +210,7 @@ profiles:
     build_test_disk: true
     harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb31.hdf
     kickstart: ${AMIGA_31_ASSET_ROOT}/ROM/kick31.rom
+    rom_key: ${AMIGA_31_ASSET_ROOT}/ROM/rom.key
     volume_label: AmigaOS3.1
     all_apps: true
     settings:
@@ -221,8 +223,16 @@ profiles:
 
 Set `AMIBERRY_OS_ROOT` and `AMIBERRY_WORKBENCH_ADF` to the corresponding
 expanded 3.1 tree and licensed Workbench ADF before building that profile.
-Driver auto-loading still requires an OS that supplies `C:LoadModule`; omit
-`with_driver` for a standard 3.1 installation unless that command is installed.
+Driver auto-loading uses the redistributable loader built by
+`fujinet-nio-driver`. The loader's registration, duplicate-load handling,
+`OpenDevice()`, and basic trackdisk commands are validated on Workbench 3.1
+without the AmigaOS 3.2 `C:LoadModule` command. This is loader validation, not
+yet full DiskDevice support on 3.1: first `DN0:` filesystem access currently
+stalls after the filesystem handler starts, completes its quick boot/root
+device reads, and submits a retained legacy `TD_REMOVE` notification request.
+At timeout the shell's `ACTION_EXAMINE_OBJECT` packet remains queued on the
+handler. The matched 3.2 handler registers `TD_ADDCHANGEINT` before reading
+and proceeds through directory access.
 
 For a generated profile (`build_test_disk: true`), `harddrive` is
 the output HDF/VHD path; if omitted, the default is
@@ -571,7 +581,7 @@ runner starts Amiberry -> obtains exact IPC socket
 Controllers prevent the race where a separate terminal notices the socket only
 after guest startup has passed the target. A startup-sensitive controller may
 pause Amiberry before the serial bridge is opened, arm a breakpoint, then
-continue. If `LoadModule` registers the resident later, allow the guest to run
+continue. If the startup loader registers the resident later, allow the guest to run
 only until the device appears in the live DeviceList, pause, resolve, arm, and
 continue.
 
@@ -617,7 +627,7 @@ tools/amiga_emulator/beginio_trace.py
 ```
 
 It begins by releasing the initial pause just long enough for the unchanged
-startup `LoadModule` command to register `fujinet-disk.device`, then pauses,
+startup loader command to register `fujinet-disk.device`, then pauses,
 resolves the live vector, installs the breakpoint, and resumes:
 
 ```python
@@ -769,7 +779,7 @@ PYTHONPATH="$NIO_WORKSPACE/tools" \
 For a startup race, do not launch this after the normal guest sequence is
 already running. Have the runner pause Amiberry after writing
 `amiberry.sock.path` and before opening the serial bridge; start the controller,
-then issue its first `DEBUG_CONTINUE`. For a device loaded by `LoadModule`, add
+then issue its first `DEBUG_CONTINUE`. For a device loaded during startup, add
 a short polling loop around `device_debug.resolve_device()` before arming the
 breakpoint. This is the practical reason controller integration exists.
 
@@ -785,7 +795,7 @@ validate a specific live-memory or register claim at a controlled point.
 #### CPU Speed, Tasks, DOS, and Media Correlation
 
 Use `GET_CPU_SPEED` and `SET_CPU_SPEED 10` only after a target breakpoint is
-armed; slowing boot can prevent the guest reaching `LoadModule` or the test
+armed; slowing boot can prevent the guest reaching the resident loader or the test
 phase before the controller deadline. Always restore with `SET_CPU_SPEED -1`.
 
 If requests continue but a CLI checkpoint is absent, inspect Exec state using

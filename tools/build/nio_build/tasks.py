@@ -301,6 +301,7 @@ class Build:
             driver_root = self.p("FUJINET_NIO_DRIVER")
             disk_args.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
+                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
                 "--load-driver",
             ])
@@ -449,10 +450,12 @@ class Build:
             self.ctx.env,
         )
         self.ctx.env["AMIGA_WORKBENCH_CONFIG"] = profile["name"]
-        for key in ("kickstart", "fast_file_system"):
+        for key in ("kickstart", "rom_key", "fast_file_system"):
             if key in profile:
                 self.ctx.env[
-                    {"kickstart": "AMIBERRY_KICKSTART", "fast_file_system": "AMIBERRY_FAST_FILE_SYSTEM"}[key]
+                    {"kickstart": "AMIBERRY_KICKSTART",
+                     "rom_key": "AMIBERRY_ROM_KEY",
+                     "fast_file_system": "AMIBERRY_FAST_FILE_SYSTEM"}[key]
                 ] = profile[key]
         settings = profile.get("settings", {})
         self.ctx.env["AMIBERRY_EXTRA_SETTINGS"] = ";".join(

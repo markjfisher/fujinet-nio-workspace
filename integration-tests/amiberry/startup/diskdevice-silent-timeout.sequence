@@ -1,6 +1,6 @@
 C:Assign T: RAM:
 C:Echo "Loading Module"
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:Echo "... Module loaded"
 C:Failat 30
 C:fujinet-mount --uri 0 host:/standard.adf RO >DH0:fmount.result

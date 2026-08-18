@@ -11,17 +11,14 @@ from . import device_debug, ipc
 from .debug_snapshot import parse_registers, read_io_request
 
 
-DEVICE_BEGIN_IO_LINK = 0x110E
-COMPLETION_LINK = 0x13E4
-TARGET_LBAS = {880, 881, 882, 883}
-
-
+DEVICE_BEGIN_IO_LINK = 0x150A
+COMPLETION_LINK = 0x17A0
 def wait_for_device(socket_path: Path, timeout: float):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             return device_debug.resolve_device(socket_path)
-        except LookupError:
+        except (LookupError, ValueError, OSError, RuntimeError):
             time.sleep(0.05)
     raise TimeoutError("fujinet-disk.device was not registered")
 
@@ -37,8 +34,10 @@ def wait_for_pc(socket_path: Path, addresses: set[int], timeout: float) -> int:
 
 
 def request_at_completion(socket_path: Path, registers: dict[str, int]) -> int:
-    # device_begin_io's active IORequest local is at A5-56 in this resident build.
-    return device_debug.read_word(socket_path, registers["A5"] - 56, 4)
+    del socket_path
+    # The current build retains the active IORequest directly in A5 through
+    # the common completion block.
+    return registers["A5"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -58,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         ipc.request(socket_path, "DEBUG_ACTIVATE")
         delta = vectors.begin_io - DEVICE_BEGIN_IO_LINK
         completion = delta + COMPLETION_LINK
-        if device_debug.read_word(socket_path, completion, 2) != 0x226D:
+        if device_debug.read_word(socket_path, completion, 2) != 0x082D:
             raise RuntimeError(f"completion opcode mismatch at {completion:#x}")
         ipc.request(socket_path, "SET_BREAKPOINT", hex(vectors.begin_io))
         ipc.request(socket_path, "SET_BREAKPOINT", hex(completion), "1")
@@ -78,14 +77,14 @@ def main(argv: list[str] | None = None) -> int:
                 request_address = request_at_completion(socket_path, registers)
             request = read_io_request(socket_path, request_address)
             lba = request["io_Offset"] // 512 if request["io_Offset"] % 512 == 0 else -1
-            if request["io_Command"] == 2 and request["io_Length"] == 512 and lba in TARGET_LBAS:
-                event = "begin" if pc == vectors.begin_io else "completion"
-                with log_path.open("a", encoding="ascii") as log:
-                    log.write(
-                        f"event={event} request={request_address:#x} lba={lba} "
-                        f"actual={request['io_Actual']} error={request['io_Error']:#x} "
-                        f"flags={request['io_Flags']:#x}\n"
-                    )
+            event = "begin" if pc == vectors.begin_io else "completion"
+            with log_path.open("a", encoding="ascii") as log:
+                log.write(
+                    f"event={event} request={request_address:#x} "
+                    f"command={request['io_Command']} lba={lba} "
+                    f"length={request['io_Length']} actual={request['io_Actual']} "
+                    f"error={request['io_Error']:#x} flags={request['io_Flags']:#x}\n"
+                )
             ipc.request(socket_path, "DEBUG_CONTINUE")
     finally:
         try:

@@ -64,6 +64,26 @@ class AmigaRunnerTests(unittest.TestCase):
         self.assertIn("DH0:" + str(disk), command)
         self.assertNotIn("-0", command)
 
+    def test_amiga_forever_rom_key_is_staged_beside_kickstart(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "test.adf"
+            rom = root / "encrypted.rom"
+            rom_key = root / "rom.key"
+            for path in (disk, rom, rom_key):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_ROM_KEY": str(rom_key),
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--disk", str(disk)]))
+                runner.stage_rom_files()
+                self.assertEqual(
+                    (runner.rom_dir / "rom.key").read_bytes(), b"test"
+                )
+
     def test_uae_config_is_loaded_before_profile_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

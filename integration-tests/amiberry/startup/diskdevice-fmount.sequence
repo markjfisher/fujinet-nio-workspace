@@ -1,7 +1,7 @@
 C:Assign T: RAM:
 C:Echo "FUJINET WRITE PERSISTED" >DH0:persist-source.txt
 C:FailAt 21
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:Echo "LOAD RC=$RC" >DH0:fmount-load.result
 C:fmount 11 0 RO >DH0:fmount-mount.result
 C:Echo "FMOUNT RC=$RC" >>DH0:fmount-mount.result

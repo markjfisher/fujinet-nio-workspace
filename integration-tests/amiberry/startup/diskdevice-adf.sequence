@@ -1,6 +1,6 @@
 C:Assign T: RAM:
 C:Echo "FUJINET WRITE PERSISTED" >DH0:persist-source.txt
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:Echo "LOAD RC=$RC" >DH0:disk-load.result
 C:fujinet-mount --boundary 6 >DH0:disk-exec-boundary.result
 C:fujinet-mount host:/standard.adf >DH0:disk-mount.result

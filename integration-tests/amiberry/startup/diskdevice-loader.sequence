@@ -1,0 +1,18 @@
+C:Assign T: RAM:
+C:FailAt 21
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device >DH0:loader.result
+C:Echo "FIRST RC=$RC" >>DH0:loader.result
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device >DH0:loader-second.result
+C:Echo "SECOND RC=$RC" >>DH0:loader-second.result
+C:fujinet-load-resident DEVS:fujinet-disk.device wrong-resident.device >DH0:loader-mismatch.result
+C:Echo "MISMATCH RC=$RC" >>DH0:loader-mismatch.result
+C:fujinet-load-resident C:wifitest wrong-resident.device >DH0:loader-invalid.result
+C:Echo "INVALID RC=$RC" >>DH0:loader-invalid.result
+C:fujinet-mount --status 0 >DH0:loader-status.result
+C:FLS host:/amiga-e2e-complete/diskdevice-loader >NIL:
+C:Type DH0:loader.result
+C:Type DH0:loader-second.result
+C:Type DH0:loader-mismatch.result
+C:Type DH0:loader-invalid.result
+C:Type DH0:loader-status.result
+C:Echo "E2E COMPLETE"

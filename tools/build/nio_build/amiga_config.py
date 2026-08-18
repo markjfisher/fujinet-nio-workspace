@@ -52,7 +52,8 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
         )
     if config_keys:
         result["uae_config"] = result.pop(config_keys[0])
-    for key in ("disk", "harddrive", "kickstart", "fast_file_system", "uae_config"):
+    for key in ("disk", "harddrive", "kickstart", "rom_key",
+                "fast_file_system", "uae_config"):
         if key in result:
             result[key] = _expand(result[key], root, environment)
     archive_keys = [key for key in ("install_archives", "install_archive") if key in result]

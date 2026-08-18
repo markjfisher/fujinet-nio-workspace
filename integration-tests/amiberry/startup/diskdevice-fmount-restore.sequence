@@ -1,7 +1,7 @@
 C:Assign T: RAM:
 C:FailAt 30
 C:If NOT EXISTS DH0:fmount-restore-phase-two
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:FMOUNT 11 DN0: RO >DH0:restore-dd-mount.result
 C:Echo "DD FMOUNT RC=$RC" >>DH0:restore-dd-mount.result
 C:Dir DN0: >DH0:restore-dd-before-dir.result

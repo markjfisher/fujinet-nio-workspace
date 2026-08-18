@@ -1,5 +1,5 @@
 C:Assign T: RAM:
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:FailAt 11
 C:FMOUNTRESTORE >DH0:restore-invalid.result
 C:Echo "RESTORE INVALID RC=$RC" >>DH0:restore-invalid.result

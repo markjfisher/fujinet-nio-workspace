@@ -46,6 +46,8 @@ def main() -> int:
                         help="extract an LHA/archive tree into the disk root")
     parser.add_argument("--disk-device", type=Path,
                         help="native fujinet-disk.device to install in DEVS:")
+    parser.add_argument("--resident-loader", type=Path,
+                        help="resident module loader to install in C:")
     parser.add_argument("--load-driver", action="store_true",
                         help="load fujinet-disk.device during startup")
     parser.add_argument("--disk-mount-tool", type=Path,
@@ -81,10 +83,15 @@ def main() -> int:
         if not archive.is_file():
             raise SystemExit(f"installation archive not found: {archive}")
     for path, label in ((args.disk_device, "disk device"),
+                        (args.resident_loader, "resident loader"),
                         (args.disk_mount_tool, "disk mount tool"),
                         ):
         if path is not None and not path.is_file():
             raise SystemExit(f"{label} not found: {path}")
+    if args.load_driver and (args.disk_device is None or args.resident_loader is None):
+        raise SystemExit(
+            "--load-driver requires --disk-device and --resident-loader"
+        )
     for path in args.disk_mountlist:
         if not path.is_file():
             raise SystemExit(f"disk MountList not found: {path}")
@@ -121,6 +128,9 @@ def main() -> int:
         if args.disk_device:
             run_xdf(args.output, "write", str(args.disk_device),
                     "Devs/fujinet-disk.device")
+        if args.resident_loader:
+            run_xdf(args.output, "write", str(args.resident_loader),
+                    "C/fujinet-load-resident")
         if args.disk_mount_tool:
             run_xdf(args.output, "write", str(args.disk_mount_tool),
                     "C/fujinet-mount")
@@ -153,7 +163,8 @@ def main() -> int:
                 )
             if args.load_driver:
                 test_commands = (
-                    "C:LoadModule DEVS:fujinet-disk.device\n"
+                    "C:fujinet-load-resident "
+                    "DEVS:fujinet-disk.device fujinet-disk.device\n"
                     + test_commands
                 )
 

@@ -1,5 +1,5 @@
 C:Assign T: RAM:
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:fujinet-mount host:/standard.adf >DH0:dynamic-load.result
 C:Mount DN0: FROM DEVS:DN0
 C:Echo "STATIC DN0 MOUNT RC=$RC" >DH0:dynamic-static-mount.result

@@ -1,4 +1,4 @@
-C:LoadModule DEVS:fujinet-disk.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
 C:doslistdiag >DH0:dynamic-hd-pre.result
 C:FMOUNT 14 DN0: RO >DH0:dynamic-hd-mount.result
 C:Echo "FMOUNT HD RC=$RC" >>DH0:dynamic-hd-mount.result

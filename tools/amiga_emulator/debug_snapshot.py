@@ -381,5 +381,35 @@ def capture_debug_snapshot(socket_path: Path, destination: Path) -> dict[str, in
             lines.append(f"STACK {address:#x} ERROR {error}")
             break
         lines.append(f"STACK {address:#x} {value:#x}")
+    try:
+        dn0_task = resolve_dos_device_task(socket_path, "DN0")
+        lines.append(f"DOS_DEVICE name='DN0' task={dn0_task:#x}")
+    except Exception as error:
+        lines.append(f"DOS_DEVICE name='DN0' ERROR {error}")
+    try:
+        exec_base = read_memory(socket_path, 4, 4)
+        current = read_memory(socket_path, exec_base + EXEC_THIS_TASK, 4)
+        tasks = [read_task(socket_path, current, "CURRENT")]
+        tasks.extend(walk_task_list(socket_path, exec_base + EXEC_TASK_READY,
+                                    "READY"))
+        tasks.extend(walk_task_list(socket_path, exec_base + EXEC_TASK_WAIT,
+                                    "WAIT"))
+        seen: set[int] = set()
+        for task in tasks:
+            task_address = int(task["address"])
+            if task_address in seen:
+                continue
+            seen.add(task_address)
+            state = TASK_STATES.get(int(task["state"]), str(task["state"]))
+            lines.append(
+                f"TASK list={task['list']} address={task_address:#x} "
+                f"type={task['type']} name={task['name']!r} state={state} "
+                f"sig_wait={int(task['sig_wait']):#x} "
+                f"sig_recvd={int(task['sig_recvd']):#x}"
+            )
+            if task["type"] == 13 and task["name"] in {"Initial CLI", "DN0"}:
+                append_process_port_snapshot(lines, socket_path, task)
+    except Exception as error:
+        lines.append(f"TASK_SNAPSHOT ERROR {error}")
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return registers
