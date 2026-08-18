@@ -1,5 +1,16 @@
 # Add a [[test]] entry and a Startup-Sequence under startup/ to add coverage.
 
+# Integration tests intentionally own their emulated machine definition. These
+# options are not used by interactive amiga-workbench profiles or UAE configs.
+[amiberry]
+args = ["-w", "-1"]
+settings = [
+  "cpu_type=68020/68881",
+  "cpu_model=68030",
+  "fpu_model=68882",
+  "cpu_compatible=true",
+]
+
 [[test]]
 name = "wifi-config"
 project = "apps"

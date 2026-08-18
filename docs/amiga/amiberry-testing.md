@@ -275,6 +275,25 @@ capture the host desktop. Adjust the short capture delay with
 `AMIGA_E2E_SCREENSHOT_DELAY` when a test's guest display changes later in
 boot.
 
+The integration suite owns its emulated machine configuration in the
+top-level `[amiberry]` table of `integration-tests/amiberry/tests.toml`.
+`args` contains native Amiberry command-line arguments, while `settings`
+contains ordered UAE `key=value` overrides. The checked-in test machine uses
+maximum emulation speed and a 68030 with a 68882 FPU. These values are applied
+only by the pytest harness; interactive `amiga-workbench` profiles and their
+UAE configuration files are unaffected. For example:
+
+```toml
+[amiberry]
+args = ["-w", "-1"]
+settings = [
+  "cpu_type=68020/68881",
+  "cpu_model=68030",
+  "fpu_model=68882",
+  "cpu_compatible=true",
+]
+```
+
 To inspect guest result files after a focused pytest run, select the newest
 evidence directory and its case HDF, then use `xdftool type`:
 

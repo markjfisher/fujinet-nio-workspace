@@ -4,8 +4,20 @@ from conftest import (
     build_failure_report,
     checkpoint_progress,
     evaluate_monitor_state,
+    machine_environment,
     scan_completion_log_chunk,
 )
+
+
+def test_machine_environment_keeps_test_args_and_settings_ordered():
+    environment = machine_environment({
+        "args": ["-w", "-1"],
+        "settings": ["cpu_model=68030", "fpu_model=68882"],
+    })
+    assert environment["AMIBERRY_EXTRA_ARGS"] == "-w -1"
+    assert environment["AMIBERRY_EXTRA_SETTINGS"] == (
+        "cpu_model=68030;fpu_model=68882"
+    )
 
 
 def test_quiet_screen_before_completion_continues():

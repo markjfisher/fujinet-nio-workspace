@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -282,7 +283,8 @@ class AmigaRunner:
         if uae_config:
             config_args = ["--config", uae_config]
         serial_port = serial_device or f"tcp://{self.host}:{self.amiga_port}"
-        command = [self.amiberry_bin, "--log", *config_args, "-G",
+        extra_args = shlex.split(os.environ.get("AMIBERRY_EXTRA_ARGS", ""))
+        command = [self.amiberry_bin, "--log", *config_args, "-G", *extra_args,
                    "-r", str(self.rom_dir / "kickstart.rom"), *disk_args,
                    "-s", f"serial_port={serial_port}",
                    "-s", "serial_hardware_ctsrts=false",

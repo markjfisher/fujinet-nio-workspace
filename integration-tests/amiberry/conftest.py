@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import shlex
 import signal
 import socket
 import subprocess
@@ -212,9 +213,28 @@ def load_workspace_env() -> dict[str, str]:
     return environment
 
 
-def load_cases() -> dict[str, dict]:
+def load_suite_config() -> dict[str, Any]:
     with (SUITE / "tests.toml").open("rb") as stream:
-        return {case["name"]: case for case in tomllib.load(stream)["test"]}
+        return tomllib.load(stream)
+
+
+def load_cases() -> dict[str, dict]:
+    return {case["name"]: case for case in load_suite_config()["test"]}
+
+
+def machine_environment(machine: dict[str, Any]) -> dict[str, str]:
+    machine_args = machine.get("args", [])
+    machine_settings = machine.get("settings", [])
+    if not (isinstance(machine_args, list) and
+            all(isinstance(value, str) for value in machine_args)):
+        raise ValueError("[amiberry].args must be an array of strings")
+    if not (isinstance(machine_settings, list) and
+            all(isinstance(value, str) for value in machine_settings)):
+        raise ValueError("[amiberry].settings must be an array of strings")
+    return {
+        "AMIBERRY_EXTRA_ARGS": shlex.join(machine_args),
+        "AMIBERRY_EXTRA_SETTINGS": ";".join(machine_settings),
+    }
 
 
 def build_nio_binary(environment: dict[str, str]) -> None:
@@ -362,6 +382,11 @@ def amiga_environment(pytestconfig: Any) -> dict[str, str]:
 @pytest.fixture(scope="session")
 def amiga_cases() -> dict[str, dict]:
     return load_cases()
+
+
+@pytest.fixture(scope="session")
+def amiga_machine() -> dict[str, Any]:
+    return dict(load_suite_config().get("amiberry", {}))
 
 
 @pytest.fixture(scope="session")
@@ -546,6 +571,7 @@ def _terminate_runner(runner: subprocess.Popen[object]) -> None:
 @pytest.fixture()
 def run_amiga_case(amiga_environment: dict[str, str],
                    amiga_cases: dict[str, dict],
+                   amiga_machine: dict[str, Any],
                    amiga_evidence_root: Path) -> Any:
     def run(name: str) -> dict[str, str]:
         case = amiga_cases[name]
@@ -657,6 +683,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         case_index = list(amiga_cases).index(name)
         test_env["FUJINET_NIO_PORT"] = str(65510 + case_index)
         test_env["AMIBERRY_PORT"] = str(23470 + case_index)
+        test_env.update(machine_environment(amiga_machine))
 
         # Timing parameters — screen-quiet is for screenshot/evidence cadence only.
         screenshot_quiet = float(case.get("screenshot_quiet", 15))

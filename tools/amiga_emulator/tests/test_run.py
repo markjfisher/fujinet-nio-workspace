@@ -28,6 +28,7 @@ class AmigaRunnerTests(unittest.TestCase):
                 "AMIGA_RUN_DIR": str(root / "run"),
                 "AMIBERRY_KICKSTART": str(rom),
                 "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+                "AMIBERRY_EXTRA_ARGS": "-w -1",
                 "AMIBERRY_EXTRA_SETTINGS": "chipmem_size=512;fastmem_size=8",
             }
             with patch.dict(os.environ, environment, clear=False):
@@ -40,6 +41,7 @@ class AmigaRunnerTests(unittest.TestCase):
         self.assertIn("chipmem_size=512", command)
         self.assertIn("fastmem_size=8", command)
         self.assertIn("serial_direct=true", command)
+        self.assertEqual(command[command.index("-w") + 1], "-1")
 
     def test_vhd_harddrive_uses_amiberry_harddisk_option(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
