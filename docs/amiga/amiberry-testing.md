@@ -87,10 +87,61 @@ FujiNet disk driver, use:
 The image includes `DEVS:fujinet-disk.device` and `C:fujinet-mount`, but no
 static `DN0`-`DN7` MountLists. `fmount` inspects the selected media and creates
 the DOS node dynamically. The generated HDF is the local interactive image at
-`build/images/amiga-wifitest.hdf`; it is not a TNFS-mounted media image. With
+`build/images/amiga-workbench.hdf`; it is not a TNFS-mounted media image. With
 `--with-driver`, its startup sequence also runs
 `C:LoadModule DEVS:fujinet-disk.device` before Workbench loads, so the driver
 is ready after a warm start without opening a shell manually.
+
+Additional Amiga archives can be unpacked into the HDF while it is being
+assembled. For example, to stage the Picasso96 installer and its files:
+
+```sh
+./scripts/build.sh amiga-workbench \
+  --profile wb3.2 \
+  --all-apps \
+  --with-driver \
+  --install-archive \
+  /home/markf/dev/amiga/AmigaForever/af11/Archives/Picasso96/Picasso96.lha \
+  -- \
+  --external-nio
+```
+
+The archive is extracted under the HDF root, preserving its
+`Picasso96Install/` tree. The Amiga-side `InstallPicasso96` program is not
+run automatically; launch it from Workbench or a Shell when you want to
+perform its interactive installation. Multiple `--install-archive` options
+are supported. The same list can be stored in a profile as an
+`install_archives` YAML list (`install_archive` is also accepted for
+compatibility). The `all_apps` and `with_driver` flags can be stored in the
+profile as well, so the complete environment can be recreated without
+command-line switches. For example:
+
+```yaml
+profiles:
+  wb32-setup:
+    build_test_disk: true
+    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-base.hdf
+    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
+    all_apps: true
+    with_driver: true
+    install_archives:
+      - /path/to/Picasso96.lha
+    settings:
+      cpu_type: 68040
+      z3_autoconfig: true
+
+  wb32-run:
+    build_test_disk: false
+    disk: ${NIO_WORKSPACE}/build/images/amiga-wb32-run.hdf
+    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
+    settings:
+      cpu_type: 68040
+      z3_autoconfig: true
+```
+
+Build the setup image with `--profile wb32-setup`, copy it to the run image
+when you want a disposable working copy, then launch the copy with
+`--profile wb32-run`.
 
 ## Building ADF media for TNFS
 
@@ -142,8 +193,15 @@ AMIGA_WORKBENCH_CONFIG=my-profile \
 
 Each profile can specify `disk`, `kickstart`, `build_test_disk`, and an
 Amiberry `settings` mapping such as `cpu_type`, `chipmem_size`, and
-`fastmem_size`. An optional `uae_config` entry loads an existing Amiberry
-configuration before applying the profile settings.
+`fastmem_size`. These values are directly mapped to `-s` key/value pairs
+and match the names found in typical UAE config files.
+
+For a generated profile (`build_test_disk: true`), `disk` is
+the output HDF path; if omitted, the default is
+`build/images/amiga-workbench.hdf`. For a direct profile
+(`build_test_disk: false`), `disk` is an existing image to reuse. An optional
+`uae_config` entry loads an existing Amiberry configuration before applying
+the profile settings.
 
 The runner defaults SDL3 to `SDL_VIDEO_DRIVER=kmsdrm,wayland,x11`, while
 respecting either SDL video-driver variable if already set. SDL3 documents

@@ -48,6 +48,18 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
     for key in ("disk", "kickstart", "fast_file_system", "uae_config"):
         if key in result:
             result[key] = _expand(result[key], root, environment)
+    archive_keys = [key for key in ("install_archives", "install_archive") if key in result]
+    if len(archive_keys) > 1:
+        raise SystemExit(
+            f"Amiga profile must use only one of install_archives/install_archive: {selected}"
+        )
+    if archive_keys:
+        archives = result.pop(archive_keys[0])
+        if not isinstance(archives, list):
+            raise SystemExit(f"Amiga profile archive list must be a list: {selected}")
+        result["install_archives"] = [
+            _expand(archive, root, environment) for archive in archives
+        ]
     settings = result.get("settings", {})
     if not isinstance(settings, dict):
         raise SystemExit(f"Amiga profile settings must be a mapping: {selected}")

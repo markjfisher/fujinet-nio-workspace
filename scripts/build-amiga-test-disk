@@ -5,23 +5,13 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-def xdf_tool() -> list[str]:
-    tool = shutil.which("xdftool")
-    if tool:
-        return [tool]
-    uvx = shutil.which("uvx")
-    if uvx:
-        return [uvx, "--from", "amitools", "xdftool"]
-    raise SystemExit("xdftool is required, or install uv/uvx to fetch amitools")
-
-
-def run_xdf(image: Path, *commands: str) -> None:
-    subprocess.run([*xdf_tool(), str(image), *commands], check=True)
+from amiga_emulator.disk import extract_archive, install_tree, run_xdf
 
 
 def ignored_cd_content(_directory: str, names: list[str]) -> set[str]:
@@ -45,6 +35,8 @@ def main() -> int:
     parser.add_argument("--app-name", default="wifitest")
     parser.add_argument("--extra-app-dir", action="append", type=Path, default=[],
                         help="directory of additional executables to install in C:")
+    parser.add_argument("--install-archive", action="append", type=Path, default=[],
+                        help="extract an LHA/archive tree into the disk root")
     parser.add_argument("--disk-device", type=Path,
                         help="native fujinet-disk.device to install in DEVS:")
     parser.add_argument("--load-driver", action="store_true",
@@ -74,6 +66,9 @@ def main() -> int:
     for app_dir in args.extra_app_dir:
         if not app_dir.is_dir():
             raise SystemExit(f"additional Amiga application directory not found: {app_dir}")
+    for archive in args.install_archive:
+        if not archive.is_file():
+            raise SystemExit(f"installation archive not found: {archive}")
     for path, label in ((args.disk_device, "disk device"),
                         (args.disk_mount_tool, "disk mount tool"),
                         ):
@@ -120,6 +115,10 @@ def main() -> int:
                     continue
                 run_xdf(args.output, "write", str(app), f"C/{app.name}")
                 installed_names.add(app.name)
+        for index, archive in enumerate(args.install_archive):
+            archive_root = Path(temp) / f"archive-{index}"
+            extract_archive(archive, archive_root)
+            install_tree(args.output, archive_root)
         if args.startup_script or not args.interactive or args.load_driver:
             if args.startup_script:
                 if not args.startup_script.is_file():

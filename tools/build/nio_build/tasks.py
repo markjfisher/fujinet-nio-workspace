@@ -255,7 +255,14 @@ class Build:
         self.runner.run("amiga-test-adf", command)
         self.ctx.env["AMIBERRY_ADF"] = str(output)
 
-    def amiga_test_disk(self, *, all_apps: bool = False, with_driver: bool = False) -> None:
+    def amiga_test_disk(
+        self,
+        *,
+        all_apps: bool = False,
+        with_driver: bool = False,
+        install_archives: list[Path] | None = None,
+        output: Path | None = None,
+    ) -> None:
         app_name, app = self.amiga_test_app()
         # Keep one useful interactive image containing both the selected test
         # app and the complete core utility set.  The selected app still
@@ -271,7 +278,7 @@ class Build:
             )
         if not boot_adf.is_file():
             raise SystemExit(f"boot-block source ADF not found: {boot_adf}")
-        output = self.ctx.image_dir / f"amiga-{app_name}.hdf"
+        output = output or (self.ctx.image_dir / f"amiga-{app_name}.hdf")
         disk_args = [
             self.ctx.root / "scripts" / "build-amiga-test-disk",
             "--os-root", os_root,
@@ -293,6 +300,8 @@ class Build:
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
                 "--load-driver",
             ])
+        for archive in install_archives or []:
+            disk_args.extend(["--install-archive", archive])
         startup_script = self.ctx.env.get("AMIGA_TEST_STARTUP_SCRIPT", "")
         if startup_script:
             startup_path = Path(startup_script).expanduser()
@@ -391,6 +400,10 @@ class Build:
             "--with-driver", action="store_true",
             help="install fujinet-disk.device and fujinet-mount (dynamic mounts only)",
         )
+        parser.add_argument(
+            "--install-archive", action="append", type=Path, metavar="PATH",
+            help="extract an LHA/archive tree into the virtual disk (repeatable)",
+        )
         parser.epilog = (
             "Amiberry options go after '--', for example --external-nio.\n"
             "The --all-apps and --with-driver options build a convenient interactive\n"
@@ -440,9 +453,17 @@ class Build:
             self.ctx.env["AMIBERRY_UAE_CONFIG"] = profile["uae_config"]
 
         if profile.get("build_test_disk", False):
+            output = Path(profile.get("disk", "")) if profile.get("disk") else (
+                self.ctx.image_dir / "amiga-workbench.hdf"
+            )
             self.amiga_test_disk(
-                all_apps=parsed.all_apps,
-                with_driver=parsed.with_driver,
+                all_apps=bool(profile.get("all_apps", False)) or parsed.all_apps,
+                with_driver=bool(profile.get("with_driver", False)) or parsed.with_driver,
+                install_archives=[
+                    *[Path(path) for path in profile.get("install_archives", [])],
+                    *[path.expanduser() for path in (parsed.install_archive or [])],
+                ],
+                output=output,
             )
         else:
             disk = Path(profile.get("disk", ""))

@@ -57,6 +57,7 @@ The test harness imports `run.py`, which:
 | File | Purpose |
 | --- | --- |
 | `run.py` | Amiberry/NIO/serial bridge runner used by integration tests. |
+| `disk.py` | Reusable HDF assembly, archive extraction, and Amiga tree installation helpers. |
 | `ipc.py` | Small client for the Amiberry Unix IPC text protocol. |
 | `device_debug.py` | Resolves a loaded Exec device and its live vectors. |
 | `debug_snapshot.py` | Decodes registers, IORequests, timeout snapshots, Exec/DOS objects. |
