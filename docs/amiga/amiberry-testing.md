@@ -196,6 +196,34 @@ Amiberry `settings` mapping such as `cpu_type`, `chipmem_size`, and
 `fastmem_size`. These values are directly mapped to `-s` key/value pairs
 and match the names found in typical UAE config files.
 
+Generated profiles may also set `volume_label`. The disk builder supports
+AmigaOS 3.1-style trees: the optional AmigaOS 3.2 `WBStartup/Welcome` files
+need not exist, an existing `Devs/serial.device` is replaced by the copy from
+the selected boot ADF, and both `LoadWB` and `C:LoadWB` startup lines are
+recognised. A portable 3.1 profile can therefore be kept in a user profile
+file without hard-coding licensed paths in the workspace:
+
+```yaml
+profiles:
+  wb31-setup:
+    build_test_disk: true
+    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb31.hdf
+    kickstart: ${AMIGA_31_ASSET_ROOT}/ROM/kick31.rom
+    volume_label: AmigaOS3.1
+    all_apps: true
+    settings:
+      cpu_type: 68000
+      chipmem_size: 512
+      fastmem_size: 8
+      cpu_compatible: true
+      cachesize: 0
+```
+
+Set `AMIBERRY_OS_ROOT` and `AMIBERRY_WORKBENCH_ADF` to the corresponding
+expanded 3.1 tree and licensed Workbench ADF before building that profile.
+Driver auto-loading still requires an OS that supplies `C:LoadModule`; omit
+`with_driver` for a standard 3.1 installation unless that command is installed.
+
 For a generated profile (`build_test_disk: true`), `harddrive` is
 the output HDF/VHD path; if omitted, the default is
 `build/images/amiga-workbench.hdf`. For a direct profile

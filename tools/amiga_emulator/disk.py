@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import re
 from pathlib import Path
 
 
@@ -19,6 +20,34 @@ def xdf_tool() -> list[str]:
 
 def run_xdf(image: Path, *commands: str) -> None:
     subprocess.run([*xdf_tool(), str(image), *commands], check=True)
+
+
+def run_xdf_optional(image: Path, *commands: str) -> bool:
+    """Run an xdftool operation whose target may legitimately be absent."""
+    result = subprocess.run(
+        [*xdf_tool(), str(image), *commands],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def validate_volume_label(label: str) -> str:
+    if not label or len(label) > 30 or any(character in label for character in ":/\\"):
+        raise ValueError(
+            "volume label must be 1-30 characters and cannot contain ':', '/', or '\\'"
+        )
+    return label
+
+
+def startup_command_offset(startup: str, command: str) -> int | None:
+    """Return the beginning of an AmigaDOS command line, ignoring C: prefix."""
+    match = re.search(
+        rf"(?im)^[ \t]*(?:C:)?{re.escape(command)}(?:[ \t].*)?(?:\r?\n|$)",
+        startup,
+    )
+    return match.start() if match is not None else None
 
 
 def archive_tool() -> tuple[str, str]:

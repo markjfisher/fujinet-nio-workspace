@@ -262,6 +262,7 @@ class Build:
         with_driver: bool = False,
         install_archives: list[Path] | None = None,
         output: Path | None = None,
+        volume_label: str | None = None,
     ) -> None:
         app_name, app = self.amiga_test_app()
         # Keep one useful interactive image containing both the selected test
@@ -289,6 +290,9 @@ class Build:
             "--command", self.ctx.env.get("AMIGA_TEST_COMMAND", app_name),
             "--output", output,
         ]
+        volume_label = volume_label or self.ctx.env.get("AMIGA_TEST_VOLUME_LABEL")
+        if volume_label:
+            disk_args.extend(["--volume-label", volume_label])
         if all_apps:
             disk_args.extend([
                 "--extra-app-dir", self.p("NIO_APPS") / "build" / "amiga" / "bin",
@@ -405,6 +409,10 @@ class Build:
             "--install-archive", action="append", type=Path, metavar="PATH",
             help="extract an LHA/archive tree into the virtual disk (repeatable)",
         )
+        parser.add_argument(
+            "--volume-label", metavar="LABEL",
+            help="volume label for a newly built Workbench hard drive",
+        )
         parser.epilog = (
             "Amiberry options go after '--', for example --external-nio.\n"
             "The --all-apps and --with-driver options build a convenient interactive\n"
@@ -465,6 +473,7 @@ class Build:
                     *[path.expanduser() for path in (parsed.install_archive or [])],
                 ],
                 output=output,
+                volume_label=parsed.volume_label or profile.get("volume_label"),
             )
         else:
             harddrive = profile.get("harddrive")
