@@ -42,21 +42,22 @@ C:If NOT ERROR
 C:Copy DH0:persist-source.txt TO DN2:PERSIST.TXT
 C:Echo "COPY RC=$RC" >DH0:fmount-rw-copy.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-status.result
+C:Echo "STATUS RW RC=$RC" >>DH0:fmount-rw-status.result
 C:Assign DN2: DISMOUNT
 C:FUMOUNT DN2: >DH0:fmount-rw-fumount.result
 C:Echo "FUMOUNT RW RC=$RC" >>DH0:fmount-rw-fumount.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-absent.result
-C:FAPP PUT amiga-e2e-rendezvous before-dn2-remount ready >DH0:fmount-rendezvous-ready.result
-C:Lab wait-dn2-remount
-C:FAPP GET amiga-e2e-rendezvous release-dn2-remount >NIL:
-C:If ERROR
-C:Wait 1 SECS
-C:Skip wait-dn2-remount
-C:EndIf
+C:Echo "STATUS ABSENT RC=$RC" >>DH0:fmount-rw-absent.result
+C:Echo "after-rw-absent" >DH0:fmount-rw-absent.done
+C:Echo "before-dn2-remount" >DH0:fmount-rendezvous.marker
+C:Ask "Diagnostic gate: press Return to remount DN2"
 C:FMOUNT 13 DN2: RW >DH0:fmount-rw-remount.result
 C:Echo "FMOUNT RW REMOUNT RC=$RC" >>DH0:fmount-rw-remount.result
+C:Echo "after-dn2-remount" >DH0:fmount-rw-remount.done
 C:fujinet-mount --status 2 >DH0:fmount-rw-present.result
+C:Echo "STATUS PRESENT RC=$RC" >>DH0:fmount-rw-present.result
 C:Type DN2:PERSIST.TXT >DH0:fmount-rw-persist.result
+C:Echo "TYPE PERSIST RC=$RC" >>DH0:fmount-rw-persist.result
 C:EndIf
 C:fumount DN0: >DH0:fumount-eject.result
 C:Echo "FUMOUNT RC=$RC" >>DH0:fumount-eject.result

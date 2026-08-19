@@ -385,7 +385,8 @@ class AmigaRunner:
             elif os.environ.get("AMIGA_E2E_CHECKPOINT_BEGINIO_CAPTURE") == "1":
                 self.debugger_controller = self.start_process(
                     [sys.executable, "-m", "amiga_emulator.checkpoint_beginio_capture",
-                     "--socket", str(self.ipc_socket), "--run-dir", str(self.run_dir)],
+                     "--socket", str(self.ipc_socket), "--run-dir", str(self.run_dir),
+                     "--image", str(self.disk)],
                     self.run_dir / "checkpoint-beginio-controller.log", cwd=ROOT,
                 )
         except (FileNotFoundError, OSError):
