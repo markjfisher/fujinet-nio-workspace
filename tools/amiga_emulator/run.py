@@ -370,7 +370,23 @@ class AmigaRunner:
                     [sys.executable, "-m", "amiga_emulator.dn2_handler_trace",
                      "--socket", str(self.ipc_socket),
                      "--output-dir", str(self.run_dir)],
-                    self.run_dir / "dn2-handler-controller.log", cwd=ROOT,
+                     self.run_dir / "dn2-handler-controller.log", cwd=ROOT,
+                )
+            elif os.environ.get("AMIGA_E2E_IO_REQUEST_COMPARE") == "1":
+                ipc.request(self.ipc_socket, "DEBUG_ACTIVATE")
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.io_request_compare_capture",
+                     "--socket", str(self.ipc_socket),
+                     "--output-dir", str(self.run_dir),
+                     "--device", os.environ.get("AMIGA_E2E_COMPARE_DEVICE", "fujinet-disk.device"),
+                     "--dos-device", os.environ.get("AMIGA_E2E_COMPARE_DOS_DEVICE", "DN2:")],
+                    self.run_dir / "io-request-compare-controller.log", cwd=ROOT,
+                )
+            elif os.environ.get("AMIGA_E2E_CHECKPOINT_BEGINIO_CAPTURE") == "1":
+                self.debugger_controller = self.start_process(
+                    [sys.executable, "-m", "amiga_emulator.checkpoint_beginio_capture",
+                     "--socket", str(self.ipc_socket), "--run-dir", str(self.run_dir)],
+                    self.run_dir / "checkpoint-beginio-controller.log", cwd=ROOT,
                 )
         except (FileNotFoundError, OSError):
             # IPC is optional in Amiberry builds; serial testing must still work.

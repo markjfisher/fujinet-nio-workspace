@@ -46,6 +46,13 @@ C:Assign DN2: DISMOUNT
 C:FUMOUNT DN2: >DH0:fmount-rw-fumount.result
 C:Echo "FUMOUNT RW RC=$RC" >>DH0:fmount-rw-fumount.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-absent.result
+C:FAPP PUT amiga-e2e-rendezvous before-dn2-remount ready >DH0:fmount-rendezvous-ready.result
+C:Lab wait-dn2-remount
+C:FAPP GET amiga-e2e-rendezvous release-dn2-remount >NIL:
+C:If ERROR
+C:Wait 1 SECS
+C:Skip wait-dn2-remount
+C:EndIf
 C:FMOUNT 13 DN2: RW >DH0:fmount-rw-remount.result
 C:Echo "FMOUNT RW REMOUNT RC=$RC" >>DH0:fmount-rw-remount.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-present.result

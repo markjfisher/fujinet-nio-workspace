@@ -879,6 +879,14 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         if _has_requester(shot):
                             requester_seen = True
                             shutil.copy2(shot, run_dir / "amiberry-screen.png")
+                            requester_hold = float(
+                                test_env.get("AMIGA_E2E_REQUESTER_HOLD", "0")
+                            )
+                            if requester_hold > 0:
+                                time.sleep(requester_hold)
+                                _ipc_screenshot(
+                                    ipc_sock, run_dir / "amiberry-requester-held.png"
+                                )
                             termination_reason = "requester"
                             break
 
