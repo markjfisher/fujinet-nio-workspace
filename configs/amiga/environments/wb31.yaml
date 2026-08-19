@@ -2,6 +2,7 @@ id: wb31
 display_name: "AmigaOS Workbench 3.1 (rev 40.42)"
 os_version: "3.1"
 kickstart_var: AMIGA_WB31_KICKSTART
+rom_key_var: AMIGA_WB31_ROM_KEY
 
 assembly:
   method: six_disk
