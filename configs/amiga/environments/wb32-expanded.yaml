@@ -1,0 +1,18 @@
+id: wb32-expanded
+display_name: "AmigaOS Workbench 3.2 (pre-expanded tree)"
+os_version: "3.2"
+kickstart_var: AMIGA_WB32_KICKSTART
+
+assembly:
+  # Phase 1 (transitional): import from a user-maintained expanded installation
+  # tree produced by the Hyperion installer. AMIGA_WB32_EXPANDED must not
+  # become permanent architecture.
+  # Phase 2 (target): build directly from licensed 3.2 installation media,
+  # eliminating AMIGA_WB32_EXPANDED entirely.
+  method: preexpanded
+  expanded_root_var: AMIGA_WB32_EXPANDED
+  boot_adf_var: AMIGA_WB32_ADF
+
+hdf:
+  size: 128M
+  volume_label: Workbench32

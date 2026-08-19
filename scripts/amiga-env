@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ENVS_DIR = ROOT / "build" / "amiga-envs"
 RECIPES_DIR = ROOT / "configs" / "amiga" / "environments"
+MACHINES_DIR = ROOT / "configs" / "amiga" / "machines"
 LOCAL_AMIGA_ENV = ROOT / "local" / "amiga.env"
 
 sys.path.insert(0, str(ROOT / "tools"))
@@ -57,6 +58,19 @@ def load_local_env() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Recipe loader
 # ---------------------------------------------------------------------------
+
+def load_machine_profile(machine_id: str) -> dict:
+    try:
+        import yaml
+        loader = yaml.safe_load
+    except ImportError:
+        def loader(text: str) -> dict:  # type: ignore[misc]
+            return _simple_yaml(text)
+    machine_path = MACHINES_DIR / f"{machine_id}.yaml"
+    if not machine_path.is_file():
+        raise SystemExit(f"No machine profile found: {machine_path}")
+    return loader(machine_path.read_text(encoding="utf-8"))
+
 
 def load_recipe(env_id: str) -> dict:
     try:
@@ -246,8 +260,126 @@ def assemble_six_disk(recipe: dict, local_env: dict[str, str], out_dir: Path) ->
     return tree, workbench_adf
 
 
+def assemble_wb32_adf(recipe: dict, local_env: dict[str, str], out_dir: Path,
+                      machine_modules_adf: Path) -> tuple[Path, Path]:
+    """Assemble WB3.2 from three ADFs. Returns (os_tree, boot_adf).
+
+    Assembly order:
+      1. Workbench3.2.adf      -> root (generic C/, S/Startup-Sequence, Devs/serial.device, etc.)
+      2. Machine Modules ADF   -> overlay root (machine-specific core LIBS/, DEVS/ devices, L/)
+      3. Extras3.2.adf         -> overlay root (generic additional L/ handlers, Prefs, Tools)
+    """
+    assembly = recipe["assembly"]
+    disks_spec = assembly["disks"]
+
+    def resolve(var_name: str) -> Path:
+        val = local_env.get(var_name)
+        if not val:
+            raise SystemExit(f"Required variable not set in local/amiga.env: {var_name}")
+        p = Path(val)
+        if not p.is_file():
+            raise SystemExit(f"{var_name}={val!r} — file not found")
+        return p
+
+    workbench_adf = resolve(disks_spec["workbench"])
+    modules_adf = machine_modules_adf
+    extras_adf = resolve(disks_spec["extras"])
+
+    tree = out_dir / "os-tree"
+    tree.mkdir(parents=True, exist_ok=True)
+
+    def find_existing(parent: Path, name: str) -> Path | None:
+        """Case-insensitive lookup: find an entry in parent matching name."""
+        name_lower = name.lower()
+        try:
+            for child in parent.iterdir():
+                if child.name.lower() == name_lower:
+                    return child
+        except FileNotFoundError:
+            pass
+        return None
+
+    def overlay(src_dir: Path, dest_dir: Path) -> None:
+        """Recursively merge src_dir into dest_dir, case-insensitively."""
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for item in src_dir.iterdir():
+            existing = find_existing(dest_dir, item.name)
+            if item.is_dir():
+                # Merge into existing dir (preserving its original name casing)
+                overlay(item, existing if existing else dest_dir / item.name)
+            else:
+                shutil.copy2(item, existing if existing else dest_dir / item.name)
+
+    print("  Unpacking Workbench3.2.adf -> /")
+    wb_tmp = out_dir / "tmp-workbench"
+    unpack_adf(workbench_adf, wb_tmp)
+    for item in wb_tmp.iterdir():
+        dest = tree / item.name
+        if item.is_dir() and dest.exists():
+            overlay(item, dest)
+        elif dest.exists():
+            shutil.copy2(item, dest)
+        else:
+            shutil.move(str(item), dest)
+
+    print("  Overlaying ModulesA1200.adf -> /")
+    mods_tmp = out_dir / "tmp-modules"
+    unpack_adf(modules_adf, mods_tmp)
+    for item in mods_tmp.iterdir():
+        existing = find_existing(tree, item.name)
+        if item.is_dir():
+            overlay(item, existing if existing else tree / item.name)
+        else:
+            shutil.copy2(item, existing if existing else tree / item.name)
+
+    print("  Overlaying Extras3.2.adf L/ -> /L")
+    extras_tmp = out_dir / "tmp-extras"
+    unpack_adf(extras_adf, extras_tmp)
+    extras_l = extras_tmp / "L"
+    if extras_l.is_dir():
+        existing_l = find_existing(tree, "L")
+        overlay(extras_l, existing_l if existing_l else tree / "L")
+
+    # Clean up xdftool metadata sidecars.
+    for pattern in ("*.blkdev", "*.bootcode", "*.xdfmeta"):
+        for sidecar in tree.rglob(pattern):
+            sidecar.unlink()
+
+    if assembly.get("startup_patch") == "remove_addbuffers":
+        for name in ("S/Startup-Sequence", "S/Startup-sequence"):
+            ss = tree / name
+            if ss.is_file():
+                text = ss.read_text(encoding="latin-1")
+                lines = [l for l in text.splitlines(True) if "AddBuffers" not in l]
+                ss.write_text("".join(lines), encoding="latin-1")
+                print("  Patched S/Startup-Sequence: removed AddBuffers line")
+                break
+
+    # Remove temp unpack dirs.
+    for d in (wb_tmp, mods_tmp, extras_tmp):
+        shutil.rmtree(d, ignore_errors=True)
+
+    return tree, workbench_adf
+
+
+_CD_ROM_ONLY = frozenset({"ADF", "GlowIconsCollection", "Labels", "ROM"})
+
+
+def _is_amiga_filename(name: str) -> bool:
+    """Return True if the filename can be encoded as Latin-1 (i.e. valid on AmigaOS FFS)."""
+    try:
+        name.encode("latin-1")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
 def assemble_preexpanded(recipe: dict, local_env: dict[str, str], out_dir: Path) -> tuple[Path, Path]:
-    """Use an existing expanded OS tree (transitional wb32 method)."""
+    """Use an existing expanded OS tree (transitional wb32 method).
+
+    Copies only the AmigaOS content (not CD-ROM installer artifacts) to a
+    staging directory so build-amiga-hdf receives a clean FFS-compatible tree.
+    """
     assembly = recipe["assembly"]
     expanded_var = assembly["expanded_root_var"]
     boot_adf_var = assembly["boot_adf_var"]
@@ -264,14 +396,41 @@ def assemble_preexpanded(recipe: dict, local_env: dict[str, str], out_dir: Path)
             f"{boot_adf_var} must point to the Workbench ADF. "
             f"Set it in local/amiga.env."
         )
-    return Path(expanded_root), Path(boot_adf_val)
+
+    def _ignore(directory: str, names: list[str]) -> set[str]:
+        skipped: set[str] = set()
+        for name in names:
+            if name in _CD_ROM_ONLY or not _is_amiga_filename(name):
+                skipped.add(name)
+        return skipped
+
+    print("  Copying expanded OS tree (excluding CD-ROM artifacts) ...")
+    tree = out_dir / "os-tree"
+    if tree.exists():
+        shutil.rmtree(tree)
+    shutil.copytree(Path(expanded_root), tree, ignore=_ignore)
+
+    # The CD-ROM preinstallation tree has no serial.device — extract it from
+    # the boot ADF (the same source the legacy --os-root path used).
+    devs_dir = tree / "Devs"
+    devs_dir.mkdir(exist_ok=True)
+    serial_dev = devs_dir / "serial.device"
+    serial_dev.unlink(missing_ok=True)
+    cmd = [*xdftool_cmd(), str(Path(boot_adf_val)), "read", "Devs/serial.device", str(serial_dev)]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0 or not serial_dev.is_file():
+        print("  Warning: could not extract serial.device from boot ADF", file=sys.stderr)
+    else:
+        print("  Extracted serial.device from boot ADF")
+
+    return tree, Path(boot_adf_val)
 
 
 # ---------------------------------------------------------------------------
 # build
 # ---------------------------------------------------------------------------
 
-def cmd_build(env_id: str, force: bool) -> None:
+def cmd_build(env_id: str, force: bool, machine_id: str | None) -> None:
     recipe_path = RECIPES_DIR / f"{env_id}.yaml"
     recipe = load_recipe(env_id)
 
@@ -281,6 +440,38 @@ def cmd_build(env_id: str, force: bool) -> None:
             f"Environment '{env_id}' has no assembly recipe yet (method: TBD).\n"
             f"Edit {recipe_path} to define the assembly method."
         )
+
+    assembly = recipe.get("assembly", {})
+    machine_modules_required = assembly.get("machine_modules") == "required"
+
+    # Resolve machine profile and modules ADF if needed.
+    machine_profile: dict = {}
+    machine_modules_adf: Path | None = None
+    if machine_modules_required:
+        if not machine_id:
+            raise SystemExit(
+                f"Environment '{env_id}' requires a machine (machine_modules: required).\n"
+                f"Specify one with --machine, e.g.: scripts/amiga-env build {env_id} --machine a1200-030"
+            )
+        machine_profile = load_machine_profile(machine_id)
+        os_modules = machine_profile.get("os_modules", {})
+        modules_var = os_modules.get(env_id)
+        if not modules_var:
+            raise SystemExit(
+                f"Machine profile '{machine_id}' has no os_modules entry for '{env_id}'.\n"
+                f"Add 'os_modules: {{{env_id}: AMIGA_WB32_ADF_MODULES_XXX}}' to "
+                f"configs/amiga/machines/{machine_id}.yaml"
+            )
+        local_env_early = load_local_env()
+        modules_val = local_env_early.get(modules_var)
+        if not modules_val or not Path(modules_val).is_file():
+            raise SystemExit(
+                f"{modules_var} must point to the machine Modules ADF. "
+                f"Set it in local/amiga.env."
+            )
+        machine_modules_adf = Path(modules_val)
+    elif machine_id:
+        print(f"Note: --machine {machine_id!r} ignored (environment '{env_id}' is machine-agnostic).")
 
     local_env = load_local_env()
     if not local_env and not LOCAL_AMIGA_ENV.is_file():
@@ -306,19 +497,24 @@ def cmd_build(env_id: str, force: bool) -> None:
         if rom_key_val:
             rom_key = Path(rom_key_val)
 
-    out_dir = ENVS_DIR / env_id
+    # Output path: <env_id>/ for machine-agnostic, <env_id>/<machine_id>/ when machine required.
+    if machine_modules_required and machine_id:
+        out_dir = ENVS_DIR / env_id / machine_id
+    else:
+        out_dir = ENVS_DIR / env_id
     out_dir.mkdir(parents=True, exist_ok=True)
     base_hdf = out_dir / "base.hdf"
     manifest_path = out_dir / "manifest.json"
     stamp_path = out_dir / ".stamp"
 
     # Collect media files for hashing (done before assembly to avoid hashing temps).
-    assembly = recipe.get("assembly", {})
     media_files: list[Path] = [kickstart]
     if rom_key and rom_key.is_file():
         media_files.append(rom_key)
+    if machine_modules_adf and machine_modules_adf.is_file():
+        media_files.append(machine_modules_adf)
 
-    if method == "six_disk":
+    if method in ("six_disk", "wb32_adf"):
         disks_spec = assembly.get("disks", {})
         for var in disks_spec.values():
             val = local_env.get(var, "")
@@ -331,17 +527,21 @@ def cmd_build(env_id: str, force: bool) -> None:
 
     input_hash = compute_input_hash(recipe_path, media_files)
 
+    build_label = f"{env_id}/{machine_id}" if machine_id and machine_modules_required else env_id
     if not force and stamp_path.is_file() and stamp_path.read_text().strip() == input_hash:
-        print(f"Environment '{env_id}' is up to date (stamp matches). Use --force to rebuild.")
+        print(f"Environment '{build_label}' is up to date (stamp matches). Use --force to rebuild.")
         return
 
-    print(f"Building environment: {env_id}")
+    print(f"Building environment: {build_label}")
 
     with tempfile.TemporaryDirectory(prefix=f"amiga-env-{env_id}-") as tmp:
         work = Path(tmp)
 
         if method == "six_disk":
             os_tree, boot_adf = assemble_six_disk(recipe, local_env, work)
+        elif method == "wb32_adf":
+            assert machine_modules_adf is not None
+            os_tree, boot_adf = assemble_wb32_adf(recipe, local_env, work, machine_modules_adf)
         elif method == "preexpanded":
             os_tree, boot_adf = assemble_preexpanded(recipe, local_env, work)
         else:
@@ -367,6 +567,7 @@ def cmd_build(env_id: str, force: bool) -> None:
 
     manifest = {
         "id": env_id,
+        "machine": machine_id if machine_modules_required and machine_id else None,
         "os_version": recipe.get("os_version", ""),
         "base_hdf": str(base_hdf.resolve()),
         "kickstart": str(kickstart.resolve()),
@@ -384,19 +585,27 @@ def cmd_build(env_id: str, force: bool) -> None:
 # show
 # ---------------------------------------------------------------------------
 
-def cmd_show(env_id: str, field: str) -> None:
-    manifest_path = ENVS_DIR / env_id / "manifest.json"
+def _manifest_path(env_id: str, machine_id: str | None) -> Path:
+    if machine_id:
+        return ENVS_DIR / env_id / machine_id / "manifest.json"
+    return ENVS_DIR / env_id / "manifest.json"
+
+
+def cmd_show(env_id: str, field: str, machine_id: str | None) -> None:
+    manifest_path = _manifest_path(env_id, machine_id)
+    label = f"{env_id}/{machine_id}" if machine_id else env_id
     if not manifest_path.is_file():
+        machine_flag = f" --machine {machine_id}" if machine_id else ""
         raise SystemExit(
-            f"Environment '{env_id}' has not been built yet.\n"
-            f"Run: scripts/amiga-env build {env_id}"
+            f"Environment '{label}' has not been built yet.\n"
+            f"Run: scripts/amiga-env build {env_id}{machine_flag}"
         )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if field not in manifest:
         raise SystemExit(f"Unknown manifest field: {field!r}. Available: {', '.join(manifest)}")
     value = manifest[field]
     if value is None:
-        raise SystemExit(f"Field {field!r} is not set for environment '{env_id}'")
+        raise SystemExit(f"Field {field!r} is not set for environment '{label}'")
     print(value)
 
 
@@ -409,47 +618,75 @@ def cmd_status() -> None:
     if not recipes:
         print("No environment recipes found.")
         return
+    local_env = load_local_env()
     for recipe_path in recipes:
         env_id = recipe_path.stem
-        manifest_path = ENVS_DIR / env_id / "manifest.json"
-        stamp_path = ENVS_DIR / env_id / ".stamp"
-        if not manifest_path.is_file():
-            print(f"  {env_id:12s}  NOT BUILT")
-            continue
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        built_at = manifest.get("built_at", "?")
-        hdf = Path(manifest.get("base_hdf", ""))
-        if not hdf.is_file():
-            print(f"  {env_id:12s}  MISSING HDF  (was built at {built_at})")
-            continue
-        # Quick up-to-date check using cached stamp.
         try:
             recipe = load_recipe(env_id)
-            local_env = load_local_env()
-            assembly = recipe.get("assembly", {})
-            method = assembly.get("method", "")
-            kickstart_var = recipe.get("kickstart_var", "")
-            kickstart_val = local_env.get(kickstart_var, "")
-            media_files: list[Path] = []
-            if kickstart_val and Path(kickstart_val).is_file():
-                media_files.append(Path(kickstart_val))
-            if method == "six_disk":
-                for var in assembly.get("disks", {}).values():
-                    val = local_env.get(var, "")
-                    if val and Path(val).is_file():
-                        media_files.append(Path(val))
-            elif method == "preexpanded":
-                boot_adf_val = local_env.get(assembly.get("boot_adf_var", ""), "")
-                if boot_adf_val and Path(boot_adf_val).is_file():
-                    media_files.append(Path(boot_adf_val))
-            current_hash = compute_input_hash(recipe_path, media_files)
-            stored_hash = stamp_path.read_text().strip() if stamp_path.is_file() else ""
-            stale = current_hash != stored_hash
-        except Exception:
-            stale = True
+        except SystemExit:
+            print(f"  {env_id:12s}  ERROR loading recipe")
+            continue
 
-        state = "STALE" if stale else "OK"
-        print(f"  {env_id:12s}  {state:6s}  built {built_at[:19]}")
+        assembly = recipe.get("assembly", {})
+        method = assembly.get("method", "")
+        machine_modules_required = assembly.get("machine_modules") == "required"
+
+        # Determine which output directories to check (machine-keyed or plain).
+        env_base = ENVS_DIR / env_id
+        if machine_modules_required:
+            # Enumerate all machine sub-directories that have been built.
+            candidates = [(d.name, d) for d in env_base.iterdir() if d.is_dir()] if env_base.is_dir() else []
+            if not candidates:
+                print(f"  {env_id:12s}  NOT BUILT  (requires --machine)")
+                continue
+        else:
+            candidates = [(None, env_base)]
+
+        for machine_id, out_dir in candidates:
+            label = f"{env_id}/{machine_id}" if machine_id else env_id
+            manifest_path = out_dir / "manifest.json"
+            stamp_path = out_dir / ".stamp"
+            if not manifest_path.is_file():
+                print(f"  {label:20s}  NOT BUILT")
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            built_at = manifest.get("built_at", "?")
+            hdf = Path(manifest.get("base_hdf", ""))
+            if not hdf.is_file():
+                print(f"  {label:20s}  MISSING HDF  (was built at {built_at})")
+                continue
+            try:
+                kickstart_var = recipe.get("kickstart_var", "")
+                kickstart_val = local_env.get(kickstart_var, "")
+                media_files: list[Path] = []
+                if kickstart_val and Path(kickstart_val).is_file():
+                    media_files.append(Path(kickstart_val))
+                if method in ("six_disk", "wb32_adf"):
+                    for var in assembly.get("disks", {}).values():
+                        val = local_env.get(var, "")
+                        if val and Path(val).is_file():
+                            media_files.append(Path(val))
+                    if machine_id and machine_modules_required:
+                        try:
+                            mp = load_machine_profile(machine_id)
+                            mod_var = mp.get("os_modules", {}).get(env_id, "")
+                            mod_val = local_env.get(mod_var, "")
+                            if mod_val and Path(mod_val).is_file():
+                                media_files.append(Path(mod_val))
+                        except SystemExit:
+                            pass
+                elif method == "preexpanded":
+                    boot_adf_val = local_env.get(assembly.get("boot_adf_var", ""), "")
+                    if boot_adf_val and Path(boot_adf_val).is_file():
+                        media_files.append(Path(boot_adf_val))
+                current_hash = compute_input_hash(recipe_path, media_files)
+                stored_hash = stamp_path.read_text().strip() if stamp_path.is_file() else ""
+                stale = current_hash != stored_hash
+            except Exception:
+                stale = True
+
+            state = "STALE" if stale else "OK"
+            print(f"  {label:20s}  {state:6s}  built {built_at[:19]}")
 
 
 # ---------------------------------------------------------------------------
@@ -463,19 +700,23 @@ def main() -> int:
 
     p_build = sub.add_parser("build", help="build a base HDF for an environment")
     p_build.add_argument("env_id", help="environment id (e.g. wb31, wb32)")
+    p_build.add_argument("--machine", dest="machine_id", default=None,
+                         help="machine profile id (required for environments with machine_modules: required)")
     p_build.add_argument("--force", action="store_true", help="rebuild even if up to date")
 
     p_show = sub.add_parser("show", help="print a field from the environment manifest")
     p_show.add_argument("env_id", help="environment id")
     p_show.add_argument("field", help="manifest field (base_hdf, kickstart, rom_key, ...)")
+    p_show.add_argument("--machine", dest="machine_id", default=None,
+                        help="machine id used when the env was built with --machine")
 
     sub.add_parser("status", help="show build status for all environments")
 
     args = parser.parse_args()
     if args.command == "build":
-        cmd_build(args.env_id, args.force)
+        cmd_build(args.env_id, args.force, args.machine_id)
     elif args.command == "show":
-        cmd_show(args.env_id, args.field)
+        cmd_show(args.env_id, args.field, args.machine_id)
     elif args.command == "status":
         cmd_status()
     else:

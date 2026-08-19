@@ -1,17 +1,22 @@
 id: wb32
-display_name: "AmigaOS Workbench 3.2"
+display_name: "AmigaOS Workbench 3.2 (rev 47.x)"
 os_version: "3.2"
 kickstart_var: AMIGA_WB32_KICKSTART
 
 assembly:
-  # Phase 1 (transitional): import from a user-maintained expanded installation
-  # tree produced by the Hyperion installer. AMIGA_WB32_EXPANDED must not
-  # become permanent architecture.
-  # Phase 2 (target): build directly from licensed 3.2 installation media,
-  # eliminating AMIGA_WB32_EXPANDED entirely.
-  method: preexpanded
-  expanded_root_var: AMIGA_WB32_EXPANDED
-  boot_adf_var: AMIGA_WB32_ADF
+  # Two-disk generic base: Workbench3.2.adf (generic tools, utility libs, Startup-Sequence,
+  # serial.device) + Extras3.2.adf (additional L/ filesystem handlers, Prefs, Tools).
+  # Core OS libraries (graphics.library, intuition.library, exec.library, dos.library, etc.)
+  # and hardware devices are machine-specific and live in each machine's ModulesXXXX_3.2.adf.
+  # The machine profile declares os_modules.wb32 pointing to the correct Modules ADF for
+  # that hardware; this environment requires a machine to be specified at build time.
+  method: wb32_adf
+  disks:
+    workbench: AMIGA_WB32_ADF_WORKBENCH   # boot block source; generic C/, Devs/, Libs/ (utility)
+    extras:    AMIGA_WB32_ADF_EXTRAS       # generic L/ handlers, Prefs panels, Tools
+  machine_modules: required                # machine profile must supply os_modules.wb32
+  boot_adf: disks.workbench
+  startup_patch: remove_addbuffers         # strip floppy-only AddBuffers DF0: line
 
 hdf:
   size: 128M

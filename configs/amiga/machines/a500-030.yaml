@@ -1,17 +1,17 @@
-id: a1200-030
-display_name: "Amiga 1200 (68030)"
+id: a500-030
+display_name: "Amiga 500 (68030)"
 uae_config: base-68030.uae
 
 # UAE/Amiberry key=value settings applied as command-line overrides after the
 # base uae_config is loaded.  Keys and values are passed verbatim as -s flags.
 settings:
-  chipset: aga
-  chipmem_size: 4
-  fastmem_size: 8
+  chipset: ecs
+  chipmem_size: 2
+  fastmem_size: 2
   cpu_speed: max
 
 # Machine-specific OS module disks for environments that declare
 # machine_modules: required.  Key = environment id; value = local/amiga.env
 # variable pointing to the correct Modules ADF for this hardware.
 os_modules:
-  wb32: AMIGA_WB32_ADF_MODULES_A1200
+  wb32: AMIGA_WB32_ADF_MODULES_A500

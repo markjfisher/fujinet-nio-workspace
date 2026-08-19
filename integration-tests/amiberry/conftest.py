@@ -220,14 +220,34 @@ def load_suite_config() -> dict[str, Any]:
         return tomllib.load(stream)
 
 
-def load_env_manifest(env_id: str) -> dict[str, Any]:
-    """Load build/amiga-envs/<env_id>/manifest.json, raising SystemExit with a helpful message."""
-    manifest_path = ROOT / "build" / "amiga-envs" / env_id / "manifest.json"
-    if not manifest_path.is_file():
-        raise SystemExit(
-            f"AmigaOS environment '{env_id}' has not been built.\n"
-            f"Run: scripts/amiga-env build {env_id}"
-        )
+def load_env_manifest(env_id: str, machine_id: str | None = None) -> dict[str, Any]:
+    """Load the manifest.json for a built environment.
+
+    For machine-agnostic environments (wb31): build/amiga-envs/<env_id>/manifest.json
+    For machine-keyed environments (wb32):    build/amiga-envs/<env_id>/<machine_id>/manifest.json
+    """
+    envs_root = ROOT / "build" / "amiga-envs"
+    if machine_id:
+        machine_path = envs_root / env_id / machine_id / "manifest.json"
+        agnostic_path = envs_root / env_id / "manifest.json"
+        if machine_path.is_file():
+            manifest_path = machine_path
+        elif agnostic_path.is_file():
+            # Environment is machine-agnostic; --amiga-machine selects hardware only.
+            manifest_path = agnostic_path
+        else:
+            raise SystemExit(
+                f"AmigaOS environment '{env_id}/{machine_id}' has not been built.\n"
+                f"Run: scripts/amiga-env build {env_id} --machine {machine_id}\n"
+                f"Or (if {env_id} is machine-agnostic): scripts/amiga-env build {env_id}"
+            )
+    else:
+        manifest_path = envs_root / env_id / "manifest.json"
+        if not manifest_path.is_file():
+            raise SystemExit(
+                f"AmigaOS environment '{env_id}' has not been built.\n"
+                f"Run: scripts/amiga-env build {env_id}"
+            )
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
@@ -235,19 +255,97 @@ def load_cases() -> dict[str, dict]:
     return {case["name"]: case for case in load_suite_config()["test"]}
 
 
+def _load_machine_profile_yaml(machine_id: str) -> dict[str, Any]:
+    """Load a machine YAML profile, returning a nested dict.
+
+    The ``uae_config`` field, if present, is resolved to an absolute path
+    relative to ``configs/amiga/`` (the amiga config root), where .uae files
+    live alongside the machines/ subdirectory.
+
+    Uses PyYAML if available; otherwise uses a minimal two-level parser
+    sufficient for the machine profile format (scalar values and one level
+    of nested dicts — no lists, no anchors).
+    """
+    amiga_cfg_dir = ROOT / "configs" / "amiga"
+    machine_path = amiga_cfg_dir / "machines" / f"{machine_id}.yaml"
+    if not machine_path.is_file():
+        raise FileNotFoundError(f"Machine profile not found: {machine_path}")
+    text = machine_path.read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore[import]
+        profile = yaml.safe_load(text)
+    except ImportError:
+        # Minimal fallback: parse two-level key: value / key:\n  subkey: value
+        profile: dict[str, Any] = {}
+        current_dict: dict[str, Any] | None = None
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            if ":" not in stripped:
+                continue
+            k, _, v = stripped.partition(":")
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if indent == 0:
+                if v:
+                    profile[k] = v
+                    current_dict = None
+                else:
+                    current_dict = {}
+                    profile[k] = current_dict
+            elif current_dict is not None:
+                try:
+                    current_dict[k] = int(v)
+                except (ValueError, TypeError):
+                    current_dict[k] = v
+
+    # Resolve uae_config to an absolute path (relative to configs/amiga/).
+    uae_config = profile.get("uae_config", "")
+    if uae_config:
+        resolved = (amiga_cfg_dir / uae_config).resolve()
+        profile["uae_config"] = str(resolved)
+
+    return profile
+
+
 def machine_environment(machine: dict[str, Any]) -> dict[str, str]:
-    machine_args = machine.get("args", [])
-    machine_settings = machine.get("settings", [])
-    if not (isinstance(machine_args, list) and
-            all(isinstance(value, str) for value in machine_args)):
-        raise ValueError("[amiberry].args must be an array of strings")
-    if not (isinstance(machine_settings, list) and
-            all(isinstance(value, str) for value in machine_settings)):
-        raise ValueError("[amiberry].settings must be an array of strings")
-    return {
-        "AMIBERRY_EXTRA_ARGS": shlex.join(machine_args),
-        "AMIBERRY_EXTRA_SETTINGS": ";".join(machine_settings),
+    """Translate a machine profile dict into AMIBERRY_* environment variables.
+
+    Accepts two formats:
+    - YAML profile (settings is a dict of {key: value}): machine-specific UAE
+      overrides.  Runtime invocation args (AMIBERRY_EXTRA_ARGS) come from the
+      suite config [amiberry].args so they are not baked into the machine
+      profile.
+    - Legacy tests.toml format (settings is a list[str] of "key=value"):
+      used when --amiga-machine is not given.
+    """
+    settings = machine.get("settings", {})
+    if isinstance(settings, dict):
+        # YAML machine profile: convert {key: value} to "key=value" list
+        settings_list = [f"{k}={v}" for k, v in settings.items()]
+        # Invocation flags (e.g. -w -1) live in tests.toml, not the machine profile
+        suite_args: list[str] = list(load_suite_config().get("amiberry", {}).get("args", []))
+    else:
+        # Legacy tests.toml format
+        if not (isinstance(settings, list) and
+                all(isinstance(v, str) for v in settings)):
+            raise ValueError("[amiberry].settings must be an array of strings")
+        settings_list = list(settings)
+        suite_args = machine.get("args", [])
+        if not (isinstance(suite_args, list) and
+                all(isinstance(v, str) for v in suite_args)):
+            raise ValueError("[amiberry].args must be an array of strings")
+
+    result: dict[str, str] = {
+        "AMIBERRY_EXTRA_ARGS": shlex.join(suite_args),
+        "AMIBERRY_EXTRA_SETTINGS": ";".join(settings_list),
     }
+    uae_config = machine.get("uae_config", "")
+    if uae_config:
+        result["AMIBERRY_UAE_CONFIG"] = uae_config
+    return result
 
 
 def build_nio_binary(environment: dict[str, str]) -> None:
@@ -389,14 +487,18 @@ def amiga_environment(pytestconfig: Any) -> dict[str, str]:
     missing: list[str] = []
 
     env_id: str | None = pytestconfig.getoption("--amiga-env")
+    machine_id: str | None = pytestconfig.getoption("--amiga-machine")
     if env_id:
         # New path: load OS root and kickstart from the built environment manifest.
-        manifest = load_env_manifest(env_id)
+        # Pass machine_id when given — machine-keyed envs live under <env_id>/<machine_id>/.
+        manifest = load_env_manifest(env_id, machine_id)
         base_hdf = Path(manifest["base_hdf"])
+        label = f"{env_id}/{machine_id}" if machine_id else env_id
+        machine_flag = f" --machine {machine_id}" if machine_id else ""
         if not base_hdf.is_file():
             pytest.skip(
-                f"AmigaOS environment '{env_id}' base HDF is missing: {base_hdf}\n"
-                f"Run: scripts/amiga-env build {env_id}"
+                f"AmigaOS environment '{label}' base HDF is missing: {base_hdf}\n"
+                f"Run: scripts/amiga-env build {env_id}{machine_flag}"
             )
         environment["AMIGA_ENV_ID"] = env_id
         environment["AMIGA_ENV_BASE_HDF"] = str(base_hdf)
@@ -438,7 +540,13 @@ def amiga_cases() -> dict[str, dict]:
 
 
 @pytest.fixture(scope="session")
-def amiga_machine() -> dict[str, Any]:
+def amiga_machine(pytestconfig: Any) -> dict[str, Any]:
+    machine_id: str | None = pytestconfig.getoption("--amiga-machine")
+    if machine_id:
+        try:
+            return _load_machine_profile_yaml(machine_id)
+        except FileNotFoundError as exc:
+            pytest.skip(str(exc))
     return dict(load_suite_config().get("amiberry", {}))
 
 

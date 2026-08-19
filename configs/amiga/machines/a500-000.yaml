@@ -1,7 +1,11 @@
 id: a500-000
 display_name: "Amiga 500 (68000)"
-cpu: 68000
-chipset: ocs
-chip_ram: 512K
-fast_ram: 0
-compatible: true
+uae_config: base.uae
+
+settings:
+  cpu_model: 68000
+  chipset: ocs
+  chipmem_size: 1
+  fastmem_size: 0
+  cpu_speed: real
+  cpu_compatible: true
