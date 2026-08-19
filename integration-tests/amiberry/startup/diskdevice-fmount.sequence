@@ -44,11 +44,6 @@ C:Echo "COPY RC=$RC" >DH0:fmount-rw-copy.result
 C:fujinet-mount --status 2 >DH0:fmount-rw-status.result
 C:Echo "STATUS RW RC=$RC" >>DH0:fmount-rw-status.result
 
-C:Assign DN2: DISMOUNT
-
-C:Echo "before-dn2-fumount" >DH0:fmount-rendezvous.marker
-C:Ask "Diagnostic gate: press Return to FUMOUNT DN2"
-
 C:FUMOUNT DN2: >DH0:fmount-rw-fumount.result
 C:Echo "FUMOUNT RW RC=$RC" >>DH0:fmount-rw-fumount.result
 C:Echo "after-dn2-fumount" >DH0:fmount-rw-fumount.done
@@ -56,6 +51,9 @@ C:Echo "after-dn2-fumount" >DH0:fmount-rw-fumount.done
 C:fujinet-mount --status 2 >DH0:fmount-rw-absent.result
 C:Echo "STATUS ABSENT RC=$RC" >>DH0:fmount-rw-absent.result
 C:Echo "after-rw-absent" >DH0:fmount-rw-absent.done
+
+C:fujinet-mount --status 2 >DH0:pre-remount-status.result
+C:fujinet-mount --trace >DH0:pre-remount-trace.result
 
 C:FMOUNT 13 DN2: RW >DH0:fmount-rw-remount.result
 

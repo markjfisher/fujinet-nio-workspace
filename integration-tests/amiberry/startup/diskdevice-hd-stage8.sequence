@@ -16,7 +16,6 @@ C:FMOUNT 18 DN0: RW >DH0:hd-stage8-rw-mount.result
 C:Copy DH0:hd-persist-source.txt TO DN0:HDPERSIST.TXT
 C:Echo "COPY HD RC=$RC" >DH0:hd-stage8-rw-copy.result
 C:fujinet-mount --status 0 >DH0:hd-stage8-rw-status.result
-C:Assign DN0: DISMOUNT
 C:FUMOUNT DN0: >DH0:hd-stage8-rw-fumount.result
 C:fujinet-mount --status 0 >DH0:hd-stage8-rw-absent.result
 C:FMOUNT 18 DN0: RW >DH0:hd-stage8-rw-remount.result
