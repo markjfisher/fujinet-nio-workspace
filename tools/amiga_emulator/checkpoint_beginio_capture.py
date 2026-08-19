@@ -50,7 +50,9 @@ def main() -> int:
                 record = rendezvous.capture_raw(socket_path, transcript, registers["A1"])
                 (run_dir / "checkpoint-beginio-capture.json").write_text(
                     json.dumps(record, indent=2) + "\n", encoding="utf-8")
-                rendezvous.request(socket_path, transcript, "DEBUG_CONTINUE")
+                rendezvous.request(socket_path, transcript, "CLEAR_BREAKPOINT",
+                                   hex(vectors.begin_io))
+                rendezvous.request(socket_path, transcript, "DEBUG_DEACTIVATE")
                 return 0
             time.sleep(0.02)
         raise TimeoutError("target BeginIO was not observed after guest release")

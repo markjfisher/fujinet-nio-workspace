@@ -69,7 +69,12 @@ C:EndIf
 C:fumount DN0: >DH0:fumount-eject.result
 C:Echo "FUMOUNT RC=$RC" >>DH0:fumount-eject.result
 C:fujinet-mount --status 0 >DH0:fumount-status.result
-C:FLS host:/amiga-e2e-complete/diskdevice-fmount >NIL:
+
+C:Echo "BEFORE FLS" >DH0:fmount-completion-marker.result
+C:FLS host:/amiga-e2e-complete/diskdevice-fmount >>DH0:fmount-completion-marker.result
+C:Echo "FLS RC=$RC" >>DH0:fmount-completion-marker.result
+C:Echo "AFTER FLS" >>DH0:fmount-completion-marker.result
+
 C:EndIf
 C:Type DH0:fmount-load.result
 C:Type DH0:fmount-mount.result
@@ -103,4 +108,5 @@ C:Type DH0:fmount-rw-persist.result
 C:Type DH0:fmount-rw-status.result
 C:Type DH0:fumount-eject.result
 C:Type DH0:fumount-status.result
+C:Type DH0:fmount-completion.result
 C:Echo "E2E COMPLETE"
