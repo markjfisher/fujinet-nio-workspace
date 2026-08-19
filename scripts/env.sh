@@ -4,11 +4,8 @@
 CD=cd
 
 pathadd_end() {
-  if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
-    export PATH="$PATH:$1"
-    return 0 # success
-  fi
-  return 1 # directory doesn't exist or path already added
+  [ -d "$1" ] || return 1
+  [[ ":$PATH:" == *":$1:"* ]] || export PATH="$PATH:$1"
 }
 
 workspace_dir() {
