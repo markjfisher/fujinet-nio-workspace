@@ -55,6 +55,7 @@ class MonitorSnapshot:
     deadline: float
     debugger_mode: bool = False
     debugger_paused: bool = False
+    capture_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class CompletionLogState:
 
 
 def evaluate_monitor_state(snapshot: MonitorSnapshot) -> tuple[str, str | None]:
-    if snapshot.requester_seen:
+    if snapshot.requester_seen and not snapshot.capture_mode:
         return ("failure", "requester")
     if snapshot.runner_returncode is not None:
         return ("failure", "runner_exit")
@@ -690,12 +691,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
         screenshot_quiet = float(case.get("screenshot_quiet", 15))
         activity_timeout = float(case.get("activity_timeout", test_env.get("AMIGA_E2E_ACTIVITY_TIMEOUT", "30")))
         debugger_mode = test_env.get("AMIGA_E2E_DEBUGGER", "0") == "1"
+        capture_mode = test_env.get("AMIGA_E2E_CHECKPOINT_BEGINIO_CAPTURE", "0") == "1"
         screenshot_interval = float(case.get("screenshot_interval", 1.0))
         external_activity_evidence = bool(case.get("silent_peer") or case.get("native_floppy"))
         # How long after boot with NO screen movement before giving up.
         no_activity_timeout = float(case.get("no_activity_timeout", 20))
         runner_timeout = str(
-            3600 if debugger_mode else
+            3600 if (debugger_mode or capture_mode) else
             case.get("timeout", os.environ.get("AMIGA_E2E_TIMEOUT", "20"))
         )
 
@@ -802,9 +804,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
             boot_time = time.monotonic()
             activity_deadline = boot_time + activity_timeout
             completion_seen = False
-            if debugger_mode:
-                # The external controller owns the debugger session duration;
-                # retain the normal deadline as a fallback after it resumes.
+            if debugger_mode or capture_mode:
+                # The external controller owns the session duration; retain the
+                # normal deadline as a fallback after the controller finishes.
                 activity_deadline = boot_time + max(activity_timeout, 3600)
 
             while time.monotonic() < activity_deadline:
@@ -875,7 +877,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     _ipc_screenshot(ipc_sock, shot)
 
                     if shot.is_file():
-                        # Requester detection — fail immediately.
+                        # Requester detection — save evidence; in capture mode,
+                        # continue running so the diagnostic controller can finish.
                         if _has_requester(shot):
                             requester_seen = True
                             shutil.copy2(shot, run_dir / "amiberry-screen.png")
@@ -887,8 +890,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
                                 _ipc_screenshot(
                                     ipc_sock, run_dir / "amiberry-requester-held.png"
                                 )
-                            termination_reason = "requester"
-                            break
+                            if not capture_mode:
+                                termination_reason = "requester"
+                                break
 
                         # Screen-change detection.
                         # Only count a change as meaningful when the screenshot
@@ -911,6 +915,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     deadline=activity_deadline,
                     debugger_mode=debugger_mode,
                     debugger_paused=debugger_paused,
+                    capture_mode=capture_mode,
                 ))
                 if action == "success":
                     termination_reason = reason

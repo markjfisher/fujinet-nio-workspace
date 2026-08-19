@@ -50,24 +50,28 @@ def _value(response: str) -> int:
     return int(token, 0)
 
 
-def read_word(socket_path: Path, address: int, width: int) -> int:
-    return _value(ipc.request(socket_path, "READ_MEM", hex(address), str(width)))
+def read_word(socket_path: Path, address: int, width: int,
+              *, request_fn=None) -> int:
+    fn = request_fn if request_fn is not None else ipc.request
+    return _value(fn(socket_path, "READ_MEM", hex(address), str(width)))
 
 
-def read_vector(socket_path: Path, base: int, offset: int) -> int:
+def read_vector(socket_path: Path, base: int, offset: int,
+                *, request_fn=None) -> int:
     """Decode an Amiga six-byte JMP absolute-long library vector."""
-    opcode = read_word(socket_path, base + offset, 2)
+    opcode = read_word(socket_path, base + offset, 2, request_fn=request_fn)
     if opcode != 0x4EF9:
         raise ValueError(f"unexpected vector opcode {opcode:#x} at {base + offset:#x}")
-    return read_word(socket_path, base + offset + 2, 4)
+    return read_word(socket_path, base + offset + 2, 4, request_fn=request_fn)
 
 
-def read_c_string(socket_path: Path, address: int, limit: int = 64) -> str:
+def read_c_string(socket_path: Path, address: int, limit: int = 64,
+                  *, request_fn=None) -> str:
     if not plausible_address(address, 1):
         raise ValueError(f"implausible string pointer {address:#x}")
     data = bytearray()
     for offset in range(limit):
-        value = read_word(socket_path, address + offset, 1)
+        value = read_word(socket_path, address + offset, 1, request_fn=request_fn)
         if value == 0:
             break
         data.append(value)
@@ -75,12 +79,18 @@ def read_c_string(socket_path: Path, address: int, limit: int = 64) -> str:
 
 
 def resolve_device(socket_path: Path, name: str = "fujinet-disk.device",
-                   max_nodes: int = 256) -> tuple[int, DeviceVectors, list[str]]:
-    """Walk Exec's live device list and resolve one device's vectors."""
-    exec_base = read_word(socket_path, 4, 4)
+                   max_nodes: int = 256,
+                   *, request_fn=None) -> tuple[int, DeviceVectors, list[str]]:
+    """Walk Exec's live device list and resolve one device's vectors.
+
+    *request_fn*, if provided, is called as ``request_fn(socket_path, command,
+    *args)`` instead of ``ipc.request``.  Pass a logging wrapper to capture
+    READ_MEM traffic in a transcript.
+    """
+    exec_base = read_word(socket_path, 4, 4, request_fn=request_fn)
     if not plausible_address(exec_base, 2):
         raise ValueError(f"implausible ExecBase pointer {exec_base:#x}")
-    head = read_word(socket_path, exec_base + EXEC_DEVICE_LIST, 4)
+    head = read_word(socket_path, exec_base + EXEC_DEVICE_LIST, 4, request_fn=request_fn)
     if head and not plausible_address(head, 2):
         raise ValueError(f"implausible device-list head {head:#x}")
     seen: set[int] = set()
@@ -92,23 +102,23 @@ def resolve_device(socket_path: Path, name: str = "fujinet-disk.device",
         if not plausible_address(node, 2):
             raise ValueError(f"implausible device-list node {node:#x}")
         seen.add(node)
-        name_ptr = read_word(socket_path, node + NODE_NAME, 4)
+        name_ptr = read_word(socket_path, node + NODE_NAME, 4, request_fn=request_fn)
         if name_ptr and not plausible_address(name_ptr, 1):
             raise ValueError(f"implausible ln_Name pointer {name_ptr:#x}")
-        node_name = read_c_string(socket_path, name_ptr) if name_ptr else ""
+        node_name = read_c_string(socket_path, name_ptr, request_fn=request_fn) if name_ptr else ""
         names.append(node_name)
         if node_name == name:
             vectors = DeviceVectors(
                 base=node,
-                open=read_vector(socket_path, node, LIB_OPEN),
-                close=read_vector(socket_path, node, LIB_CLOSE),
-                expunge=read_vector(socket_path, node, LIB_EXPUNGE),
-                reserved=read_vector(socket_path, node, LIB_RESERVED),
-                begin_io=read_vector(socket_path, node, DEV_BEGIN_IO),
-                abort_io=read_vector(socket_path, node, DEV_ABORT_IO),
+                open=read_vector(socket_path, node, LIB_OPEN, request_fn=request_fn),
+                close=read_vector(socket_path, node, LIB_CLOSE, request_fn=request_fn),
+                expunge=read_vector(socket_path, node, LIB_EXPUNGE, request_fn=request_fn),
+                reserved=read_vector(socket_path, node, LIB_RESERVED, request_fn=request_fn),
+                begin_io=read_vector(socket_path, node, DEV_BEGIN_IO, request_fn=request_fn),
+                abort_io=read_vector(socket_path, node, DEV_ABORT_IO, request_fn=request_fn),
             )
             return exec_base, vectors, names
-        node = read_word(socket_path, node + NODE_SUCC, 4)
+        node = read_word(socket_path, node + NODE_SUCC, 4, request_fn=request_fn)
         if node == EXEC_LIST_TAIL:
             break
         if node and not plausible_address(node, 2):

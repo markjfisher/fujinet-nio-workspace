@@ -63,7 +63,9 @@ def request(socket_path: Path, transcript: Path, command: str, *args: str) -> st
 
 
 def resolve_device(socket_path: Path, transcript: Path, name: str) -> device_debug.DeviceVectors:
-    _, vectors, names = device_debug.resolve_device(socket_path, name)
+    def _req(sock: Path, command: str, *args: str) -> str:
+        return request(sock, transcript, command, *args)
+    _, vectors, names = device_debug.resolve_device(socket_path, name, request_fn=_req)
     with transcript.open("a", encoding="utf-8") as out:
         out.write(json.dumps({"device": name, "devices": names,
                               "base": hex(vectors.base),
