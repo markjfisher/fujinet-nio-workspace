@@ -1,0 +1,5 @@
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:fujinet-mount host:/standard.adf >NIL:
+C:tdprobe fujinet-disk.device >DH0:tdprobe-fujinet.result
+C:Echo "TDPROBE FUJINET RC=$RC"
+C:Echo "E2E COMPLETE"

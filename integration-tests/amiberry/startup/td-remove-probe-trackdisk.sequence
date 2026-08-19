@@ -1,0 +1,4 @@
+C:Wait 10 SECS
+C:tdprobe trackdisk.device >DH0:tdprobe-trackdisk.result
+C:Echo "TDPROBE TRACKDISK RC=$RC"
+C:Echo "E2E COMPLETE"

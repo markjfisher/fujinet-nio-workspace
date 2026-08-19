@@ -224,15 +224,10 @@ profiles:
 Set `AMIBERRY_OS_ROOT` and `AMIBERRY_WORKBENCH_ADF` to the corresponding
 expanded 3.1 tree and licensed Workbench ADF before building that profile.
 Driver auto-loading uses the redistributable loader built by
-`fujinet-nio-driver`. The loader's registration, duplicate-load handling,
-`OpenDevice()`, and basic trackdisk commands are validated on Workbench 3.1
-without the AmigaOS 3.2 `C:LoadModule` command. This is loader validation, not
-yet full DiskDevice support on 3.1: first `DN0:` filesystem access currently
-stalls after the filesystem handler starts, completes its quick boot/root
-device reads, and submits a retained legacy `TD_REMOVE` notification request.
-At timeout the shell's `ACTION_EXAMINE_OBJECT` packet remains queued on the
-handler. The matched 3.2 handler registers `TD_ADDCHANGEINT` before reading
-and proceeds through directory access.
+`fujinet-nio-driver`. The loader itself is validated on Workbench 3.1. Full
+`DNx:` filesystem access is not yet validated there: its filesystem handler
+uses the classic synchronous `TD_REMOVE` change-interrupt interface, whereas
+Workbench 3.2 uses retained `TD_ADDCHANGEINT` requests.
 
 For a generated profile (`build_test_disk: true`), `harddrive` is
 the output HDF/VHD path; if omitted, the default is
