@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -219,6 +220,17 @@ def load_suite_config() -> dict[str, Any]:
         return tomllib.load(stream)
 
 
+def load_env_manifest(env_id: str) -> dict[str, Any]:
+    """Load build/amiga-envs/<env_id>/manifest.json, raising SystemExit with a helpful message."""
+    manifest_path = ROOT / "build" / "amiga-envs" / env_id / "manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(
+            f"AmigaOS environment '{env_id}' has not been built.\n"
+            f"Run: scripts/amiga-env build {env_id}"
+        )
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
 def load_cases() -> dict[str, dict]:
     return {case["name"]: case for case in load_suite_config()["test"]}
 
@@ -352,6 +364,20 @@ def pytest_addoption(parser: Any) -> None:
         default=False,
         help="run the Amiberry integration tests; otherwise skip them",
     )
+    parser.addoption(
+        "--amiga-env",
+        default=None,
+        help="AmigaOS environment id (e.g. wb31, wb32). When given, the built "
+             "base HDF and kickstart are read from build/amiga-envs/<id>/manifest.json. "
+             "When omitted, falls back to the legacy AMIBERRY_OS_ROOT / AMIBERRY_WORKBENCH_ADF "
+             "environment variables.",
+    )
+    parser.addoption(
+        "--amiga-machine",
+        default=None,
+        help="Machine profile id (e.g. a1200-030). When given, the machine YAML "
+             "from configs/amiga/machines/<id>.yaml overrides amiberry settings.",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -360,8 +386,34 @@ def amiga_environment(pytestconfig: Any) -> dict[str, str]:
         pytest.skip("Amiberry tests disabled; use --run-amiga or AMIGA_E2E=1")
 
     environment = load_workspace_env()
-    required = ("AMIBERRY_OS_ROOT", "AMIBERRY_WORKBENCH_ADF")
-    missing = [name for name in required if not Path(environment.get(name, "")).is_file() and not Path(environment.get(name, "")).is_dir()]
+    missing: list[str] = []
+
+    env_id: str | None = pytestconfig.getoption("--amiga-env")
+    if env_id:
+        # New path: load OS root and kickstart from the built environment manifest.
+        manifest = load_env_manifest(env_id)
+        base_hdf = Path(manifest["base_hdf"])
+        if not base_hdf.is_file():
+            pytest.skip(
+                f"AmigaOS environment '{env_id}' base HDF is missing: {base_hdf}\n"
+                f"Run: scripts/amiga-env build {env_id}"
+            )
+        environment["AMIGA_ENV_ID"] = env_id
+        environment["AMIGA_ENV_BASE_HDF"] = str(base_hdf)
+        environment["AMIBERRY_KICKSTART"] = manifest["kickstart"]
+        if manifest.get("rom_key"):
+            environment["AMIBERRY_ROM_KEY"] = manifest["rom_key"]
+        # AMIBERRY_OS_ROOT is not needed with the manifest path; leave the
+        # legacy value in place if it happens to be set, but do not require it.
+    else:
+        # Legacy path: require AMIBERRY_OS_ROOT and AMIBERRY_WORKBENCH_ADF from env.
+        required = ("AMIBERRY_OS_ROOT", "AMIBERRY_WORKBENCH_ADF")
+        missing += [
+            name for name in required
+            if not Path(environment.get(name, "")).is_file()
+            and not Path(environment.get(name, "")).is_dir()
+        ]
+
     for command in ("amiberry", "socat"):
         if shutil.which(command, path=environment.get("PATH")) is None:
             missing.append(command)
@@ -650,18 +702,34 @@ def run_amiga_case(amiga_environment: dict[str, str],
 
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
-        build_cmd = [
-            str(ROOT / "scripts/build-amiga-test-disk"),
-            "--os-root", amiga_environment["AMIBERRY_OS_ROOT"],
-            "--boot-adf", amiga_environment["AMIBERRY_WORKBENCH_ADF"],
-            "--app", app,
-            "--app-name", case["app"],
-            "--extra-app-dir", ROOT / "repos/nio-apps/build/amiga/bin",
-            "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
-            "--startup-script", startup,
-            "--no-workbench",
-            "--output", image,
-        ]
+        base_hdf = amiga_environment.get("AMIGA_ENV_BASE_HDF")
+        if base_hdf:
+            # New path: copy the pre-built base HDF and inject the test payload.
+            build_cmd = [
+                str(ROOT / "scripts/build-amiga-test-disk"),
+                "--base-hdf", base_hdf,
+                "--app", app,
+                "--app-name", case["app"],
+                "--extra-app-dir", ROOT / "repos/nio-apps/build/amiga/bin",
+                "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
+                "--startup-script", startup,
+                "--no-workbench",
+                "--output", image,
+            ]
+        else:
+            # Legacy path: build from the expanded OS root on every run.
+            build_cmd = [
+                str(ROOT / "scripts/build-amiga-test-disk"),
+                "--os-root", amiga_environment["AMIBERRY_OS_ROOT"],
+                "--boot-adf", amiga_environment["AMIBERRY_WORKBENCH_ADF"],
+                "--app", app,
+                "--app-name", case["app"],
+                "--extra-app-dir", ROOT / "repos/nio-apps/build/amiga/bin",
+                "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
+                "--startup-script", startup,
+                "--no-workbench",
+                "--output", image,
+            ]
         if case.get("driver"):
             driver_root = ROOT / "repos/fujinet-nio-driver"
             build_cmd.extend([

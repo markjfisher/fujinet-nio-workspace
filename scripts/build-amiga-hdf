@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Build a pristine bootable AmigaOS base HDF from an assembled OS tree.
+
+This tool packs an already-assembled OS filesystem tree into an HDF image and
+installs the boot block from the supplied ADF.  It does not inject any
+application, test payload, or FujiNet material — those belong in the
+second-stage build-amiga-test-disk step.
+
+All OS-specific file extraction (L/FastFileSystem from Install disk,
+serial.device from Workbench ADF, etc.) must be done by the caller before
+invoking this tool; this tool only packs what is in --os-tree.
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+
+from amiga_emulator.disk import (
+    run_xdf,
+    run_xdf_optional,
+    validate_volume_label,
+)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--os-tree", required=True, type=Path,
+                        help="assembled AmigaOS filesystem tree to pack")
+    parser.add_argument("--boot-adf", required=True, type=Path,
+                        help="ADF whose boot block is written to the HDF")
+    parser.add_argument("--output", required=True, type=Path,
+                        help="output HDF path")
+    parser.add_argument("--size", default="128M",
+                        help="image size (default: 128M)")
+    parser.add_argument("--volume-label", required=True,
+                        help="Amiga volume label (1-30 chars, no :/\\)")
+    args = parser.parse_args()
+
+    if not args.os_tree.is_dir():
+        raise SystemExit(f"OS tree not found: {args.os_tree}")
+    if not args.boot_adf.is_file():
+        raise SystemExit(f"boot ADF not found: {args.boot_adf}")
+    try:
+        volume_label = validate_volume_label(args.volume_label)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.unlink(missing_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix="amiga-hdf-") as tmp:
+        # xdftool derives the packed volume name from the directory name.
+        staged = Path(tmp) / volume_label
+        shutil.copytree(args.os_tree, staged)
+        run_xdf(args.output, "pack", str(staged), "ffs", f"size={args.size}")
+        run_xdf_optional(args.output, "delete", "WBStartup/Welcome")
+        run_xdf_optional(args.output, "delete", "WBStartup/Welcome.info")
+        boot_code = Path(tmp) / "boot.bin"
+        run_xdf(args.boot_adf, "boot", "read", str(boot_code))
+        run_xdf(args.output, "boot", "write", str(boot_code))
+
+    print(f"Built base HDF: {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

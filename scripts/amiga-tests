@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Run the Amiberry integration test suite against a selected AmigaOS environment.
+#
+# Usage:
+#   scripts/amiga-tests [--amiga-env ENV] [--amiga-machine MACHINE] [pytest-args...]
+#
+# Convenience wrapper around:
+#   uv run pytest --run-amiga --amiga-env ENV [--amiga-machine MACHINE] [pytest-args...]
+#
+# If --amiga-env is not given, pytest uses its configured default.
+# Any additional arguments are forwarded to pytest verbatim.
+
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+source "$ROOT/scripts/env.sh"
+
+exec uv run pytest --run-amiga "$@" "$ROOT/integration-tests/amiberry"

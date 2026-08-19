@@ -1,0 +1,22 @@
+id: wb31
+display_name: "AmigaOS Workbench 3.1 (rev 40.42)"
+os_version: "3.1"
+kickstart_var: AMIGA_WB31_KICKSTART
+
+assembly:
+  method: six_disk
+  # Six disks identified by role. L/FastFileSystem must come from the Install
+  # disk — the Workbench floppy carries only a ROM-overlay FFS.
+  disks:
+    install:    AMIGA_WB31_ADF_INSTALL    # Disk 1: L/FastFileSystem source; not merged to root
+    workbench:  AMIGA_WB31_ADF_WORKBENCH  # Disk 2: boot block source; contents merged to /
+    extras:     AMIGA_WB31_ADF_EXTRAS     # Disk 3: contents merged to /
+    storage:    AMIGA_WB31_ADF_STORAGE    # Disk 4: unpacked to /Storage
+    locale:     AMIGA_WB31_ADF_LOCALE     # Disk 5: unpacked to /Locale
+    fonts:      AMIGA_WB31_ADF_FONTS      # Disk 6: unpacked to /Fonts
+  boot_adf: disks.workbench               # Workbench ADF is the boot block source
+  startup_patch: remove_addbuffers        # strip floppy-only AddBuffers line from S/Startup-Sequence
+
+hdf:
+  size: 128M
+  volume_label: Workbench31

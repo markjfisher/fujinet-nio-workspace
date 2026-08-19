@@ -1,0 +1,8 @@
+id: a1200-030
+display_name: "Amiga 1200 (68030)"
+cpu: 68030
+fpu: 68882
+chipset: aga
+chip_ram: 4M
+fast_ram: 8M
+uae_config: base-68030.uae

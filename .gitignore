@@ -2,6 +2,7 @@
 /test-evidence/
 /fujinet-data/
 /local/config.env
+/local/amiga.env
 *.log
 
 /.vscode/

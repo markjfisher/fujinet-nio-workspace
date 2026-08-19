@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+"""Manage AmigaOS base environments for FujiNet NIO testing.
+
+Subcommands:
+  build <env_id>          Build (or rebuild) a base HDF for the given environment.
+  show  <env_id> <field>  Print a single field from the environment manifest.
+  status                  Show build status for all known environments.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+ENVS_DIR = ROOT / "build" / "amiga-envs"
+RECIPES_DIR = ROOT / "configs" / "amiga" / "environments"
+LOCAL_AMIGA_ENV = ROOT / "local" / "amiga.env"
+
+sys.path.insert(0, str(ROOT / "tools"))
+
+from amiga_emulator.disk import run_xdf  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# local/amiga.env loader
+# ---------------------------------------------------------------------------
+
+def load_local_env() -> dict[str, str]:
+    """Load local/amiga.env into a dict. Returns {} if file is absent."""
+    result: dict[str, str] = {}
+    if not LOCAL_AMIGA_ENV.is_file():
+        return result
+    for line in LOCAL_AMIGA_ENV.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, raw_value = line.partition("=")
+        key = key.strip()
+        # Strip surrounding quotes and expand $HOME / ~ simply.
+        value = raw_value.strip().strip('"').strip("'")
+        value = value.replace("$HOME", str(Path.home())).replace("~", str(Path.home()))
+        result[key.strip()] = value
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Recipe loader
+# ---------------------------------------------------------------------------
+
+def load_recipe(env_id: str) -> dict:
+    try:
+        import yaml
+        loader = yaml.safe_load
+    except ImportError:
+        # Fallback: tiny YAML reader sufficient for our simple recipe files.
+        def loader(text: str) -> dict:  # type: ignore[misc]
+            return _simple_yaml(text)
+
+    recipe_path = RECIPES_DIR / f"{env_id}.yaml"
+    if not recipe_path.is_file():
+        raise SystemExit(f"No environment recipe found: {recipe_path}")
+    return loader(recipe_path.read_text(encoding="utf-8"))
+
+
+def _simple_yaml(text: str) -> dict:
+    """Minimal YAML parser for flat/two-level recipes (no lists, no anchors)."""
+    result: dict = {}
+    current_key: str | None = None
+    current_obj: dict | None = None
+    for line in text.splitlines():
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        stripped = line.strip()
+        if ":" in stripped:
+            k, _, v = stripped.partition(":")
+            k = k.strip()
+            v = v.strip()
+            if indent == 0:
+                if v:
+                    result[k] = v
+                    current_key = None
+                    current_obj = None
+                else:
+                    current_key = k
+                    current_obj = {}
+                    result[k] = current_obj
+            elif current_obj is not None:
+                if v:
+                    current_obj[k] = v
+                else:
+                    nested: dict = {}
+                    current_obj[k] = nested
+                    current_obj = nested
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Content hashing
+# ---------------------------------------------------------------------------
+
+def hash_file(path: Path, hasher: "hashlib._Hash") -> None:
+    with path.open("rb") as fh:
+        while chunk := fh.read(1 << 20):
+            hasher.update(chunk)
+
+
+def compute_input_hash(recipe_path: Path, media_paths: list[Path]) -> str:
+    h = hashlib.sha256()
+    h.update(recipe_path.read_bytes())
+    # Include builder version as a string so recipe-logic changes invalidate the stamp.
+    h.update(b"amiga-env-builder-v1\n")
+    for p in sorted(media_paths):
+        h.update(p.name.encode())
+        hash_file(p, h)
+    return "sha256:" + h.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# xdftool helpers
+# ---------------------------------------------------------------------------
+
+def xdftool_cmd() -> list[str]:
+    if shutil.which("xdftool"):
+        return ["xdftool"]
+    if shutil.which("uvx"):
+        return ["uvx", "--from", "amitools", "xdftool"]
+    raise SystemExit("xdftool or uvx is required to unpack ADF disks")
+
+
+def unpack_adf(adf: Path, dest: Path) -> None:
+    """Unpack an ADF into dest/ using xdftool. dest must not exist yet."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.unlink(missing_ok=True)
+    if dest.is_dir():
+        shutil.rmtree(dest)
+    cmd = [*xdftool_cmd(), str(adf), "unpack", str(dest)]
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+
+
+# ---------------------------------------------------------------------------
+# Assembly methods
+# ---------------------------------------------------------------------------
+
+def assemble_six_disk(recipe: dict, local_env: dict[str, str], out_dir: Path) -> tuple[Path, Path]:
+    """Assemble WB3.1-style six-disk set. Returns (os_tree, boot_adf)."""
+    assembly = recipe["assembly"]
+    disks_spec = assembly["disks"]
+
+    def resolve(var_name: str) -> Path:
+        val = local_env.get(var_name)
+        if not val:
+            raise SystemExit(f"Required variable not set in local/amiga.env: {var_name}")
+        p = Path(val)
+        if not p.is_file():
+            raise SystemExit(f"{var_name}={val!r} — file not found")
+        return p
+
+    install_adf = resolve(disks_spec["install"])
+    workbench_adf = resolve(disks_spec["workbench"])
+    extras_adf = resolve(disks_spec["extras"])
+    storage_adf = resolve(disks_spec["storage"])
+    locale_adf = resolve(disks_spec["locale"])
+    fonts_adf = resolve(disks_spec["fonts"])
+
+    tree = out_dir / "os-tree"
+    tree.mkdir(parents=True, exist_ok=True)
+
+    print("  Unpacking Workbench disk -> /")
+    wb_tmp = out_dir / "tmp-workbench"
+    unpack_adf(workbench_adf, wb_tmp)
+    for item in wb_tmp.iterdir():
+        dest = tree / item.name
+        if dest.exists():
+            if dest.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+        else:
+            shutil.move(str(item), dest)
+
+    print("  Unpacking Extras disk -> /")
+    extras_tmp = out_dir / "tmp-extras"
+    unpack_adf(extras_adf, extras_tmp)
+    for item in extras_tmp.iterdir():
+        dest = tree / item.name
+        if dest.exists():
+            if dest.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+        else:
+            shutil.move(str(item), dest)
+
+    print("  Unpacking Storage disk -> /Storage")
+    unpack_adf(storage_adf, tree / "Storage")
+
+    print("  Unpacking Locale disk -> /Locale")
+    unpack_adf(locale_adf, tree / "Locale")
+
+    print("  Unpacking Fonts disk -> /Fonts")
+    unpack_adf(fonts_adf, tree / "Fonts")
+
+    print("  Extracting L/FastFileSystem from Install disk")
+    install_tmp = out_dir / "tmp-install"
+    unpack_adf(install_adf, install_tmp)
+    ffs_src = install_tmp / "L" / "FastFileSystem"
+    if not ffs_src.is_file():
+        raise SystemExit(f"L/FastFileSystem not found in Install disk: {install_adf}")
+    (tree / "L").mkdir(exist_ok=True)
+    shutil.copy2(ffs_src, tree / "L" / "FastFileSystem")
+
+    # Clean up xdftool metadata sidecars that would otherwise be packed.
+    for sidecar in tree.glob("*.blkdev"):
+        sidecar.unlink()
+    for sidecar in tree.glob("*.bootcode"):
+        sidecar.unlink()
+    for sidecar in tree.glob("*.xdfmeta"):
+        sidecar.unlink()
+
+    if assembly.get("startup_patch") == "remove_addbuffers":
+        for name in ("S/Startup-Sequence", "S/Startup-sequence"):
+            ss = tree / name
+            if ss.is_file():
+                text = ss.read_text(encoding="latin-1")
+                lines = [l for l in text.splitlines(True) if "AddBuffers" not in l]
+                ss.write_text("".join(lines), encoding="latin-1")
+                print("  Patched S/Startup-Sequence: removed AddBuffers line")
+                break
+
+    # Clean up temp unpack dirs.
+    for d in (wb_tmp, extras_tmp, install_tmp):
+        shutil.rmtree(d, ignore_errors=True)
+
+    return tree, workbench_adf
+
+
+def assemble_preexpanded(recipe: dict, local_env: dict[str, str], out_dir: Path) -> tuple[Path, Path]:
+    """Use an existing expanded OS tree (transitional wb32 method)."""
+    assembly = recipe["assembly"]
+    expanded_var = assembly["expanded_root_var"]
+    boot_adf_var = assembly["boot_adf_var"]
+
+    expanded_root = local_env.get(expanded_var)
+    if not expanded_root or not Path(expanded_root).is_dir():
+        raise SystemExit(
+            f"{expanded_var} must point to an expanded AmigaOS tree. "
+            f"Set it in local/amiga.env."
+        )
+    boot_adf_val = local_env.get(boot_adf_var)
+    if not boot_adf_val or not Path(boot_adf_val).is_file():
+        raise SystemExit(
+            f"{boot_adf_var} must point to the Workbench ADF. "
+            f"Set it in local/amiga.env."
+        )
+    return Path(expanded_root), Path(boot_adf_val)
+
+
+# ---------------------------------------------------------------------------
+# build
+# ---------------------------------------------------------------------------
+
+def cmd_build(env_id: str, force: bool) -> None:
+    recipe_path = RECIPES_DIR / f"{env_id}.yaml"
+    recipe = load_recipe(env_id)
+
+    method = recipe.get("assembly", {}).get("method", "")
+    if method == "TBD":
+        raise SystemExit(
+            f"Environment '{env_id}' has no assembly recipe yet (method: TBD).\n"
+            f"Edit {recipe_path} to define the assembly method."
+        )
+
+    local_env = load_local_env()
+    if not local_env and not LOCAL_AMIGA_ENV.is_file():
+        print(
+            f"Warning: {LOCAL_AMIGA_ENV} not found.\n"
+            f"Copy local/amiga.env.example to local/amiga.env and fill in your paths.",
+            file=sys.stderr,
+        )
+
+    kickstart_var = recipe.get("kickstart_var", "")
+    kickstart_val = local_env.get(kickstart_var, "")
+    kickstart = Path(kickstart_val) if kickstart_val else None
+    if not kickstart or not kickstart.is_file():
+        raise SystemExit(
+            f"{kickstart_var} must point to the Kickstart ROM. "
+            f"Set it in local/amiga.env."
+        )
+
+    rom_key_var = recipe.get("rom_key_var")
+    rom_key: Path | None = None
+    if rom_key_var:
+        rom_key_val = local_env.get(rom_key_var, "")
+        if rom_key_val:
+            rom_key = Path(rom_key_val)
+
+    out_dir = ENVS_DIR / env_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    base_hdf = out_dir / "base.hdf"
+    manifest_path = out_dir / "manifest.json"
+    stamp_path = out_dir / ".stamp"
+
+    # Collect media files for hashing (done before assembly to avoid hashing temps).
+    assembly = recipe.get("assembly", {})
+    media_files: list[Path] = [kickstart]
+    if rom_key and rom_key.is_file():
+        media_files.append(rom_key)
+
+    if method == "six_disk":
+        disks_spec = assembly.get("disks", {})
+        for var in disks_spec.values():
+            val = local_env.get(var, "")
+            if val and Path(val).is_file():
+                media_files.append(Path(val))
+    elif method == "preexpanded":
+        boot_adf_val = local_env.get(assembly.get("boot_adf_var", ""), "")
+        if boot_adf_val and Path(boot_adf_val).is_file():
+            media_files.append(Path(boot_adf_val))
+
+    input_hash = compute_input_hash(recipe_path, media_files)
+
+    if not force and stamp_path.is_file() and stamp_path.read_text().strip() == input_hash:
+        print(f"Environment '{env_id}' is up to date (stamp matches). Use --force to rebuild.")
+        return
+
+    print(f"Building environment: {env_id}")
+
+    with tempfile.TemporaryDirectory(prefix=f"amiga-env-{env_id}-") as tmp:
+        work = Path(tmp)
+
+        if method == "six_disk":
+            os_tree, boot_adf = assemble_six_disk(recipe, local_env, work)
+        elif method == "preexpanded":
+            os_tree, boot_adf = assemble_preexpanded(recipe, local_env, work)
+        else:
+            raise SystemExit(f"Unknown assembly method: {method!r}")
+
+        hdf_settings = recipe.get("hdf", {})
+        volume_label = hdf_settings.get("volume_label", env_id)
+        size = hdf_settings.get("size", "128M")
+
+        print(f"  Packing base HDF ({size}) ...")
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "build-amiga-hdf"),
+                "--os-tree", str(os_tree),
+                "--boot-adf", str(boot_adf),
+                "--output", str(base_hdf),
+                "--size", size,
+                "--volume-label", volume_label,
+            ],
+            check=True,
+        )
+
+    manifest = {
+        "id": env_id,
+        "os_version": recipe.get("os_version", ""),
+        "base_hdf": str(base_hdf.resolve()),
+        "kickstart": str(kickstart.resolve()),
+        "rom_key": str(rom_key.resolve()) if rom_key and rom_key.is_file() else None,
+        "input_hash": input_hash,
+        "built_at": datetime.now(timezone.utc).isoformat(),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    stamp_path.write_text(input_hash + "\n", encoding="utf-8")
+
+    print(f"Done: {base_hdf}")
+
+
+# ---------------------------------------------------------------------------
+# show
+# ---------------------------------------------------------------------------
+
+def cmd_show(env_id: str, field: str) -> None:
+    manifest_path = ENVS_DIR / env_id / "manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(
+            f"Environment '{env_id}' has not been built yet.\n"
+            f"Run: scripts/amiga-env build {env_id}"
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if field not in manifest:
+        raise SystemExit(f"Unknown manifest field: {field!r}. Available: {', '.join(manifest)}")
+    value = manifest[field]
+    if value is None:
+        raise SystemExit(f"Field {field!r} is not set for environment '{env_id}'")
+    print(value)
+
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+def cmd_status() -> None:
+    recipes = sorted(RECIPES_DIR.glob("*.yaml"))
+    if not recipes:
+        print("No environment recipes found.")
+        return
+    for recipe_path in recipes:
+        env_id = recipe_path.stem
+        manifest_path = ENVS_DIR / env_id / "manifest.json"
+        stamp_path = ENVS_DIR / env_id / ".stamp"
+        if not manifest_path.is_file():
+            print(f"  {env_id:12s}  NOT BUILT")
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        built_at = manifest.get("built_at", "?")
+        hdf = Path(manifest.get("base_hdf", ""))
+        if not hdf.is_file():
+            print(f"  {env_id:12s}  MISSING HDF  (was built at {built_at})")
+            continue
+        # Quick up-to-date check using cached stamp.
+        try:
+            recipe = load_recipe(env_id)
+            local_env = load_local_env()
+            assembly = recipe.get("assembly", {})
+            method = assembly.get("method", "")
+            kickstart_var = recipe.get("kickstart_var", "")
+            kickstart_val = local_env.get(kickstart_var, "")
+            media_files: list[Path] = []
+            if kickstart_val and Path(kickstart_val).is_file():
+                media_files.append(Path(kickstart_val))
+            if method == "six_disk":
+                for var in assembly.get("disks", {}).values():
+                    val = local_env.get(var, "")
+                    if val and Path(val).is_file():
+                        media_files.append(Path(val))
+            elif method == "preexpanded":
+                boot_adf_val = local_env.get(assembly.get("boot_adf_var", ""), "")
+                if boot_adf_val and Path(boot_adf_val).is_file():
+                    media_files.append(Path(boot_adf_val))
+            current_hash = compute_input_hash(recipe_path, media_files)
+            stored_hash = stamp_path.read_text().strip() if stamp_path.is_file() else ""
+            stale = current_hash != stored_hash
+        except Exception:
+            stale = True
+
+        state = "STALE" if stale else "OK"
+        print(f"  {env_id:12s}  {state:6s}  built {built_at[:19]}")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command")
+
+    p_build = sub.add_parser("build", help="build a base HDF for an environment")
+    p_build.add_argument("env_id", help="environment id (e.g. wb31, wb32)")
+    p_build.add_argument("--force", action="store_true", help="rebuild even if up to date")
+
+    p_show = sub.add_parser("show", help="print a field from the environment manifest")
+    p_show.add_argument("env_id", help="environment id")
+    p_show.add_argument("field", help="manifest field (base_hdf, kickstart, rom_key, ...)")
+
+    sub.add_parser("status", help="show build status for all environments")
+
+    args = parser.parse_args()
+    if args.command == "build":
+        cmd_build(args.env_id, args.force)
+    elif args.command == "show":
+        cmd_show(args.env_id, args.field)
+    elif args.command == "status":
+        cmd_status()
+    else:
+        parser.print_help()
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

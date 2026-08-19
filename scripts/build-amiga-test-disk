@@ -36,8 +36,19 @@ def ignored_cd_content(_directory: str, names: list[str]) -> set[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--os-root", required=True, type=Path)
-    parser.add_argument("--boot-adf", required=True, type=Path)
+
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument(
+        "--base-hdf", type=Path,
+        help="pre-built base HDF (from scripts/amiga-env build); copied then test payload injected",
+    )
+    source_group.add_argument(
+        "--os-root", type=Path,
+        help="(legacy) expanded AmigaOS tree; packed into a fresh HDF each run",
+    )
+
+    parser.add_argument("--boot-adf", type=Path,
+                        help="(legacy, required with --os-root) boot-block + serial.device source ADF")
     parser.add_argument("--app", required=True, type=Path)
     parser.add_argument("--app-name", default="wifitest")
     parser.add_argument("--extra-app-dir", action="append", type=Path, default=[],
@@ -66,13 +77,19 @@ def main() -> int:
     parser.add_argument("--size", default="128M")
     parser.add_argument(
         "--volume-label",
-        help="Amiga volume label; defaults to the expanded OS directory name",
+        help="Amiga volume label; only used with --os-root (defaults to the OS tree directory name)",
     )
     args = parser.parse_args()
 
-    if not args.os_root.is_dir():
+    if args.os_root is not None and args.boot_adf is None:
+        raise SystemExit("--boot-adf is required when using --os-root")
+    if args.base_hdf is not None and args.boot_adf is not None:
+        raise SystemExit("--boot-adf is not used with --base-hdf (boot block is already in the base HDF)")
+    if args.base_hdf is not None and not args.base_hdf.is_file():
+        raise SystemExit(f"base HDF not found: {args.base_hdf}")
+    if args.os_root is not None and not args.os_root.is_dir():
         raise SystemExit(f"expanded AmigaOS tree not found: {args.os_root}")
-    if not args.boot_adf.is_file():
+    if args.boot_adf is not None and not args.boot_adf.is_file():
         raise SystemExit(f"boot-block source ADF not found: {args.boot_adf}")
     if not args.app.is_file():
         raise SystemExit(f"application not found: {args.app}")
@@ -95,35 +112,69 @@ def main() -> int:
     for path in args.disk_mountlist:
         if not path.is_file():
             raise SystemExit(f"disk MountList not found: {path}")
-    try:
-        volume_label = validate_volume_label(
-            args.volume_label or args.os_root.resolve().name
-        )
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.unlink(missing_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="amiga-test-disk-") as temp:
-        # xdftool derives the packed volume name from this directory.
-        staged_os = Path(temp) / volume_label
-        shutil.copytree(args.os_root, staged_os, ignore=ignored_cd_content)
-        run_xdf(args.output, "pack", str(staged_os), "ffs", f"size={args.size}")
-        # The licensed Workbench tree includes a first-run WBStartup program
-        # which opens a "Welcome to the Amiga Preinstallation Environment"
-        # requester.  Test images should boot directly to an usable
-        # Workbench; remove only this optional welcome program, not the rest
-        # of WBStartup.
-        run_xdf_optional(args.output, "delete", "WBStartup/Welcome")
-        run_xdf_optional(args.output, "delete", "WBStartup/Welcome.info")
-        boot_code = Path(temp) / "boot.bin"
-        run_xdf(args.boot_adf, "boot", "read", str(boot_code))
-        run_xdf(args.output, "boot", "write", str(boot_code))
-        serial_device = Path(temp) / "serial.device"
-        run_xdf(args.boot_adf, "read", "Devs/serial.device", str(serial_device))
-        run_xdf_optional(args.output, "delete", "Devs/serial.device")
-        run_xdf(args.output, "write", str(serial_device), "Devs/serial.device")
+
+        if args.base_hdf is not None:
+            # ---------------------------------------------------------------
+            # New path: copy the pre-built base HDF and inject test payload.
+            # Boot block and serial.device are already in the base HDF.
+            # ---------------------------------------------------------------
+            shutil.copy2(args.base_hdf, args.output)
+
+            # Read the Startup-Sequence from the copied image so we can splice
+            # test commands into it at the LoadWB marker, exactly as the legacy
+            # path does from the staged OS tree.
+            ss_local = Path(temp) / "Startup-Sequence"
+            _extracted = False
+            for ss_name in ("S/Startup-Sequence", "S/Startup-sequence"):
+                try:
+                    run_xdf(args.output, "read", ss_name, str(ss_local))
+                    _extracted = True
+                    break
+                except SystemExit:
+                    pass
+            if not _extracted:
+                raise SystemExit("Could not read S/Startup-Sequence from base HDF")
+            original = ss_local.read_text(encoding="latin-1")
+            staged_startup: str | None = original  # used below in shared payload injection
+
+        else:
+            # ---------------------------------------------------------------
+            # Legacy path: pack a fresh HDF from the expanded OS tree.
+            # ---------------------------------------------------------------
+            try:
+                volume_label = validate_volume_label(
+                    args.volume_label or args.os_root.resolve().name  # type: ignore[union-attr]
+                )
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
+
+            staged_os = Path(temp) / volume_label
+            shutil.copytree(args.os_root, staged_os, ignore=ignored_cd_content)
+            run_xdf(args.output, "pack", str(staged_os), "ffs", f"size={args.size}")
+            run_xdf_optional(args.output, "delete", "WBStartup/Welcome")
+            run_xdf_optional(args.output, "delete", "WBStartup/Welcome.info")
+            boot_code = Path(temp) / "boot.bin"
+            run_xdf(args.boot_adf, "boot", "read", str(boot_code))
+            run_xdf(args.output, "boot", "write", str(boot_code))
+            serial_device = Path(temp) / "serial.device"
+            run_xdf(args.boot_adf, "read", "Devs/serial.device", str(serial_device))
+            run_xdf_optional(args.output, "delete", "Devs/serial.device")
+            run_xdf(args.output, "write", str(serial_device), "Devs/serial.device")
+
+            startup_source = staged_os / "S" / "Startup-sequence"
+            if not startup_source.is_file():
+                startup_source = staged_os / "S" / "Startup-Sequence"
+            staged_startup = startup_source.read_text(encoding="latin-1")
+
+        # -------------------------------------------------------------------
+        # Shared: install test payload (app, driver, startup modifications).
+        # Applies to both --base-hdf and --os-root modes.
+        # -------------------------------------------------------------------
         run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
         if args.disk_device:
             run_xdf(args.output, "write", str(args.disk_device),
@@ -148,6 +199,7 @@ def main() -> int:
             archive_root = Path(temp) / f"archive-{index}"
             extract_archive(archive, archive_root)
             install_tree(args.output, archive_root)
+
         if args.startup_script or not args.interactive or args.load_driver:
             if args.startup_script:
                 if not args.startup_script.is_file():
@@ -172,10 +224,7 @@ def main() -> int:
             # assigns ENV: and T:, installs the normal command path, and only
             # then should our test commands run.  Replacing it makes AmigaOS
             # request the missing ENV volume during boot.
-            startup_source = staged_os / "S" / "Startup-sequence"
-            if not startup_source.is_file():
-                startup_source = staged_os / "S" / "Startup-Sequence"
-            original = startup_source.read_text(encoding="latin-1")
+            original = staged_startup  # type: ignore[assignment]
             marker_at = startup_command_offset(original, "LoadWB")
             if marker_at is None:
                 raise SystemExit(
@@ -189,7 +238,7 @@ def main() -> int:
                 startup_text += "C:Wait 1\nC:EndCLI\n"
             else:
                 startup_text += original[marker_at:]
-            startup = Path(temp) / "Startup-Sequence"
+            startup = Path(temp) / "Startup-Sequence-patched"
             startup.write_text(startup_text, encoding="latin-1")
             run_xdf(args.output, "delete", "S/Startup-Sequence")
             run_xdf(args.output, "write", str(startup), "S/Startup-Sequence")

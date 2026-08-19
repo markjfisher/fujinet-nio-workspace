@@ -1,0 +1,7 @@
+id: a500-000
+display_name: "Amiga 500 (68000)"
+cpu: 68000
+chipset: ocs
+chip_ram: 512K
+fast_ram: 0
+compatible: true
