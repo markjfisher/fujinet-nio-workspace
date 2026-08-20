@@ -16,6 +16,22 @@ except ImportError as exc:  # pragma: no cover - depends on host setup
     ) from exc
 
 
+def _load_local_amiga_env(root: Path) -> dict[str, str]:
+    """Load local/amiga.env key=value pairs without shell evaluation."""
+    env_file = root / "local" / "amiga.env"
+    result: dict[str, str] = {}
+    if not env_file.is_file():
+        return result
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip()
+    return result
+
+
 def _expand(value: Any, root: Path, environment: dict[str, str]) -> Any:
     if not isinstance(value, str):
         return value
@@ -44,7 +60,10 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
         raise SystemExit(f"Unknown Amiga Workbench profile '{selected}'; available: {available}")
 
     result = dict(profile)
-    environment = environment or {}
+    # Merge local/amiga.env so workbenches.yaml can reference variables like
+    # ${AMIGA_WB32_KICKSTART} even when build.sh does not source env.sh first.
+    local_env = _load_local_amiga_env(root)
+    environment = {**local_env, **(environment or {})}
     config_keys = [key for key in ("config_file", "uae_config") if key in result]
     if len(config_keys) > 1:
         raise SystemExit(

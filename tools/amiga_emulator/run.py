@@ -110,16 +110,18 @@ class AmigaRunner:
         self.rom_dir.mkdir(parents=True, exist_ok=True)
 
         self.amiberry_bin = os.environ.get("AMIBERRY_BIN", "amiberry")
-        self.kickstart = env_path(
-            "AMIBERRY_KICKSTART",
-            "${HOME}/dev/amiga/amigaOS3.2/ROM/kickCDTVa1000a500a2000a600.rom",
-        )
+        kickstart = os.environ.get("AMIBERRY_KICKSTART", "")
+        if not kickstart:
+            raise SystemExit(
+                "AMIBERRY_KICKSTART is not set. "
+                "Set it in local/amiga.env (e.g. AMIGA_WB32_KICKSTART) and ensure "
+                "workbenches.yaml references ${AMIGA_WB32_KICKSTART}."
+            )
+        self.kickstart = Path(kickstart).expanduser()
         rom_key = os.environ.get("AMIBERRY_ROM_KEY", "")
         self.rom_key = Path(rom_key).expanduser() if rom_key else None
-        os_root = env_path("AMIBERRY_OS_ROOT", "${HOME}/dev/amiga/amigaOS3.2")
-        self.fast_file_system = env_path(
-            "AMIBERRY_FAST_FILE_SYSTEM", str(os_root / "L/FastFileSystem")
-        )
+        fast_file_system = os.environ.get("AMIBERRY_FAST_FILE_SYSTEM", "")
+        self.fast_file_system = Path(fast_file_system).expanduser() if fast_file_system else None
         self.disk = Path(
             args.harddrive
             or args.disk
@@ -159,6 +161,11 @@ class AmigaRunner:
             require_file(self.rom_key, "Amiga Forever ROM key")
         require_file(self.disk, "Amiga disk")
         if self.disk_kind == "harddrive":
+            if self.fast_file_system is None:
+                raise SystemExit(
+                    "AMIBERRY_FAST_FILE_SYSTEM is not set. "
+                    "Set it in local/amiga.env or the environment."
+                )
             require_file(self.fast_file_system)
         if self.serial_mode not in ("tcp", "pty"):
             raise SystemExit(f"Unknown Amiga serial mode: {self.serial_mode}")

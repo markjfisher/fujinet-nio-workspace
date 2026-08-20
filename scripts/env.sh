@@ -73,12 +73,13 @@ setup_nio_environment() {
   export FUJINET_NIO_TCP_RELEASE_BIN="${FUJINET_NIO_TCP_RELEASE_BIN:-$FUJINET_NIO/build/fujibus-tcp-release/fujinet-nio}"
   export FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN="${FUJINET_NIO_ATARI_FUJIBUS_NETSIO_BIN:-$FUJINET_NIO/build/atari-fujibus-netsio-debug/fujinet-nio}"
   export AMIBERRY_BIN="${AMIBERRY_BIN:-amiberry}"
-  export AMIBERRY_ASSET_ROOT="${AMIBERRY_ASSET_ROOT:-${HOME}/dev/amiga/amigaOS3.2}"
-  export AMIBERRY_KICKSTART="${AMIBERRY_KICKSTART:-$AMIBERRY_ASSET_ROOT/ROM/kickCDTVa1000a500a2000a600.rom}"
-  export AMIBERRY_WORKBENCH_ADF="${AMIBERRY_WORKBENCH_ADF:-$AMIBERRY_ASSET_ROOT/ADF/Workbench3.2.adf}"
-  export AMIBERRY_OS_ROOT="${AMIBERRY_OS_ROOT:-$AMIBERRY_ASSET_ROOT}"
-  export AMIBERRY_FAST_FILE_SYSTEM="${AMIBERRY_FAST_FILE_SYSTEM:-$AMIBERRY_OS_ROOT/L/FastFileSystem}"
+  export AMIGA_ENV_ROOT="${AMIGA_ENV_ROOT:-$NIO_BUILD_DIR/amiga-envs}"
   export AMIGA_WORKBENCH_CONFIG_FILE="${AMIGA_WORKBENCH_CONFIG_FILE:-$NIO_WORKSPACE/configs/amiga/workbenches.yaml}"
+  # Source local/amiga.env for licensed media paths (gitignored, never committed).
+  if [[ -f "$NIO_WORKSPACE/local/amiga.env" ]]; then
+    # shellcheck disable=SC1090
+    source "$NIO_WORKSPACE/local/amiga.env"
+  fi
   export AMIGA_WORKBENCH_CONFIG="${AMIGA_WORKBENCH_CONFIG:-}"
   export AMIBERRY_HOST="${AMIBERRY_HOST:-127.0.0.1}"
   export AMIBERRY_PORT="${AMIBERRY_PORT:-23462}"
