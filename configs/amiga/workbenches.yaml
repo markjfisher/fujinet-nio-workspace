@@ -3,7 +3,7 @@ default: wb32-run
 profiles:
   wb32-run:
     build_test_disk: false
-    harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-pristine.vhd
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-run.vhd
     kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
     config_file: ${NIO_WORKSPACE}/configs/amiga/base-68030.uae
 

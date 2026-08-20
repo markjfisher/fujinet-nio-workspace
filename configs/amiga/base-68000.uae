@@ -15,3 +15,4 @@ cpu_memory_cycle_exact=true
 blitter_cycle_exact=true
 cycle_exact=true
 fpu_strict=false
+amiberry.right_control_is_right_win=true
