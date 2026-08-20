@@ -7,16 +7,17 @@ service and does not need Amiga disk support for this workflow.
 
 ## Prerequisites
 
-Install `amiberry`, `socat`, `nc`, and the `m68k-amigaos` toolchain. Set the
-Amiga asset root if it is not the default:
+Install `amiberry`, `socat`, `nc`, and the `m68k-amigaos` toolchain.
+
+Licensed AmigaOS assets are configured in `local/amiga.env` (gitignored).
+Copy `local/amiga.env.example` and fill in your paths. Build an AmigaOS
+environment before running tests:
 
 ```sh
-export AMIBERRY_ASSET_ROOT="$HOME/dev/amiga/amigaOS3.2"
+scripts/amiga-env build wb32 --machine a1200-030
 ```
 
-The root must contain `ROM/kickCDTVa1000a500a2000a600.rom`,
-`ADF/Workbench3.2.adf`, and `L/FastFileSystem`. These are user-supplied
-licensed assets and are not stored in the workspace.
+See `docs/amiga/environment-setup.md` for full details.
 
 ## Build and run
 
@@ -56,93 +57,21 @@ First start FujiNet NIO yourself and leave it listening on TCP port `65504`.
 Use the same NIO configuration you normally use; the important part is that
 its TCP channel is enabled on that port.
 
-In another terminal, build an interactive HDF. This preserves the normal
-Workbench startup sequence instead of running one app and exiting:
+Boot an interactive Workbench session using a named profile from
+`configs/amiga/workbenches.yaml`. The profile declares the OS environment,
+machine, and the path to your persistent VHD/HDF:
 
 ```sh
-AMIGA_TEST_INTERACTIVE=1 ./scripts/build.sh amiga-test-disk
+./scripts/build.sh amiga-workbench --profile wb32-a1200 -- --external-nio
+./scripts/build.sh amiga-workbench --profile wb31-a1200 -- --external-nio
 ```
 
-The simplest way to build an interactive Workbench disk and connect it to the
-already-running NIO is:
-
-```sh
-./scripts/build.sh amiga-workbench -- --external-nio
-```
-
-This builds the selected app into the HDF but preserves the normal Workbench
-startup sequence. Amiberry opens visibly; open `System/Shell` and run the app.
-The test-image builder removes Workbench's optional `WBStartup/Welcome`
-program, so the first-run "Welcome to the Amiga Preinstallation Environment"
-requester does not interrupt automated or interactive tests.
-
-For a single interactive playground image containing every Amiga application
-from `nio-apps`, every Amiga utility from `nio-core-apps`, and the resident
-FujiNet disk driver, use:
-
-```sh
-./scripts/build.sh amiga-workbench --all-apps --with-driver -- --external-nio
-```
-
-The image includes `DEVS:fujinet-disk.device` and `C:fujinet-mount`, but no
-static `DN0`-`DN7` MountLists. `fmount` inspects the selected media and creates
-the DOS node dynamically. The generated HDF is the local interactive image at
-`build/images/amiga-workbench.hdf`; it is not a TNFS-mounted media image. With
-`--with-driver`, its startup sequence runs the workspace-owned
-`C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device`
-before Workbench loads. It registers the resident directly, so the driver is
-ready without a warm restart and without AmigaOS 3.2's `LoadModule` command.
-
-Additional Amiga archives can be unpacked into the HDF while it is being
-assembled. For example, to stage the Picasso96 installer and its files:
-
-```sh
-./scripts/build.sh amiga-workbench \
-  --profile wb3.2 \
-  --all-apps \
-  --with-driver \
-  --install-archive \
-  /home/markf/dev/amiga/AmigaForever/af11/Archives/Picasso96/Picasso96.lha \
-  -- \
-  --external-nio
-```
-
-The archive is extracted under the HDF root, preserving its
-`Picasso96Install/` tree. The Amiga-side `InstallPicasso96` program is not
-run automatically; launch it from Workbench or a Shell when you want to
-perform its interactive installation. Multiple `--install-archive` options
-are supported. The same list can be stored in a profile as an
-`install_archives` YAML list (`install_archive` is also accepted for
-compatibility). The `all_apps` and `with_driver` flags can be stored in the
-profile as well, so the complete environment can be recreated without
-command-line switches. For example:
-
-```yaml
-profiles:
-  wb32-setup:
-    build_test_disk: true
-    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb32-base.hdf
-    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
-    all_apps: true
-    with_driver: true
-    install_archives:
-      - /path/to/Picasso96.lha
-    settings:
-      cpu_type: 68040
-      z3_autoconfig: true
-
-  wb32-run:
-    build_test_disk: false
-    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb32-run.hdf
-    kickstart: ${AMIBERRY_ASSET_ROOT}/ROM/kickCDTVa1000a500a2000a600.rom
-    settings:
-      cpu_type: 68040
-      z3_autoconfig: true
-```
-
-Build the setup image with `--profile wb32-setup`, copy it to the run image
-when you want a disposable working copy, then launch the copy with
-`--profile wb32-run`.
+Amiberry opens visibly; open `System/Shell` and run commands interactively.
+Profiles are defined in `configs/amiga/workbenches.yaml`. Each declares an
+`environment` (e.g. `wb32`) and `machine` (e.g. `a1200-030`) — the kickstart
+and machine settings are resolved automatically from those. The `harddrive`
+field points to your own persistent VHD/HDF, separate from the test base HDF.
+See `docs/amiga/environment-setup.md` for how to configure profiles.
 
 ## Building ADF media for TNFS
 
@@ -221,24 +150,23 @@ profiles:
       cachesize: 0
 ```
 
-Set `AMIBERRY_OS_ROOT` and `AMIBERRY_WORKBENCH_ADF` to the corresponding
-expanded 3.1 tree and licensed Workbench ADF before building that profile.
-Driver auto-loading uses the redistributable loader built by
+Set `AMIGA_WB31_KICKSTART` and optionally `AMIGA_WB31_ADF_MODULES` in
+`local/amiga.env` — see `docs/amiga/environment-setup.md` for the full variable
+list. Driver auto-loading uses the redistributable loader built by
 `fujinet-nio-driver`. The loader itself is validated on Workbench 3.1. Full
 `DNx:` filesystem access is not yet validated there: its filesystem handler
 uses the classic synchronous `TD_REMOVE` change-interrupt interface, whereas
 Workbench 3.2 uses retained `TD_ADDCHANGEINT` requests.
 
-For a generated profile (`build_test_disk: true`), `harddrive` is
-the output HDF/VHD path; if omitted, the default is
-`build/images/amiga-workbench.hdf`. For a direct profile
-(`build_test_disk: false`), `harddrive` is an existing HDF/VHD image to reuse.
-Use `disk` for floppy/ADF profiles such as `wb1.3`. An optional
-`config_file` entry loads an existing Amiberry UAE configuration before
-applying the profile settings. `uae_config` remains accepted as a legacy alias.
-The profile settings are emitted as command-line `-s` overrides after the
-configuration file is loaded, so a profile only needs to list differences from
-the shared base configuration.
+Profiles in `configs/amiga/workbenches.yaml` that declare an `environment` +
+`machine` pair derive their kickstart and base HDF from the built environment
+manifest; `harddrive` may be overridden to point at a personal persistent
+VHD/HDF. Profiles without an `environment` key (such as the `wb1.3` floppy
+profile) specify `disk`, `kickstart`, and `settings` directly; the
+corresponding variables must be set in `local/amiga.env`. An optional
+`uae_config` entry loads an existing Amiberry UAE configuration before
+applying the profile settings; the profile `settings` are emitted as
+command-line `-s` overrides after the configuration file is loaded.
 
 The runner defaults SDL3 to `SDL_VIDEO_DRIVER=kmsdrm,wayland,x11`, while
 respecting either SDL video-driver variable if already set. SDL3 documents
@@ -274,18 +202,21 @@ non-interactive e2e images. To make a core utility the e2e command, use
 
 The workspace has a reusable guest integration suite under
 `integration-tests/amiberry/`. It starts a fresh POSIX FujiNet-NIO and
-Amiberry for each case, builds a test HDF with a generated Startup-Sequence,
-extracts guest result files, and asserts their contents:
+Amiberry for each case, copies the pre-built base HDF, injects the test
+payload, extracts guest result files, and asserts their contents.
+
+Build everything and run the full suite:
 
 ```sh
-./scripts/build.sh amiga-tests
+./scripts/build.sh amiga-tests --amiga-env wb32 --amiga-machine a1200-030
 ```
 
-Run a focused case or see verbose output with:
+When binaries are already built, run directly with `scripts/amiga-tests`:
 
 ```sh
-./scripts/run-amiga-e2e-tests -k wifi -v
-./scripts/run-amiga-e2e-tests -k cli -v
+scripts/amiga-tests --amiga-env wb32 --amiga-machine a1200-030
+scripts/amiga-tests --amiga-env wb32 --amiga-machine a1200-030 -k wifi -v
+scripts/amiga-tests --amiga-env wb31 --amiga-machine a1200-030 -k cli -v
 ```
 
 The first tests cover Wi-Fi SET/GET/status/scan using the public

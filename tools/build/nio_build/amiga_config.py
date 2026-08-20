@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import string
 from pathlib import Path
@@ -44,6 +45,45 @@ def _expand(value: Any, root: Path, environment: dict[str, str]) -> Any:
     return str(path)
 
 
+def _load_env_manifest(root: Path, env_id: str, machine_id: str | None) -> dict[str, Any]:
+    """Load build/amiga-envs/<env_id>[/<machine_id>]/manifest.json."""
+    envs_root = root / "build" / "amiga-envs"
+    if machine_id:
+        machine_path = envs_root / env_id / machine_id / "manifest.json"
+        agnostic_path = envs_root / env_id / "manifest.json"
+        if machine_path.is_file():
+            manifest_path = machine_path
+        elif agnostic_path.is_file():
+            manifest_path = agnostic_path
+        else:
+            raise SystemExit(
+                f"AmigaOS environment '{env_id}/{machine_id}' has not been built.\n"
+                f"Run: scripts/amiga-env build {env_id} --machine {machine_id}"
+            )
+    else:
+        manifest_path = envs_root / env_id / "manifest.json"
+        if not manifest_path.is_file():
+            raise SystemExit(
+                f"AmigaOS environment '{env_id}' has not been built.\n"
+                f"Run: scripts/amiga-env build {env_id}"
+            )
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def _load_machine_profile(root: Path, machine_id: str) -> dict[str, Any]:
+    """Load configs/amiga/machines/<machine_id>.yaml."""
+    machine_path = root / "configs" / "amiga" / "machines" / f"{machine_id}.yaml"
+    if not machine_path.is_file():
+        raise SystemExit(f"Machine profile not found: {machine_path}")
+    with machine_path.open("r", encoding="utf-8") as fh:
+        profile = yaml.safe_load(fh) or {}
+    uae_config = profile.get("uae_config", "")
+    if uae_config:
+        resolved = (root / "configs" / "amiga" / uae_config).resolve()
+        profile["uae_config"] = str(resolved)
+    return profile
+
+
 def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] | None = None) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         document = yaml.safe_load(handle) or {}
@@ -64,6 +104,31 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
     # ${AMIGA_WB32_KICKSTART} even when build.sh does not source env.sh first.
     local_env = _load_local_amiga_env(root)
     environment = {**local_env, **(environment or {})}
+
+    # Resolve environment + machine references to a concrete disk and kickstart.
+    env_id: str | None = result.pop("environment", None)
+    machine_id: str | None = result.pop("machine", None)
+    if env_id:
+        manifest = _load_env_manifest(root, env_id, machine_id)
+        result.setdefault("harddrive", manifest["base_hdf"])
+        result.setdefault("kickstart", manifest["kickstart"])
+        if manifest.get("rom_key"):
+            result.setdefault("rom_key", manifest["rom_key"])
+        result["_env_id"] = env_id
+        result["_machine_id"] = machine_id
+    if machine_id and not env_id:
+        # machine without environment: just apply hardware settings
+        machine_profile = _load_machine_profile(root, machine_id)
+        result.setdefault("uae_config", machine_profile.get("uae_config", ""))
+        if "settings" not in result:
+            result["settings"] = machine_profile.get("settings", {})
+        result["_machine_id"] = machine_id
+    elif machine_id and env_id:
+        machine_profile = _load_machine_profile(root, machine_id)
+        result.setdefault("uae_config", machine_profile.get("uae_config", ""))
+        if "settings" not in result:
+            result["settings"] = machine_profile.get("settings", {})
+
     config_keys = [key for key in ("config_file", "uae_config") if key in result]
     if len(config_keys) > 1:
         raise SystemExit(

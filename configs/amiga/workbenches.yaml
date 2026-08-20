@@ -1,11 +1,25 @@
-default: wb32-run
+default: wb32-a1200
 
 profiles:
-  wb32-run:
-    build_test_disk: false
+  # Interactive Workbench sessions — point harddrive at your own persistent VHD/HDF.
+  # The environment provides kickstart; the machine provides CPU/chipset/RAM settings.
+  # To use a pre-built base image instead of a personal one, set harddrive to the
+  # output of: scripts/amiga-env build <env_id> --machine <machine_id>
+
+  wb32-a1200:
+    environment: wb32
+    machine: a1200-030
     harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-run.vhd
-    kickstart: ${AMIGA_WB32_KICKSTART}
-    config_file: ${NIO_WORKSPACE}/configs/amiga/base-68030.uae
+
+  wb32-a500:
+    environment: wb32
+    machine: a500-030
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-a500-run.vhd
+
+  wb31-a1200:
+    environment: wb31
+    machine: a1200-030
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.1-run.hdf
 
   wb1.3:
     disk: ${AMIGA_WB13_ADF_WORKBENCH}

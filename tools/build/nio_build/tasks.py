@@ -265,25 +265,42 @@ class Build:
         volume_label: str | None = None,
     ) -> None:
         app_name, app = self.amiga_test_app()
-        # Keep one useful interactive image containing both the selected test
-        # app and the complete core utility set.  The selected app still
-        # controls the non-interactive e2e startup command.
         self.core_apps_amiga()
         core_app_dir = self.p("NIO_CORE_APPS") / "build" / "amiga" / "bin"
-        os_root = Path(self.ctx.env.get("AMIBERRY_OS_ROOT", ""))
-        boot_adf = Path(self.ctx.env.get("AMIBERRY_WORKBENCH_ADF", ""))
-        if not os_root.is_dir():
-            raise SystemExit(
-                f"expanded AmigaOS tree not found: {os_root}\n"
-                "Set AMIBERRY_OS_ROOT to the licensed expanded AmigaOS tree."
-            )
-        if not boot_adf.is_file():
-            raise SystemExit(f"boot-block source ADF not found: {boot_adf}")
         output = output or (self.ctx.image_dir / f"amiga-{app_name}.hdf")
+
+        env_id = self.ctx.env.get("AMIGA_ENV_ID", "")
+        machine_id = self.ctx.env.get("AMIGA_MACHINE_ID", "")
+        base_hdf = self.ctx.env.get("AMIGA_ENV_BASE_HDF", "")
+
+        if not base_hdf and env_id:
+            # Resolve base HDF from the built environment manifest.
+            from .amiga_config import _load_env_manifest, _load_machine_profile
+            manifest = _load_env_manifest(self.ctx.root, env_id, machine_id or None)
+            base_hdf = manifest["base_hdf"]
+            self.ctx.env["AMIBERRY_KICKSTART"] = manifest["kickstart"]
+            if manifest.get("rom_key"):
+                self.ctx.env["AMIBERRY_ROM_KEY"] = manifest["rom_key"]
+            if machine_id:
+                machine = _load_machine_profile(self.ctx.root, machine_id)
+                settings = machine.get("settings", {})
+                self.ctx.env["AMIBERRY_EXTRA_SETTINGS"] = ";".join(
+                    f"{k}={v}" for k, v in settings.items()
+                )
+                if machine.get("uae_config"):
+                    self.ctx.env["AMIBERRY_UAE_CONFIG"] = machine["uae_config"]
+
+        if not base_hdf or not Path(base_hdf).is_file():
+            raise SystemExit(
+                "No AmigaOS base HDF available for amiga-e2e.\n"
+                "Set AMIGA_ENV_ID (and optionally AMIGA_MACHINE_ID) to a built environment,\n"
+                "or set AMIGA_ENV_BASE_HDF directly.\n"
+                "Build with: scripts/amiga-env build <env_id> [--machine <machine_id>]"
+            )
+
         disk_args = [
             self.ctx.root / "scripts" / "build-amiga-test-disk",
-            "--os-root", os_root,
-            "--boot-adf", boot_adf,
+            "--base-hdf", base_hdf,
             "--app", app,
             "--app-name", app_name,
             "--extra-app-dir", core_app_dir,
@@ -350,11 +367,24 @@ class Build:
             action="store_true",
             help="keep the Workbench shell instead of running the app at boot",
         )
+        if build_adf:
+            parser.add_argument(
+                "--amiga-env",
+                metavar="ENV_ID",
+                help="AmigaOS environment id (e.g. wb31, wb32); reads base HDF from "
+                     "build/amiga-envs/<id>/manifest.json (or AMIGA_ENV_ID env var)",
+            )
+            parser.add_argument(
+                "--amiga-machine",
+                metavar="MACHINE_ID",
+                help="machine profile id (e.g. a1200-030); selects machine-keyed "
+                     "environment sub-directory (or AMIGA_MACHINE_ID env var)",
+            )
         parser.epilog = (
             "Amiberry options go after '--', for example:\n"
-            "  scripts/build.sh amiga-e2e --app wifitest -- --external-nio\n"
+            "  scripts/build.sh amiga-e2e --amiga-env wb32 --amiga-machine a1200-030 --app wifitest -- --external-nio\n"
             "Environment equivalents: AMIGA_TEST_APP, AMIGA_TEST_PROJECT, "
-            "AMIGA_TEST_COMMAND, AMIGA_TEST_INTERACTIVE"
+            "AMIGA_TEST_COMMAND, AMIGA_TEST_INTERACTIVE, AMIGA_ENV_ID, AMIGA_MACHINE_ID"
         )
         return parser
 
@@ -373,6 +403,11 @@ class Build:
             self.ctx.env["AMIGA_TEST_COMMAND"] = parsed.command
         if parsed.interactive:
             self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
+        if build_adf:
+            if getattr(parsed, "amiga_env", None):
+                self.ctx.env["AMIGA_ENV_ID"] = parsed.amiga_env
+            if getattr(parsed, "amiga_machine", None):
+                self.ctx.env["AMIGA_MACHINE_ID"] = parsed.amiga_machine
         return runner_args
 
     def amiga_run(self, args: list[str], *, build_adf: bool) -> None:
@@ -398,27 +433,11 @@ class Build:
             "--config", "--profile-file", dest="profile_file", metavar="PATH",
             help="alternate workbenches YAML file",
         )
-        parser.add_argument(
-            "--all-apps", action="store_true",
-            help="install all Amiga applications from nio-apps and nio-core-apps",
-        )
-        parser.add_argument(
-            "--with-driver", action="store_true",
-            help="install fujinet-disk.device and fujinet-mount (dynamic mounts only)",
-        )
-        parser.add_argument(
-            "--install-archive", action="append", type=Path, metavar="PATH",
-            help="extract an LHA/archive tree into the virtual disk (repeatable)",
-        )
-        parser.add_argument(
-            "--volume-label", metavar="LABEL",
-            help="volume label for a newly built Workbench hard drive",
-        )
         parser.epilog = (
-            "Amiberry options go after '--', for example --external-nio.\n"
-            "The --all-apps and --with-driver options build a convenient interactive\n"
-            "playground image; fmount discovers media dynamically, so static MountLists\n"
-            "are not installed."
+            "Profiles are defined in configs/amiga/workbenches.yaml.\n"
+            "Each profile declares an environment (e.g. wb32) and machine (e.g. a1200-030),\n"
+            "plus a harddrive path pointing to your persistent VHD/HDF.\n"
+            "Amiberry options go after '--', for example: -- --external-nio"
         )
         return parser
 
@@ -427,7 +446,7 @@ class Build:
         return cls.amiga_workbench_parser().format_help()
 
     def amiga_workbench(self, args: list[str]) -> None:
-        """Build an interactive Amiga HDF, then run it in Amiberry."""
+        """Boot a named Amiberry Workbench profile from an existing disk image."""
         self.ctx.env["AMIGA_TEST_INTERACTIVE"] = "1"
         from .amiga_config import load_profile
 
@@ -450,52 +469,49 @@ class Build:
             self.ctx.env,
         )
         self.ctx.env["AMIGA_WORKBENCH_CONFIG"] = profile["name"]
-        for key in ("kickstart", "rom_key", "fast_file_system"):
-            if key in profile:
-                self.ctx.env[
-                    {"kickstart": "AMIBERRY_KICKSTART",
-                     "rom_key": "AMIBERRY_ROM_KEY",
-                     "fast_file_system": "AMIBERRY_FAST_FILE_SYSTEM"}[key]
-                ] = profile[key]
+        for key, env_var in (
+            ("kickstart", "AMIBERRY_KICKSTART"),
+            ("rom_key", "AMIBERRY_ROM_KEY"),
+            ("fast_file_system", "AMIBERRY_FAST_FILE_SYSTEM"),
+            ("uae_config", "AMIBERRY_UAE_CONFIG"),
+        ):
+            if profile.get(key):
+                self.ctx.env[env_var] = profile[key]
         settings = profile.get("settings", {})
         self.ctx.env["AMIBERRY_EXTRA_SETTINGS"] = ";".join(
-            f"{key}={value}" for key, value in settings.items()
+            f"{k}={v}" for k, v in settings.items()
         )
-        if profile.get("uae_config"):
-            self.ctx.env["AMIBERRY_UAE_CONFIG"] = profile["uae_config"]
 
-        if profile.get("build_test_disk", False):
-            output = Path(profile.get("harddrive", profile.get("disk", ""))) if profile.get("harddrive", profile.get("disk")) else (
-                self.ctx.image_dir / "amiga-workbench.hdf"
+        harddrive = profile.get("harddrive")
+        disk = Path(harddrive or profile.get("disk", ""))
+        if not disk.is_file():
+            raise SystemExit(
+                f"Amiga Workbench disk not found for profile '{profile['name']}': {disk}\n"
+                "Set harddrive in the profile to an existing VHD/HDF path."
             )
-            self.amiga_test_disk(
-                all_apps=bool(profile.get("all_apps", False)) or parsed.all_apps,
-                with_driver=bool(profile.get("with_driver", False)) or parsed.with_driver,
-                install_archives=[
-                    *[Path(path) for path in profile.get("install_archives", [])],
-                    *[path.expanduser() for path in (parsed.install_archive or [])],
-                ],
-                output=output,
-                volume_label=parsed.volume_label or profile.get("volume_label"),
-            )
-        else:
-            harddrive = profile.get("harddrive")
-            disk = Path(harddrive or profile.get("disk", ""))
-            if not disk.is_file():
-                raise SystemExit(f"Amiga Workbench disk not found for profile {profile['name']}: {disk}")
-            self.ctx.env["AMIBERRY_DISK"] = str(disk)
-            if harddrive or disk.suffix.lower() in {".hdf", ".vhd"}:
-                self.ctx.env["AMIBERRY_DISK_KIND"] = "harddrive"
-            else:
-                self.ctx.env["AMIBERRY_DISK_KIND"] = "floppy"
+        self.ctx.env["AMIBERRY_DISK"] = str(disk)
+        self.ctx.env["AMIBERRY_DISK_KIND"] = (
+            "harddrive" if harddrive or disk.suffix.lower() in {".hdf", ".vhd"} else "floppy"
+        )
         self.amiga_run(runner_args, build_adf=False)
 
     def amiga_tests(self, args: list[str]) -> None:
+        """Build all Amiga artefacts then run the integration-test suite.
+
+        Builds lib-amiga, apps-amiga, core-apps-amiga, and the POSIX NIO
+        binary so the suite always runs against the latest of everything.
+        Additional arguments (including --amiga-env / --amiga-machine) are
+        forwarded verbatim to scripts/amiga-tests → pytest.
+        """
         if args[:1] == ["--"]:
             args = args[1:]
+        self.lib_amiga()
+        self.apps_amiga()
+        self.core_apps_amiga()
+        self.fujinet_tcp_debug()
         self.runner.run(
             "amiga-e2e-tests",
-            [self.ctx.root / "scripts" / "run-amiga-e2e-tests", *args],
+            [self.ctx.root / "scripts" / "amiga-tests", *args],
         )
 
     def apps_bbc(self) -> None:
