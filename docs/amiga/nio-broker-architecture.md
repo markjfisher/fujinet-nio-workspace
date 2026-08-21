@@ -20,14 +20,14 @@ touching any service, disk device, or application code.
                           │ call
   ┌───────────────────────▼────────────────────────────────┐
   │  fujinet-nio-lib  (fn_raw_call, fnsvc_*, fn_disk_*)    │
-  │  public, platform-agnostic service API                  │
+  │  public, platform-agnostic service API                 │
   └───────────────────────┬────────────────────────────────┘
                           │ Amiga platform transport shim
                           │ (fn_transport_init/exchange/close)
   ┌───────────────────────▼────────────────────────────────┐
-  │  fujinet-nio.device                                     │
-  │  generic NIO broker / sole transport arbitrator         │
-  │  one FIFO worker, service-agnostic, backend-neutral     │
+  │  fujinet-nio.device                                    │
+  │  generic NIO broker / sole transport arbitrator        │
+  │  one FIFO worker, service-agnostic, backend-neutral    │
   └────────┬───────────────────────────────────────────────┘
            │ internal backend interface (not public ABI)
      ┌─────┴──────┬─────────────────────┐
@@ -37,11 +37,11 @@ touching any service, disk device, or application code.
   (owns         (owns                 (owns its
   serial.device) Zorro card)          resource)
 
-  ┌───────────────────────────────────────────────────────┐
+  ┌────────────────────────────────────────────────────────┐
   │  fujinet-disk.device                                   │
   │  Amiga TD_* disk semantics only                        │
   │  client of fujinet-nio-lib (same path as applications) │
-  └───────────────────────────────────────────────────────┘
+  └────────────────────────────────────────────────────────┘
 ```
 
 ### Component responsibilities
@@ -108,83 +108,134 @@ not interpret it.
 /* The only command accepted by the broker worker */
 #define FUJINET_NIO_CMD_EXCHANGE   (CMD_NONSTD + 0)
 
+/* Current struct size; callers must set fn_struct_size to this value */
+#define FUJINET_NIO_REQUEST_SIZE   (sizeof(struct FujiNetNIORequest))
+
 struct FujiNetNIORequest {
     /*
      * Standard Exec IORequest header. io_Command must be
      * FUJINET_NIO_CMD_EXCHANGE. The broker worker never supports IOF_QUICK
      * for this command; BeginIO clears it before queuing.
+     *
+     * io_Error carries native Exec/device-level completion errors only
+     * (e.g. IOERR_ABORTED, IOERR_NOCMD). It is set to zero on a successful
+     * dispatch to the worker, regardless of the NIO-level outcome.
+     * Do not read NIO protocol results from io_Error; use fn_nio_error.
      */
     struct IORequest fn_io;
 
     /*
+     * ABI version/size guard. Caller must set this to FUJINET_NIO_REQUEST_SIZE
+     * before submitting. The broker rejects requests with a mismatched size
+     * with io_Error = IOERR_BADLENGTH and fn_nio_error = FN_ERR_INVALID.
+     * This allows the struct to grow in future versions without silent
+     * misinterpretation by older callers or older brokers.
+     */
+    UWORD        fn_struct_size;
+
+    UWORD        fn_flags;          /* reserved; must be zero */
+
+    /*
      * NIO request frame — a complete, already-encoded FujiBus frame ready to
      * be handed to the physical transport. The broker does not construct,
-     * inspect, or modify the frame. For stream backends this is the
-     * pre-SLIP-encoded payload; the backend applies SLIP framing. For
-     * packet-native backends this is the FujiBus payload delivered directly.
+     * inspect, or modify the frame. For stream backends (serial) the backend
+     * applies SLIP framing around this payload. For packet-native backends
+     * (Zorro) the payload is delivered directly in the hardware packet format.
      *
      * Caller owns this buffer. It must remain valid and unmodified from
      * the time DoIO/SendIO is called until the IORequest is replied.
      */
     const UBYTE *fn_request_data;
-    UWORD        fn_request_length;  /* frames are bounded by FN_MAX_PACKET_SIZE */
+    UWORD        fn_request_length;  /* bounded by FN_MAX_PACKET_SIZE (≤ 512 today) */
 
     /*
-     * Response buffer, caller-allocated. On a successful exchange the broker
-     * writes the decoded response payload here. The caller must supply
-     * fn_response_capacity >= the maximum expected response size.
+     * Response buffer, caller-allocated. On a successful NIO exchange the
+     * broker writes the decoded response payload here (framing stripped).
+     * The caller must supply fn_response_capacity >= the maximum expected
+     * response size. fn_response_length is set by the broker and is valid
+     * only when fn_nio_error == FN_OK.
      *
      * Caller owns this buffer. The same lifetime rule as fn_request_data
      * applies.
      */
     UBYTE       *fn_response_data;
     UWORD        fn_response_capacity;
-    UWORD        fn_response_length; /* set by broker; valid only when fn_nio_error == 0 */
+    UWORD        fn_response_length;
 
     /*
-     * FN-space result code (see §2.1). Populated by the broker worker before
-     * ReplyMsg. fn_io.io_Error is set to the same value for compatibility with
-     * callers that only check io_Error.
+     * FN-space result code (see §2.1). Carries NIO/FujiBus protocol-level
+     * errors. Set by the broker worker before ReplyMsg. Independent of
+     * fn_io.io_Error; the two fields cover different error domains.
      */
     UBYTE        fn_nio_error;
 
-    UBYTE        fn_reserved[3];    /* must be zero on submission */
+    UBYTE        fn_pad[3];         /* alignment; must be zero */
 };
 ```
 
 `UWORD` (16-bit) is used for lengths because FujiBus frames are bounded by
 `FN_MAX_PACKET_SIZE` (currently 512 bytes). If that bound is ever raised above
-65535 the field must become `ULONG`; that is a future ABI version bump.
+65535 the fields must become `ULONG`; that is a future ABI version bump tracked
+through `fn_struct_size`.
 
 ### 2.1 Error domain
 
-The `fn_nio_error` field carries **FN-space error codes from `fujinet-nio.h`**,
-not native Exec `io_Error` values. This is a deliberate split: the broker's
-`io_Error` carries the same FN value (for callers that only check `io_Error`),
-but there is no conflation with Exec error codes such as `IOERR_OPENFAIL = 1`
-or `IOERR_ABORTED = 2`.
+The struct carries **two independent error fields** with different domains.
+Conflating them has caused real debugging confusion in this project and must not
+happen again.
 
-Relevant existing FN codes (from `fujinet-nio.h`):
+**`fn_io.io_Error` — native Exec/device errors only**
+
+Set by the broker to reflect the outcome of the Exec dispatch itself:
+
+| Value | Meaning |
+|---|---|
+| 0 | Dispatch succeeded; check `fn_nio_error` for NIO outcome |
+| `IOERR_ABORTED` (2) | Request was aborted before or during processing |
+| `IOERR_NOCMD` (3) | Unrecognised command (not `FUJINET_NIO_CMD_EXCHANGE`) |
+| `IOERR_BADLENGTH` (5) | `fn_struct_size` does not match the broker's ABI version |
+
+The broker does **not** copy `fn_nio_error` into `io_Error`. Callers must not
+read `io_Error` to determine whether an NIO exchange succeeded or failed.
+
+**`fn_nio_error` — FN-space protocol errors**
+
+Carries the outcome of the NIO exchange itself, using codes from `fujinet-nio.h`.
+Valid only when `io_Error == 0` (dispatch succeeded).
 
 | Symbol | Value | Meaning in broker context |
 |---|---|---|
-| `FN_OK` | 0x00 | Exchange completed successfully |
+| `FN_OK` | 0x00 | Exchange completed, response written to buffer |
 | `FN_ERR_TRANSPORT` | 0x10 | Physical layer failure (backend error) |
-| `FN_ERR_TIMEOUT` | 0x06 | Exchange timed out waiting for response |
-| `FN_ERR_IO` | 0x05 | Backend setup/IO error (not a framing error) |
+| `FN_ERR_TIMEOUT` | 0x06 | No response received within the exchange timeout |
+| `FN_ERR_IO` | 0x05 | Backend setup or IO error |
+| `FN_ERR_INVALID` | 0x02 | `fn_struct_size` mismatch or reserved fields non-zero |
 
-The broker must not define new constants in the `0x01`–`0x12` range without
-auditing `fujinet-nio.h`. A future broker-specific extension range should be
-coordinated with that header to prevent collision. `FN_ERR_ABORTED` does not
-currently exist in the FN error space; **TODO before Stage 2**: either add it
-to `fujinet-nio.h` with a value outside the current range, or document which
-existing code a caller should expect when `AbortIO` fires.
+**TODO before Stage 1:** `FN_ERR_ABORTED` does not exist in `fujinet-nio.h`.
+Add it with a value outside the current `0x00`–`0x12` range. Until then,
+`AbortIO` on a queued request sets `io_Error = IOERR_ABORTED` and
+`fn_nio_error = FN_ERR_TRANSPORT` as a placeholder.
 
-The `fn_reserved` bytes must be zeroed on submission. A future minor version
-may place a flags or version field there; the broker rejects non-zero values
-with `FN_ERR_INVALID` to avoid silent misinterpretation.
+The broker must not define new FN constants without coordinating with
+`fujinet-nio.h` to prevent future collisions.
 
-### 2.2 ABI invariants
+### 2.2 ABI forward compatibility
+
+`fn_struct_size` is the version/size guard. The protocol is:
+- Caller sets `fn_struct_size = sizeof(struct FujiNetNIORequest)` before
+  `DoIO`. This encodes the ABI version the caller was compiled against.
+- The broker checks this field in `BeginIO`. If it does not match the
+  broker's compiled size, the broker sets `io_Error = IOERR_BADLENGTH` and
+  `fn_nio_error = FN_ERR_INVALID` and replies immediately without queuing.
+- When the struct grows (new fields at the end), callers compiled against the
+  old header have a smaller `fn_struct_size`; the broker can detect this and
+  either reject or apply defaults for the new fields. The exact policy is
+  defined at the time of each extension.
+- `fn_flags` is reserved for future per-request flags (e.g. priority hints,
+  timeout overrides). Must be zero on submission; broker rejects non-zero with
+  `IOERR_BADLENGTH`.
+
+### 2.3 Other ABI invariants
 
 - No serial-specific fields. Baud rate, parity, stop bits, SLIP markers, timer
   polling — all backend-internal.
@@ -194,9 +245,8 @@ with `FN_ERR_INVALID` to avoid silent misinterpretation.
   transmits it natively without SLIP. The struct is identical across all
   backends.
 - `IORequest` (not `IOStdReq`) is the base because the broker does not use
-  `io_Length`/`io_Data`/`io_Actual` — those names conflict with the explicit
-  request/response fields and would add confusion. The broker's fields are
-  explicit members of `FujiNetNIORequest`.
+  `io_Length`/`io_Data`/`io_Actual`. Those standard fields conflict in naming
+  with the explicit request/response fields and would add confusion.
 
 ---
 
@@ -249,6 +299,22 @@ eliminated because the transport is never closed mid-batch.
 ---
 
 ## 5. Concurrency and lifetime rules
+
+### Atomicity invariant
+
+`FUJINET_NIO_CMD_EXCHANGE` is one atomic NIO transaction: the complete send of
+the request frame followed by the complete receipt of the response frame.
+
+The broker worker never interleaves the send and receive phases of two
+different callers' requests. While the worker is executing an exchange for
+caller A — regardless of how long the remote device takes to respond — caller
+B's request remains in the FIFO. Caller B's send does not begin until caller
+A's response has been fully received and written to caller A's buffer.
+
+This invariant must hold even when multiple Amiga tasks submit requests
+concurrently. It is what makes the single worker essential: each physical
+transport operation is serialised end-to-end, not merely round-robined between
+callers.
 
 ### Multiple simultaneous callers
 
@@ -460,53 +526,63 @@ are unchanged (see §10 Stage 3).
 
 `fn_slip.c` and `fn_session.c` live in
 `repos/fujinet-nio-lib/src/common/` and are compiled into the amiga library
-(`COMMON_SRCS_DEFAULT`). The current Amiga platform transport
-(`fn_transport.c`) uses `fn_stream_session_t` and the session API directly.
+(`COMMON_SRCS_DEFAULT`). The Amiga platform transport (`fn_transport.c`) uses
+`fn_stream_session_t` and the stream-session API directly.
 
 The serial backend inside `fujinet-nio.device` also needs SLIP framing and the
-stream session. This creates a potential dependency cycle:
+stream session, which could create a dependency cycle. The actual dependency
+chain was inspected:
+
+**`fn_slip.c`**
+- `#include "fn_protocol.h"` → `#include "fujinet-nio.h"` → `<stdint.h>`
+- No reference to any library-level symbol. Clean.
+
+**`fn_session.c`**
+- `#include "fn_session.h"` → `<stdint.h>` only
+- `#include "fujinet-nio.h"` → `<stdint.h>` only
+- `#include "fn_protocol.h"` → as above
+- `#include "fn_internal.h"` → declares `_fn_sessions[]`, `_fn_initialized`,
+  `_fn_req_buf[]`, `_fn_resp_buf[]`, `fn_transport_ctx_t`, etc.
+
+**`fn_internal.h` is the problem.** It includes declarations for library-level
+globals that are defined in other library objects (`fn_state.c`, etc.). If the
+broker's serial backend compiles `fn_session.c` as-is, those `extern`
+declarations do not create linker errors by themselves — the linker only
+complains when a definition is missing and the symbol is actually referenced.
+Inspection of `fn_session.c` confirms that the session framing code
+(`write_frame`, `read_frame`, `fn_stream_session_*`) does not reference any
+symbol declared in `fn_internal.h`. The include appears to be a leftover from
+an earlier refactor.
+
+**Required fix before Stage 2:** remove the `#include "fn_internal.h"` line
+from `fn_session.c`. This is a one-line change with no behavioural effect and
+eliminates the dependency on library-level globals at the header level. After
+this change the framing/session code has no dependency on any library service
+or transport symbol.
+
+### Source organisation after the fix
+
+The broker's serial backend compiles `fn_slip.c` and `fn_session.c` directly
+(referenced by path from the broker's build, not via the library's build
+target). The framing code is pure computation with no library-level side
+effects.
+
+No source file movement is required. The build system for `fujinet-nio.device`
+specifies exactly which source files it compiles. If sharing source files by
+path between two build trees proves unwieldy, extracting a
+`fujinet-nio-framing` static library is the appropriate solution — deferred
+until the path-sharing approach proves impractical.
+
+### No-cycle guarantee (after fix)
 
 ```
-fujinet-nio.device
-    → needs fn_slip.c, fn_session.c        ← framing/session code
-    → those files include fn_protocol.h, fujinet-nio.h    ← error codes, basic types
-    → those headers do NOT pull in fn_init, fn_raw, fn_packet, or service code
-```
+fn_slip.c, fn_session.c          (framing/session; after fix: no library deps)
+  compiled separately into:
+  ├── fujinet-nio-lib  (part of the library build)
+  └── fujinet-nio.device serial backend  (referenced by path)
 
-The cycle does **not** exist provided the serial backend links only the framing
-object files and does not link the full fujinet-nio-lib library. Specifically:
-
-- **Safe to link into the backend**: `fn_slip.o`, `fn_session.o`,
-  `fn_protocol.h` constants.
-- **Must not link into the backend**: `fn_raw.o`, `fn_init.o`, `fn_packet*.o`,
-  `fn_session.o` if it pulls in service state — confirm at Stage 2.
-- **The transport shim** (`fn_transport.c`) links against the full
-  fujinet-nio-lib, which is correct — it is part of that library.
-
-### Required source organisation
-
-The broker's serial backend should be built as a separate compilation unit
-that compiles `fn_slip.c` and `fn_session.c` directly (or a copy/symlink
-under the broker's source tree) without inheriting the full library build.
-The framing code is pure computation with no library-level side effects.
-
-**No source movement is required for Stage 1 or Stage 2.** The build system
-for `fujinet-nio.device` should specify exactly which source files it compiles.
-If it becomes unwieldy to share source files between the library and the broker
-build, extracting a `fujinet-nio-framing` static library is the appropriate
-solution — but this is deferred until the duplicate-source approach proves
-impractical.
-
-### No-cycle guarantee (after migration)
-
-```
-fn_slip.c, fn_session.c          (framing/session, no service deps)
-  ↑ compiled into both:
-fujinet-nio-lib (serial backend role)
-fujinet-nio.device serial backend (directly)
-
-fujinet-nio-lib transport shim   (fn_transport.c)
-  → OpenDevice("fujinet-nio.device")   [Exec call, not a code dep]
+fujinet-nio-lib transport shim (fn_transport.c)
+  → OpenDevice("fujinet-nio.device")   [runtime string, not a link dep]
 
 fujinet-disk.device
   → fujinet-nio-lib              [link dep]
@@ -514,8 +590,7 @@ fujinet-disk.device
 ```
 
 No code dependency cycle exists. The only reference from the library to the
-broker is a runtime `OpenDevice` string — exactly the same way the library
-currently references `"serial.device"`.
+broker is a runtime `OpenDevice` string.
 
 ---
 
@@ -562,33 +637,84 @@ if the strategy changes.
 
 ---
 
-## 11. Staged migration plan
+## 11. Internal physical-backend contract
+
+The broker's internal backend interface is not part of the public ABI (callers
+never see it), but its semantics must be fixed now so that both a stream/SLIP
+backend (serial) and a packet-native backend (Zorro, floppy) can implement it
+without requiring changes to the broker or to any caller.
+
+### Semantic contract
+
+A backend implements exactly three operations:
+
+**`backend_open()`**
+- Opens and initialises the physical hardware resource (e.g. `OpenDevice`,
+  memory-mapped register setup).
+- Performs any one-time configuration (baud rate, buffer allocation, DMA
+  setup).
+- Returns success or an FN-space error code.
+- Called at most once during the broker's resident lifetime (lazy, on first
+  exchange). Not called per-request.
+
+**`backend_close()`**
+- Releases the physical hardware resource.
+- Resets all internal framing/session state so that a subsequent
+  `backend_open()` starts clean.
+- Called on expunge or after an unrecoverable error.
+
+**`backend_exchange(request, request_len, response, response_capacity, response_len_out)`**
+- Performs one complete, atomic NIO transaction:
+  sends the entire `request` buffer to the remote device, then receives the
+  complete response into `response`. Framing (SLIP encoding/decoding for
+  stream backends; native packet format for packet backends) is handled
+  entirely within this function.
+- Sets `*response_len_out` on success.
+- Returns an FN-space error code (`FN_OK`, `FN_ERR_TRANSPORT`,
+  `FN_ERR_TIMEOUT`, `FN_ERR_IO`).
+- **Must not return until the exchange is complete or has definitively failed.**
+  The broker calls `ReplyMsg` only after this function returns.
+- **Must be re-entrant across calls but not concurrent.** The broker worker
+  guarantees it is never called from two threads simultaneously.
+
+### Invariants the contract enforces across backends
+
+- **Service-agnostic.** The exchange function receives and returns raw bytes.
+  It does not parse FujiBus headers, service IDs, or disk geometry.
+- **Transport-neutral.** A stream backend (serial) applies SLIP; a
+  packet-native backend does not. The contract imposes no framing assumption.
+- **No disk semantics.** No command codes, unit numbers, or catalog state
+  appear in the backend interface.
+- **Stateless between calls from the broker's perspective.** Internal state
+  (partial frames, buffer offsets) is the backend's private concern.
+- **Deterministic completion.** The backend must time out internally rather
+  than blocking indefinitely, so the broker's FIFO always makes forward
+  progress.
+
+The concrete C function signatures will be defined at Stage 2. The above
+semantic contract is fixed.
+
+---
+
+## 12. Staged migration plan
 
 Each stage ends with a testable invariant. Stages that share no dependency may
 proceed in parallel.
 
-### Stage 0 — Prerequisite: `fujinet-nio.device` broker load in test bootstrap
-
-Before any code change, update the Amiberry test harness to load
-`fujinet-nio.device` in the startup sequence and in the integration-test
-bootstrap. This establishes the load-ordering contract independently of the
-implementation work.
-
-**Testable invariant:** the bootstrap completes without error even before
-`fujinet-nio.device` exists (by stub/placeholder). All existing tests continue
-to pass because no code path yet uses the broker.
-
-### Stage 1 — Define public ABI
+### Stage 1 — Define public ABI and fix framing dependency
 
 Deliverables:
 - `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` with
-  `struct FujiNetNIORequest`, `FUJINET_NIO_CMD_EXCHANGE`, and error codes
-  (coordinated with `fujinet-nio.h`).
-- Resolve the `FN_ERR_ABORTED` constant (§2.1 TODO).
+  `struct FujiNetNIORequest`, `FUJINET_NIO_CMD_EXCHANGE`, `FUJINET_NIO_REQUEST_SIZE`,
+  and error codes (coordinated with `fujinet-nio.h`).
+- Add `FN_ERR_ABORTED` to `fujinet-nio.h` with a value outside `0x00`–`0x12`.
+- Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
+  Verify that `fn_session.c` compiles without it and all existing tests pass.
 - This document finalised after peer review.
 
 **Testable invariant:** the header compiles cleanly against the Amiga GCC
-toolchain with no warnings.
+toolchain with no warnings. The amiga and amiga-driver library builds continue
+to pass. The existing integration suite is unaffected.
 
 ### Stage 2 — Implement `fujinet-nio.device` (serial backend)
 
@@ -596,17 +722,18 @@ Deliverables:
 - New `repos/fujinet-nio-driver/amiga/nio.device/` directory.
 - Broker device: `device_init`, `device_open`, `device_close`,
   `device_expunge`, `device_begin_io`, `device_abort_io`, FIFO worker,
-  request state machine (§5.1).
-- Serial backend: serial.device + timer.device ownership, SLIP framing via
-  `fn_session`/`fn_slip`, lazy-open on first exchange.
+  request state machine (§5.1). `BeginIO` validates `fn_struct_size`.
+- Serial backend implementing the contract from §11: `backend_open`,
+  `backend_close`, `backend_exchange`. Uses serial.device + timer.device;
+  SLIP framing via `fn_session`/`fn_slip` compiled from source.
 - Error recovery policy resolved per §7 TODO.
 - Build system produces `fujinet-nio.device` binary.
-- A dedicated broker test program (not a stub, see §12) validates FIFO,
+- A dedicated broker test program (not a stub, see §13) validates FIFO,
   concurrency, buffer ownership, abort, and error propagation.
 
 **Testable invariant:** a standalone test tool opens the broker, submits a
 `FUJINET_NIO_CMD_EXCHANGE` with a known FujiBus frame, receives the correct
-response, closes. The broker test suite passes (see §12).
+response, closes. The broker test suite passes (see §13).
 
 ### Stage 3 — Re-route `fn_transport.c` through the broker
 
@@ -617,13 +744,14 @@ Deliverables:
 - No application or service code changes.
 - Remove debug instrumentation (`DBG_PRINTF` blocks) added in the race
   investigation.
+- Update the Amiberry integration-test bootstrap to load `fujinet-nio.device`
+  before any FujiNet tool. This is an environment change, not a test-logic
+  change: assertions, startup sequences, and expected results are unchanged.
 
 **Testable invariant:** the Amiberry integration suite passes with the same
-test assertions and startup-sequence operations as before Stage 3. The
-bootstrap environment may have changed (broker now loaded at startup); test
-logic is unchanged. `diskdevice-inspect-catalog` must pass reliably. No
-`OpenDevice("serial.device")` call exists anywhere outside the broker's serial
-backend.
+test assertions and startup-sequence operations as before Stage 3.
+`diskdevice-inspect-catalog` must pass reliably. No `OpenDevice("serial.device")`
+call exists anywhere outside the broker's serial backend.
 
 ### Stage 4 — Simplify `fujinet-disk.device` worker
 
@@ -653,7 +781,7 @@ production-ready.
 
 ---
 
-## 12. Broker test suite (replaces Stage 5 stub-backend)
+## 13. Broker test suite (replaces Stage 5 stub-backend)
 
 Rather than a static-response stub backend, the broker test suite validates
 broker behaviour with a real serial backend and a controlled test environment.
@@ -681,19 +809,20 @@ behaviour.
 ## Open questions
 
 1. **Broker device name:** `fujinet-nio.device` — confirm no collision with
-   existing AmigaOS or third-party device names.
+   existing AmigaOS or third-party device names. (Low risk; verify before Stage 2.)
 
 2. **Unit numbering:** unit 0 is assumed. If two FujiNet adapters in one Amiga
    are ever required, unit > 0 could select the second. Not required for current
    hardware; the ABI must not preclude it.
 
 3. **`FN_ERR_ABORTED` constant:** add to `fujinet-nio.h` with a value outside
-   the current `0x00`–`0x12` range before Stage 1 completion.
+   `0x00`–`0x12`. Required before Stage 1 completion.
 
 4. **Error recovery policy (§7):** unresolved; prerequisite for Stage 2.
+   Audit `fn_stream_session_close` / `fn_stream_session_open` for complete
+   framing-state reset.
 
 5. **`fn_transport_close` from disk device at expunge:** the interaction between
    `device_expunge` and the broker's `lib_OpenCnt` needs review during Stage 4.
-   Specifically: if the disk device's `fn_transport_close` → `CloseDevice(broker)`
-   runs after `device_expunge` has already been called on the disk device, ensure
-   no double-close or use-after-free.
+   Specifically: confirm no double-close or use-after-free if
+   `CloseDevice(broker)` is called during or after disk device expunge.
