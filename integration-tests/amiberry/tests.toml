@@ -406,6 +406,7 @@ results = [
   "inspect-post-status.result",
   "inspect-post-dir.result",
   "inspect-post-type.result",
+  "inspect-progress.result",
 ]
 
 [[test]]
@@ -464,4 +465,279 @@ results = [
   "df0-dir-rc.result",
   "df0-type.result",
   "df0-copy.result",
+]
+
+[[test]]
+name = "inspect-causal-a"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-a.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-a"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-b"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-b.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-b"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-c"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-c.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-c"
+results = [
+  "mount.result",
+  "inspect-hd.result",
+  "inspect-dd.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-d"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-d.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-d"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-e"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-e.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-e"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-f"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-f.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-f"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+  "post-dos.result",
+]
+
+[[test]]
+name = "inspect-causal-g"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-g.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-g"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+  "post-dos.result",
+  "post-status.result",
+]
+
+[[test]]
+name = "inspect-causal-h"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-h.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-h"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+  "post-dos.result",
+  "post-status.result",
+  "post-dir.result",
+]
+
+[[test]]
+name = "inspect-causal-i"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-i.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-i"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+  "post-dos.result",
+  "post-status.result",
+  "post-dir.result",
+  "post-type.result",
+]
+
+[[test]]
+name = "inspect-causal-j"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-j.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-j"
+results = [
+  "mount.result",
+  "inspect.result",
+  "progress.result",
+  "post-dos.result",
+  "post-status.result",
+  "post-dir.result",
+  "post-type.result",
+]
+
+[[test]]
+name = "inspect-causal-k"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-k.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-k"
+results = [
+  "mount.result",
+  "inspect-hd.result",
+  "inspect-dd.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-l"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-l.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-l"
+results = [
+  "mount.result",
+  "inspect-dd.result",
+  "inspect-hd.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-m"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-m.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-m"
+results = [
+  "mount.result",
+  "inspect-dd-1.result",
+  "inspect-dd-2.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-n"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-n.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-n"
+results = [
+  "mount.result",
+  "inspect-hd-1.result",
+  "inspect-hd-2.result",
+  "progress.result",
+]
+
+[[test]]
+name = "inspect-causal-o"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 60
+activity_timeout = 45
+screenshot_quiet = 10
+startup = "startup/inspect-causal-o.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/inspect-causal-o"
+results = [
+  "mount.result",
+  "inspect-hd.result",
+  "inspect-dd.result",
+  "progress.result",
 ]

@@ -1,0 +1,13 @@
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:fmount 11 DN0: RO >DH0:mount.result
+C:Echo "MOUNT RC=$RC" >>DH0:mount.result
+C:Echo "BEFORE INSPECT" >DH0:progress.result
+C:diskinspect 0 14 >DH0:inspect.result
+C:Echo "INSPECT RC=$RC" >>DH0:inspect.result
+C:Echo "AFTER INSPECT" >>DH0:progress.result
+C:Echo "BEFORE FLS" >>DH0:progress.result
+C:FLS host:/amiga-e2e-complete/inspect-causal-a >NIL:
+C:Echo "AFTER FLS" >>DH0:progress.result
+C:Echo "Causal A Complete"
+C:Wait 3
+C:EndCLI

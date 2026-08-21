@@ -838,7 +838,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         test_env = amiga_environment.copy()
         test_env["AMIGA_RUN_DIR"] = str(run_dir)
         case_index = list(amiga_cases).index(name)
-        test_env["FUJINET_NIO_PORT"] = str(65510 + case_index)
+        test_env["FUJINET_NIO_PORT"] = str(64000 + case_index)
         test_env["AMIBERRY_PORT"] = str(23470 + case_index)
         test_env.update(machine_environment(amiga_machine))
 

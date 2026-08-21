@@ -19,3 +19,7 @@ __main__.py
 /scratch
 /repos/PDCurses/
 /images/
+
+# causal output we don't want to track
+/run-*.sh
+/*-results.txt
