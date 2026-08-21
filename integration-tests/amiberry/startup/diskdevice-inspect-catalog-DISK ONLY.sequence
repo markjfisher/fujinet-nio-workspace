@@ -1,84 +1,58 @@
-C:Echo "01 BEFORE LOAD RESIDENT"
 C:Echo "01 BEFORE LOAD RESIDENT" >DH0:trace.result
 C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
-C:Echo "02 AFTER LOAD RESIDENT RC=$RC"
 C:Echo "02 AFTER LOAD RESIDENT RC=$RC" >>DH0:trace.result
 
-C:Echo "03 BEFORE FMOUNT"
 C:Echo "03 BEFORE FMOUNT" >>DH0:trace.result
 C:fmount 11 DN0: RO >DH0:inspect-mount.result
-C:Echo "04 AFTER FMOUNT RC=$RC"
 C:Echo "04 AFTER FMOUNT RC=$RC" >>DH0:trace.result
 
-C:Echo "05 BEFORE PRE DIR"
 C:Echo "05 BEFORE PRE DIR" >>DH0:trace.result
 C:Dir DN0: >DH0:inspect-pre-dir.result
 C:Echo "DIR RC=$RC" >>DH0:inspect-pre-dir.result
-C:Echo "06 AFTER PRE DIR RC=$RC"
 C:Echo "06 AFTER PRE DIR RC=$RC" >>DH0:trace.result
 
-C:Echo "07 BEFORE PRE TYPE"
 C:Echo "07 BEFORE PRE TYPE" >>DH0:trace.result
 C:Type DN0:KNOWN.TXT >DH0:inspect-pre-type.result
 C:Echo "TYPE RC=$RC" >>DH0:inspect-pre-type.result
-C:Echo "08 AFTER PRE TYPE RC=$RC"
 C:Echo "08 AFTER PRE TYPE RC=$RC" >>DH0:trace.result
 
-C:Echo "09 BEFORE PRE DOSLIST"
 C:Echo "09 BEFORE PRE DOSLIST" >>DH0:trace.result
 C:doslistdiag >DH0:inspect-pre-dos.result
-C:Echo "10 AFTER PRE DOSLIST RC=$RC"
 C:Echo "10 AFTER PRE DOSLIST RC=$RC" >>DH0:trace.result
 
-C:Echo "11 BEFORE PRE STATUS"
 C:Echo "11 BEFORE PRE STATUS" >>DH0:trace.result
 C:fujinet-mount --status 0 >DH0:inspect-pre-status.result
-C:Echo "12 AFTER PRE STATUS RC=$RC"
 C:Echo "12 AFTER PRE STATUS RC=$RC" >>DH0:trace.result
 
-C:Echo "13 BEFORE INSPECT HD"
 C:Echo "13 BEFORE INSPECT HD" >>DH0:trace.result
 C:diskinspect 0 14 >DH0:inspect-hd.result
 C:Echo "INSPECT HD RC=$RC" >>DH0:inspect-hd.result
-C:Echo "14 AFTER INSPECT HD RC=$RC"
 C:Echo "14 AFTER INSPECT HD RC=$RC" >>DH0:trace.result
 
-C:Echo "15 BEFORE INSPECT DD"
 C:Echo "15 BEFORE INSPECT DD" >>DH0:trace.result
 C:diskinspect 0 11 >DH0:inspect-dd.result
 C:Echo "INSPECT DD RC=$RC" >>DH0:inspect-dd.result
-C:Echo "16 AFTER INSPECT DD RC=$RC"
 C:Echo "16 AFTER INSPECT DD RC=$RC" >>DH0:trace.result
 
-C:Echo "17 BEFORE POST DOSLIST"
 C:Echo "17 BEFORE POST DOSLIST" >>DH0:trace.result
 C:doslistdiag >DH0:inspect-post-dos.result
-C:Echo "18 AFTER POST DOSLIST RC=$RC"
 C:Echo "18 AFTER POST DOSLIST RC=$RC" >>DH0:trace.result
 
-C:Echo "19 BEFORE POST STATUS"
 C:Echo "19 BEFORE POST STATUS" >>DH0:trace.result
 C:fujinet-mount --status 0 >DH0:inspect-post-status.result
-C:Echo "20 AFTER POST STATUS RC=$RC"
 C:Echo "20 AFTER POST STATUS RC=$RC" >>DH0:trace.result
 
-C:Echo "21 BEFORE POST DIR"
 C:Echo "21 BEFORE POST DIR" >>DH0:trace.result
 C:Dir DN0: >DH0:inspect-post-dir.result
 C:Echo "DIR RC=$RC" >>DH0:inspect-post-dir.result
-C:Echo "22 AFTER POST DIR RC=$RC"
 C:Echo "22 AFTER POST DIR RC=$RC" >>DH0:trace.result
 
-C:Echo "23 BEFORE POST TYPE"
 C:Echo "23 BEFORE POST TYPE" >>DH0:trace.result
 C:Type DN0:KNOWN.TXT >DH0:inspect-post-type.result
 C:Echo "TYPE RC=$RC" >>DH0:inspect-post-type.result
-C:Echo "24 AFTER POST TYPE RC=$RC"
 C:Echo "24 AFTER POST TYPE RC=$RC" >>DH0:trace.result
 
-C:Echo "25 BEFORE FLS"
 C:Echo "25 BEFORE FLS" >>DH0:trace.result
 C:FLS host:/amiga-e2e-complete/diskdevice-inspect-catalog >NIL:
-C:Echo "26 AFTER FLS RC=$RC"
 C:Echo "26 AFTER FLS RC=$RC" >>DH0:trace.result
 C:Echo "Exiting"
