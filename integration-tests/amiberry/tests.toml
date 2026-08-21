@@ -397,6 +397,7 @@ completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-inspect-catalog"
 results = [
   "trace.result",
+  "fls.result",
   "inspect-mount.result",
   "inspect-pre-dir.result",
   "inspect-pre-type.result",
