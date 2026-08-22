@@ -1,13 +1,17 @@
 # FujiNet NIO Broker Architecture
 
-*Status: design for review — not yet implemented*
+*Status: Stage 3 cut-over is implemented (broker + lib client). Stage 4
+idle-close removal and Stage 5 extra backends remain backlog.*
 
-This document defines the target architecture for the Amiga NIO transport
-layer. The immediate motivation is a proven race: FLS and
-`fujinet-disk.device` both call `OpenDevice("serial.device")` independently.
-The deeper motivation is that serial.device is a temporary proving-ground
-transport. Adding Zorro and other packet-native backends must not require
-changes to any service, disk device, or application code.
+This document defines the architecture for the Amiga NIO transport layer.
+The original motivation was a proven race: FLS and `fujinet-disk.device`
+both called `OpenDevice("serial.device")` independently through the
+pre-cut-over library shim. After Stage 3, production FujiNet NIO opens
+`serial.device` only in the broker serial backend; clients open
+`fujinet-nio.device`. The deeper motivation is that serial.device is a
+temporary proving-ground transport. Adding Zorro and other packet-native
+backends must not require changes to any service, disk device, or
+application code.
 
 **Locked decisions**
 
@@ -356,10 +360,10 @@ implementation behind them must honor the ownership rule in this section.
 
 ## 4. How `fujinet-disk.device` submits NIO calls through the broker
 
-The disk device is a lib client with its own transport context (§3). After
-Stage 3 (backlog), that context opens the broker, not `serial.device`. The
-worker serializes TD callers onto that one context. Stage 4 (backlog) removes
-idle-close; the worker must not `fn_transport_close` when its FIFO empties.
+The disk device is a lib client with its own transport context (§3). That
+context opens the broker, not `serial.device`. The worker serializes TD
+callers onto that one context. Stage 4 (backlog) removes idle-close; the
+worker must not `fn_transport_close` when its FIFO empties.
 
 ---
 
@@ -639,8 +643,8 @@ not the same as `serial.device` busy.
 
 The Amiberry integration test harness must ensure `fujinet-nio.device` is
 resident before any sequence step that triggers NIO. This is an environment
-concern, not a test-logic concern; the test assertions and startup sequences
-are unchanged (backlog Stage 3).
+concern, not a test-logic concern; Stage 3 kept the test assertions and
+startup-sequence operations unchanged.
 
 ---
 

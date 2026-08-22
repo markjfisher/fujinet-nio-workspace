@@ -7,6 +7,13 @@ import subprocess
 import re
 from pathlib import Path
 
+NIO_LOAD_RESIDENT = (
+    "C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device\n"
+)
+DISK_LOAD_RESIDENT = (
+    "C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device\n"
+)
+
 
 def xdf_tool() -> list[str]:
     tool = shutil.which("xdftool")
@@ -39,6 +46,20 @@ def validate_volume_label(label: str) -> str:
             "volume label must be 1-30 characters and cannot contain ':', '/', or '\\'"
         )
     return label
+
+
+def prepend_fujinet_resident_loads(
+    test_commands: str,
+    *,
+    load_driver: bool = False,
+    load_nio: bool = False,
+) -> str:
+    """Prepend LoadResident lines. NIO is applied last so it is first on disk."""
+    if load_driver:
+        test_commands = DISK_LOAD_RESIDENT + test_commands
+    if load_nio:
+        test_commands = NIO_LOAD_RESIDENT + test_commands
+    return test_commands
 
 
 def startup_command_offset(startup: str, command: str) -> int | None:

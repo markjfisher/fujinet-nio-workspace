@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from amiga_emulator.disk import (
     extract_archive,
     install_tree,
+    prepend_fujinet_resident_loads,
     run_xdf,
     startup_command_offset,
 )
@@ -138,18 +139,11 @@ def main() -> int:
                     "C:Assign T: RAM:\n"
                     f"C:{command} >DH0:{args.app_name}.result\n"
                 )
-            if args.load_driver:
-                test_commands = (
-                    "C:fujinet-load-resident "
-                    "DEVS:fujinet-disk.device fujinet-disk.device\n"
-                    + test_commands
-                )
-            if args.load_nio:
-                test_commands = (
-                    "C:fujinet-load-resident "
-                    "DEVS:fujinet-nio.device fujinet-nio.device\n"
-                    + test_commands
-                )
+            test_commands = prepend_fujinet_resident_loads(
+                test_commands,
+                load_driver=args.load_driver,
+                load_nio=args.load_nio,
+            )
 
             marker_at = startup_command_offset(staged_startup, "LoadWB")
             if marker_at is None:

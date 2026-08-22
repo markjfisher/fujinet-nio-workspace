@@ -2,7 +2,7 @@
 title: 'Amiga NIO broker Stage 3B — bootstrap and guest race proof'
 type: 'feature'
 created: '2026-08-22'
-status: 'done'
+status: 'ready-for-dev'
 review_loop_iteration: 0
 baseline_commit: '0f63b42f36ac017a6c05b59c347cc5467a2b8d31'
 context:
@@ -88,6 +88,7 @@ context:
 ## Spec Change Log
 
 - 2026-08-22: Human edit — source-search verification must find symbol-based `OpenDevice` sites, not only a literal `OpenDevice(.*serial.device` regex.
+- 2026-08-22: Stage 3B close-out — `amiga_test_disk` must `make native` before HDF construction; host tests cover generated/interactive `--load-nio` and nio-first startup.
 
 ## Design Notes
 
@@ -105,6 +106,7 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_nio_broker.py::test_isolated_exchange` -- expected: isolated PASS; no disk.device/FLS
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_adf.py::test_catalog_inspection_preserves_live_dd_handler` -- expected: PASS (run 1)
 - Repeat the previous inspect-catalog pytest command -- expected: PASS (run 2); no serial OpenDevice contention
+- `PYTHONPATH=tools/build:tools python -m unittest tests.test_amiga_test_disk amiga_emulator.tests.test_disk` from `$NIO_WORKSPACE` -- expected: `amiga_test_disk` builds broker artifacts then passes `--load-nio`; generated/interactive startup is nio-first
 - From `$NIO_WORKSPACE`, run **both** searches and **classify every hit** (do not stop at a literal `OpenDevice("serial.device")` regex; backend/shim pass a name variable):
   1. `rg -n -g '!**/.*' 'serial\\.device|timer\\.device|TIMERNAME|serial_device_name' repos/fujinet-nio-lib repos/fujinet-nio-driver/amiga repos/nio-core-apps repos/nio-apps`
   2. `rg -n -g '!**/.*' 'OpenDevice\\s*\\(' repos/fujinet-nio-lib/src/platform/amiga repos/fujinet-nio-driver/amiga repos/nio-core-apps repos/nio-apps`
@@ -129,10 +131,10 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
   [`conftest.py:829`](../../integration-tests/amiberry/conftest.py#L829)
 
 - `--load-nio` prepends nio after disk in source so nio is first on the HDF.
-  [`build-amiga-test-disk:147`](../../scripts/build-amiga-test-disk#L147)
+  [`disk.py:51`](../../tools/amiga_emulator/disk.py#L51)
 
-- Interactive and amiga-e2e HDFs get the same nio-first bootstrap.
-  [`tasks.py:327`](../../tools/build/nio_build/tasks.py#L327)
+- Interactive and amiga-e2e HDFs `make native` then pass `--load-nio`.
+  [`tasks.py:126`](../../tools/build/nio_build/tasks.py#L126)
 
 **Unchanged race proof**
 

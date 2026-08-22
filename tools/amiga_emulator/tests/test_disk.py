@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from amiga_emulator.disk import startup_command_offset, validate_volume_label
+from amiga_emulator.disk import (
+    DISK_LOAD_RESIDENT,
+    NIO_LOAD_RESIDENT,
+    prepend_fujinet_resident_loads,
+    startup_command_offset,
+    validate_volume_label,
+)
 
 
 class AmigaDiskTests(unittest.TestCase):
@@ -11,6 +17,20 @@ class AmigaDiskTests(unittest.TestCase):
         for invalid in ("", "bad:name", "bad/name", "x" * 31):
             with self.assertRaises(ValueError):
                 validate_volume_label(invalid)
+
+    def test_load_nio_is_first_on_generated_and_interactive_startup(self) -> None:
+        generated = "C:Assign T: RAM:\nC:wifitest >DH0:wifitest.result\n"
+        patched = prepend_fujinet_resident_loads(
+            generated, load_driver=True, load_nio=True
+        )
+        self.assertTrue(patched.startswith(NIO_LOAD_RESIDENT))
+        self.assertIn(DISK_LOAD_RESIDENT, patched)
+        nio_at = patched.find(NIO_LOAD_RESIDENT.strip())
+        disk_at = patched.find(DISK_LOAD_RESIDENT.strip())
+        self.assertLess(nio_at, disk_at)
+
+        interactive = prepend_fujinet_resident_loads("", load_nio=True)
+        self.assertEqual(interactive, NIO_LOAD_RESIDENT)
 
     def test_startup_command_matches_plain_and_prefixed_loadwb(self) -> None:
         for line in ("LoadWB\n", "C:LoadWB\n", "  c:loadwb delay\n"):

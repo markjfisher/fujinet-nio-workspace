@@ -78,8 +78,10 @@ not loaded in that environment.
 
 ### Stage 3 — Cut-over: `fn_transport` stops opening `serial.device`
 
-This is the cut-over. After this stage, `fn_transport` opens the broker only;
-`OpenDevice("serial.device")` exists solely in the broker's serial backend.
+This is the cut-over. After this stage, `fn_transport` opens the broker only.
+Production FujiNet NIO `OpenDevice("serial.device")` exists solely in the
+broker's serial backend. Documented test-only probes may open serial to
+assert exclusivity; they are not production ownership.
 
 Deliverables:
 - [x] `fn_transport.c` (Amiga) rewritten per §3: each transport context owns
@@ -101,8 +103,10 @@ Deliverables:
 
 **Testable invariant:** the Amiberry integration suite passes with the same
 test assertions and startup-sequence operations as before Stage 3.
-`diskdevice-inspect-catalog` must pass reliably. No `OpenDevice("serial.device")`
-call exists anywhere outside the broker's serial backend.
+`diskdevice-inspect-catalog` must pass reliably. Production FujiNet NIO
+`OpenDevice("serial.device")` exists only in the broker serial backend.
+The `fujinet-nio-exchange` `try_open_serial` helper is a documented
+test-only probe, not a production serial owner.
 
 ### Stage 4 — Remove disk-device idle-close
 

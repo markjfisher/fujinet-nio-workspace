@@ -123,6 +123,12 @@ class Build:
         self.runner.require_dir(driver_amiga)
         self.runner.run("amiga-driver-sdk", ["make", "all", "sdk"], cwd=driver_amiga)
 
+    def _ensure_amiga_nio_broker_artifacts(self) -> None:
+        """Build nio.device, load-resident, and disk binaries from a clean tree."""
+        driver_amiga = self.p("FUJINET_NIO_DRIVER") / "amiga"
+        self.runner.require_dir(driver_amiga)
+        self.runner.run("amiga-nio-broker-native", ["make", "native"], cwd=driver_amiga)
+
     def lib_tests(self) -> None:
         self.run_make("lib-tests", "FUJINET_NIO_LIB", "test")
 
@@ -306,6 +312,8 @@ class Build:
                 "or set AMIGA_ENV_BASE_HDF directly.\n"
                 "Build with: scripts/amiga-env build <env_id> [--machine <machine_id>]"
             )
+
+        self._ensure_amiga_nio_broker_artifacts()
 
         disk_args = [
             self.ctx.root / "scripts" / "build-amiga-test-disk",
