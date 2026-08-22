@@ -2,8 +2,9 @@
 title: 'Amiga NIO broker Stage 3A — lib transport cut-over'
 type: 'feature'
 created: '2026-08-22'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: 'fa2d221d59c6b0ea77f5503291afabd305e68fcf'
 context:
   - docs/amiga/nio-broker-architecture.md
   - docs/agent-test-policy.md
@@ -77,11 +78,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-lib/makefiles/targets.mk` -- Amiga `-I` to `fujinet_nio_device.h` -- shim compiles against Stage 1 ABI
-- [ ] `repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c` -- broker client per §3; drop serial/timer/DBG/session -- cut-over
-- [ ] Host tests + `Makefile` `test` hook -- I/O matrix; OpenDevice name is broker -- cheapest lib gate
-- [ ] `README.md` + `docs/building.md` -- stop saying lib uses `serial.device` directly -- Stage 3 README deliverable (lib)
-- [ ] Confirm `amiga` and `amiga-driver` still build inside `make check` -- both link images get the new shim
+- [x] `repos/fujinet-nio-lib/makefiles/targets.mk` -- Amiga `-I` to `fujinet_nio_device.h` -- shim compiles against Stage 1 ABI
+- [x] `repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c` -- broker client per §3; drop serial/timer/DBG/session -- cut-over
+- [x] Host tests + `Makefile` `test` hook -- I/O matrix; OpenDevice name is broker -- cheapest lib gate
+- [x] `README.md` + `docs/building.md` -- stop saying lib uses `serial.device` directly -- Stage 3 README deliverable (lib)
+- [x] Confirm `amiga` and `amiga-driver` still build inside `make check` -- both link images get the new shim
 
 **Acceptance Criteria:**
 - Given a stubbed `OpenDevice`, when `fn_transport_init` runs, then the name is `fujinet-nio.device` unit 0 and never `serial.device`, and the request was zeroed/`NT_MESSAGE`/reply-port/`mn_Length` initialized first.
@@ -111,3 +112,46 @@ Synchronous `DoIO` is the in-flight bound: close is not concurrent with exchange
 
 **Manual checks (if no CLI):**
 - `rg -n 'serial\\.device' repos/fujinet-nio-lib/src/platform/amiga/` -- expected: no production OpenDevice of serial in the rewritten shim
+
+## Suggested Review Order
+
+**Broker client ownership**
+
+- Process-local context owns the request, reply port, and open flag.
+  [`fn_transport.c:30`](../../repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c#L30)
+
+- Init opens `fujinet-nio.device` after 1.3-safe port and request header setup.
+  [`fn_transport.c:81`](../../repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c#L81)
+
+**Exchange mapping**
+
+- Reset ABI/result fields immediately before each blocking `DoIO`.
+  [`fn_transport.c:60`](../../repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c#L60)
+
+- Native `io_Error` maps to FN codes; success returns `fn_nio_error` and length.
+  [`fn_transport.c:126`](../../repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c#L126)
+
+- CloseDevice plus DeletePort only; no AbortIO on a completed request.
+  [`fn_transport.c:149`](../../repos/fujinet-nio-lib/src/platform/amiga/fn_transport.c#L149)
+
+**Build and docs**
+
+- Amiga targets include the driver ABI header instead of a vendored copy.
+  [`targets.mk:114`](../../repos/fujinet-nio-lib/makefiles/targets.mk#L114)
+
+- `make check` builds `amiga-driver` and runs the new host test.
+  [`Makefile:136`](../../repos/fujinet-nio-lib/Makefile#L136)
+
+- Library docs name the broker, not direct `serial.device`.
+  [`README.md:162`](../../repos/fujinet-nio-lib/README.md#L162)
+
+**Host I/O matrix**
+
+- Stubbed OpenDevice records broker name/unit and request initialization.
+  [`amiga_transport_host_test.c:140`](../../repos/fujinet-nio-lib/tests/amiga_transport_host_test.c#L140)
+
+- Stale `fn_nio_error` must not leak through a native `io_Error`.
+  [`amiga_transport_host_test.c:206`](../../repos/fujinet-nio-lib/tests/amiga_transport_host_test.c#L206)
+
+- Close after completed DoIO must not AbortIO or WaitIO.
+  [`amiga_transport_host_test.c:289`](../../repos/fujinet-nio-lib/tests/amiga_transport_host_test.c#L289)
