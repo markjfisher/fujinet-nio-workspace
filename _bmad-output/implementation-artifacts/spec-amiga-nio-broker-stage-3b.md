@@ -49,7 +49,7 @@ context:
 | Bootstrap driver case | `driver: true` HDF | `Devs/fujinet-nio.device` present; LoadResident nio **before** disk/app NIO | Missing broker → init `FN_ERR_NOT_FOUND`, not serial contention |
 | Original race | DiskDevice NIO completes; shell immediately `FLS`; both via broker | inspect-catalog assertions pass; no `serial.device` OpenDevice contention | Repeat must not flake on OpenDevice busy |
 | Idle-close remains | Disk worker FIFO empty | Still `fn_transport_close` on disk context | Serial stays with broker backend |
-| Source invariant | Production Amiga NIO tree | `OpenDevice("serial.device")` only in broker serial backend | Test-only `try_open_serial` in exchange tool explained, not production |
+| Source invariant | Production Amiga NIO tree | Classified search: broker serial backend is the sole production FujiNet NIO `serial.device` owner | `fn_transport.c` has no serial/timer ownership; disk/apps have none; `try_open_serial` is test-only |
 
 </frozen-after-approval>
 
@@ -76,15 +76,17 @@ context:
 - [ ] Rebuild `fujinet-disk.device` against cut-over `amiga-driver` -- disk uses broker via lib; no idle-close edit
 - [ ] Isolated pytest still passes; inspect-catalog pytest run **twice** -- original race gone; no shim+broker coexistence
 - [ ] App/core-apps READMEs + `amiberry-testing.md` serial sentences -- Stage 3 README remainder
-- [ ] Source search `OpenDevice` / `serial.device` on production Amiga NIO paths -- Stage 3 invariant
+- [ ] Classified source search (serial/timer symbols **and** `OpenDevice` sites) -- Stage 3 invariant; literal `OpenDevice("serial.device")` regex is not enough
 - [ ] `backlog/nio-broker.md` -- Stage 3 boxes only after 3A and 3B Verification ran
 
 **Acceptance Criteria:**
 - Given 3A is `done`, when 3B builds a `driver: true` image, then `fujinet-nio.device` is resident before disk or CLI NIO.
 - Given disk/device NIO then immediate FLS both through the broker, when `test_catalog_inspection_preserves_live_dd_handler` runs twice, then both runs pass without serial OpenDevice contention.
-- Given a production Amiga source search, when `OpenDevice("serial.device")` is listed, then the only production FujiNet NIO hit is the broker serial backend (exchange-tool probe documented as test-only).
+- Given classified hits for `serial.device` / `timer.device` symbols and every `OpenDevice` site, when reviewed, then production `fn_transport.c` has no serial/timer ownership, disk.device/apps have no physical serial ownership, the broker serial backend is the sole production FujiNet NIO `serial.device` owner, and `fujinet-nio-exchange` `try_open_serial` is test-only.
 
 ## Spec Change Log
+
+- 2026-08-22: Human edit — source-search verification must find symbol-based `OpenDevice` sites, not only a literal `OpenDevice(.*serial.device` regex.
 
 ## Design Notes
 
@@ -102,7 +104,15 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_nio_broker.py::test_isolated_exchange` -- expected: isolated PASS; no disk.device/FLS
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_adf.py::test_catalog_inspection_preserves_live_dd_handler` -- expected: PASS (run 1)
 - Repeat the previous inspect-catalog pytest command -- expected: PASS (run 2); no serial OpenDevice contention
-- `rg -n 'OpenDevice\\(.*serial\\.device' repos/fujinet-nio-lib repos/fujinet-nio-driver/amiga repos/nio-core-apps repos/nio-apps` -- expected: production FujiNet NIO hit only `fujinet_nio_serial_backend.c`; `fujinet-nio-exchange.c` `try_open_serial` test-only; **zero** hits in `fn_transport.c` / disk.device / apps
+- From `$NIO_WORKSPACE`, run **both** searches and **classify every hit** (do not stop at a literal `OpenDevice("serial.device")` regex; backend/shim pass a name variable):
+  1. `rg -n -g '!**/.*' 'serial\\.device|timer\\.device|TIMERNAME|serial_device_name' repos/fujinet-nio-lib repos/fujinet-nio-driver/amiga repos/nio-core-apps repos/nio-apps`
+  2. `rg -n -g '!**/.*' 'OpenDevice\\s*\\(' repos/fujinet-nio-lib/src/platform/amiga repos/fujinet-nio-driver/amiga repos/nio-core-apps repos/nio-apps`
+  -- expected classification:
+  - production `fn_transport.c`: **no** `serial.device` / `timer.device` / `TIMERNAME` ownership and no `OpenDevice` of those devices
+  - `disk.device` and `nio-core-apps` / `nio-apps`: **no** physical serial ownership
+  - sole production FujiNet NIO `serial.device` owner: `fujinet_nio_serial_backend.c` (`serial_device_name` + `OpenDevice`)
+  - `fujinet-nio-exchange.c` `try_open_serial`: **test-only** probe, not production
+  - comments/READMEs that only describe the cut-over are not ownership
 
 **Manual checks (if no CLI):**
 - Confirm non-isolated guest Startup-Sequence lists nio `LoadResident` before disk `LoadResident` or FLS/`fn_transport_init`

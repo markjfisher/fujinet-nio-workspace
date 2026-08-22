@@ -51,7 +51,7 @@ context:
 ## Code Map
 
 - `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3a.md` — Amiga `fn_transport` broker client, per-context Amiga resources, lib host tests, lib README/building sentences.
-- `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3b.md` — Amiberry load-before-NIO bootstrap, disk.device via cut-over lib (no semantics redesign), DiskDevice/FLS guest, `OpenDevice("serial.device")` source search.
+- `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3b.md` — Amiberry load-before-NIO bootstrap, disk.device via cut-over lib (no semantics redesign), DiskDevice/FLS guest, classified serial/`OpenDevice` source search.
 - `backlog/nio-broker.md` — Stage 3 section; still the checkpoint tracker.
 - `docs/amiga/nio-broker-architecture.md` §3, §4, §8 — ownership, disk-as-lib-client, load ordering.
 - `docs/agent-test-policy.md` — cheapest owner gates; child specs name the exact commands.
@@ -70,6 +70,7 @@ context:
 ## Spec Change Log
 
 - 2026-08-22: Split from a combined Stage 3 implementation spec for token budget. Scope stays 3A+3B under this parent gate.
+- 2026-08-22: Human edit — 3A request-init/close precondition and 3B classified source search; no scope expansion.
 
 ## Verification
 
