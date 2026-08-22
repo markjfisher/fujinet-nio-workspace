@@ -810,6 +810,7 @@ behaviour.
 
 1. **Broker device name:** `fujinet-nio.device` — confirm no collision with
    existing AmigaOS or third-party device names. (Low risk; verify before Stage 2.)
+   ANSWER: use fujinet-nio.device, there will be no collision.
 
 2. **Unit numbering:** unit 0 is assumed. If two FujiNet adapters in one Amiga
    are ever required, unit > 0 could select the second. Not required for current

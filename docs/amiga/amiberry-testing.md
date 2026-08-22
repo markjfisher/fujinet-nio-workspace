@@ -25,8 +25,14 @@ Build the Amiga example applications and a bootable HDF containing
 `wifitest`:
 
 ```sh
-./scripts/build.sh amiga-e2e --timeout 15
+./scripts/build.sh amiga-e2e \
+  --amiga-env wb32 --amiga-machine a1200-030 \
+  -- --timeout 15
 ```
+
+Runner options such as `--timeout`, `--external-nio`, and `--pty` go after `--`.
+Omit `--timeout` (or pass `--timeout 0`) to keep Amiberry running interactively.
+See `./scripts/build.sh --explain amiga-e2e` for both argument layers.
 
 The runner defaults to Amiberry's TCP serial endpoint with
 `serial_direct=true`, connected through a small `socat` bridge to the
@@ -43,13 +49,15 @@ To run a core utility instead:
 
 ```sh
 AMIGA_TEST_PROJECT=core AMIGA_TEST_APP=fhost \
-  ./scripts/build.sh amiga-e2e --timeout 15
+  ./scripts/build.sh amiga-e2e \
+    --amiga-env wb32 --amiga-machine a1200-030 \
+    -- --timeout 15
 ```
 
-The generated HDF is under `build/images/`. The builder imports
-`Devs/serial.device` from the licensed Workbench ADF and installs the app in
-the `C:` path. The startup command can be overridden with
-`AMIGA_TEST_COMMAND` when an app needs arguments.
+The generated HDF is under `build/images/`. The builder copies a pre-built
+base HDF from `scripts/amiga-env` and installs the app in `C:`. The startup
+command can be overridden with `AMIGA_TEST_COMMAND` when an app needs
+arguments.
 
 ## Interactive session with your own NIO
 
@@ -95,11 +103,11 @@ The output is `build/images/amiga-sizetest.adf`. Blank images contain no
 Workbench files or startup sequence; they are intended as media for
 `fmount`, not as disks to boot directly.
 
-Named Amiberry environments are defined in
-`configs/amiga/workbenches.yaml`. The default profile is `wb3.2`; select an
-older or custom environment with `AMIGA_WORKBENCH_CONFIG`. Direct-image
-profiles skip test-disk construction and are useful for trying older ROMs and
-operating systems:
+Named Amiberry workbench profiles are defined in
+`configs/amiga/workbenches.yaml`. The default profile is `wb32-a1200`; select
+another profile with `--profile` or `AMIGA_WORKBENCH_CONFIG`. Direct-image
+profiles (such as `wb1.3`) specify `disk` and `kickstart` directly and are
+useful for trying older ROMs and operating systems:
 
 ```sh
 AMIGA_WORKBENCH_CONFIG=wb1.3 \
@@ -121,52 +129,35 @@ AMIGA_WORKBENCH_CONFIG=my-profile \
 ./scripts/build.sh amiga-workbench -- --external-nio
 ```
 
-Each profile can specify `harddrive` or `disk`, `kickstart`, `build_test_disk`, and an
-Amiberry `settings` mapping such as `cpu_type`, `chipmem_size`, and
-`fastmem_size`. These values are directly mapped to `-s` key/value pairs
-and match the names found in typical UAE config files.
+Each profile can specify `harddrive` or `disk`, `kickstart`, and an Amiberry
+`settings` mapping such as `cpu_type`, `chipmem_size`, and `fastmem_size`.
+These values are directly mapped to `-s` key/value pairs and match the names
+found in typical UAE config files.
 
-Generated profiles may also set `volume_label`. The disk builder supports
-AmigaOS 3.1-style trees: the optional AmigaOS 3.2 `WBStartup/Welcome` files
-need not exist, an existing `Devs/serial.device` is replaced by the copy from
-the selected boot ADF, and both `LoadWB` and `C:LoadWB` startup lines are
-recognised. A portable 3.1 profile can therefore be kept in a user profile
-file without hard-coding licensed paths in the workspace:
+Profiles that declare an `environment` + `machine` pair derive kickstart (and
+optionally base HDF) from a built `scripts/amiga-env` manifest; `harddrive`
+may point at a personal persistent VHD/HDF instead:
 
 ```yaml
-profiles:
-  wb31-setup:
-    build_test_disk: true
-    harddrive: ${NIO_WORKSPACE}/build/images/amiga-wb31.hdf
-    kickstart: ${AMIGA_31_ASSET_ROOT}/ROM/kick31.rom
-    rom_key: ${AMIGA_31_ASSET_ROOT}/ROM/rom.key
-    volume_label: AmigaOS3.1
-    all_apps: true
-    settings:
-      cpu_type: 68000
-      chipmem_size: 512
-      fastmem_size: 8
-      cpu_compatible: true
-      cachesize: 0
+  wb31-a1200:
+    environment: wb31
+    machine: a1200-030
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.1-run.hdf
 ```
 
-Set `AMIGA_WB31_KICKSTART` and optionally `AMIGA_WB31_ADF_MODULES` in
-`local/amiga.env` — see `docs/amiga/environment-setup.md` for the full variable
-list. Driver auto-loading uses the redistributable loader built by
+Profiles without an `environment` key (such as the `wb1.3` floppy profile)
+specify `disk`, `kickstart`, and `settings` directly; the corresponding
+variables must be set in `local/amiga.env`. See
+`docs/amiga/environment-setup.md` for the full variable list. An optional
+`uae_config` entry loads an existing Amiberry UAE configuration before
+applying the profile settings; the profile `settings` are emitted as
+command-line `-s` overrides after the configuration file is loaded.
+
+Driver auto-loading uses the redistributable loader built by
 `fujinet-nio-driver`. The loader itself is validated on Workbench 3.1. Full
 `DNx:` filesystem access is not yet validated there: its filesystem handler
 uses the classic synchronous `TD_REMOVE` change-interrupt interface, whereas
 Workbench 3.2 uses retained `TD_ADDCHANGEINT` requests.
-
-Profiles in `configs/amiga/workbenches.yaml` that declare an `environment` +
-`machine` pair derive their kickstart and base HDF from the built environment
-manifest; `harddrive` may be overridden to point at a personal persistent
-VHD/HDF. Profiles without an `environment` key (such as the `wb1.3` floppy
-profile) specify `disk`, `kickstart`, and `settings` directly; the
-corresponding variables must be set in `local/amiga.env`. An optional
-`uae_config` entry loads an existing Amiberry UAE configuration before
-applying the profile settings; the profile `settings` are emitted as
-command-line `-s` overrides after the configuration file is loaded.
 
 The runner defaults SDL3 to `SDL_VIDEO_DRIVER=kmsdrm,wayland,x11`, while
 respecting either SDL video-driver variable if already set. SDL3 documents
@@ -176,11 +167,15 @@ the compatibility spelling.
 Alternatively, build and run in two steps:
 
 ```sh
-AMIGA_TEST_INTERACTIVE=1 ./scripts/build.sh amiga-test-disk
+AMIGA_ENV_ID=wb32 AMIGA_MACHINE_ID=a1200-030 \
+  AMIGA_TEST_INTERACTIVE=1 ./scripts/build.sh amiga-test-disk
 ./scripts/run-amiberry-nio \
   --external-nio \
   --harddrive build/images/amiga-wifitest.hdf
 ```
+
+`run-amiberry-nio` accepts `--timeout` directly (no `--` separator). For an
+interactive session without a timeout, omit it.
 
 This command remains running. Amiberry should show the Workbench display;
 open `System/Shell` (or the Shell icon) and type commands such as:
