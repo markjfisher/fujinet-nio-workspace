@@ -29,3 +29,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2a.md`
   summary: Allocate the worker signal on the worker task and name/type the `struct Task` instead of copying disk.device's init-task `AllocSignal`/`AddTask` setup
   evidence: Host tests never run `AddTask`/`Wait`/`Signal`; the disk resident uses the same pattern and is out of 2A scope.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3b.md`
+  summary: `build-amiga-test-disk --load-driver` still succeeds without `--load-nio`
+  evidence: After 3A, disk.device NIO needs the broker; pytest sequences LoadResident disk themselves and e2e `amiga_test_disk` always passes `--load-nio`, but the script still allows a disk-only prepend that can load `fujinet-disk.device` with no resident broker.

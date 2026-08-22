@@ -17,6 +17,7 @@ from amiga_emulator.disk import (
     prepend_fujinet_resident_loads,
     run_xdf,
     startup_command_offset,
+    startup_sequence_needs_patch,
 )
 
 
@@ -126,7 +127,12 @@ def main() -> int:
             extract_archive(archive, archive_root)
             install_tree(args.output, archive_root)
 
-        if args.startup_script or not args.interactive or args.load_driver or args.load_nio:
+        if startup_sequence_needs_patch(
+            startup_script=args.startup_script is not None,
+            interactive=args.interactive,
+            load_driver=args.load_driver,
+            load_nio=args.load_nio,
+        ):
             if args.startup_script:
                 if not args.startup_script.is_file():
                     raise SystemExit(f"startup script not found: {args.startup_script}")

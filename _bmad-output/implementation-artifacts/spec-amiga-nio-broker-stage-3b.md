@@ -2,7 +2,7 @@
 title: 'Amiga NIO broker Stage 3B — bootstrap and guest race proof'
 type: 'feature'
 created: '2026-08-22'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '0f63b42f36ac017a6c05b59c347cc5467a2b8d31'
 context:
@@ -133,6 +133,12 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
 - `--load-nio` prepends nio after disk in source so nio is first on the HDF.
   [`disk.py:51`](../../tools/amiga_emulator/disk.py#L51)
 
+- Interactive `--load-nio` still rewrites Startup-Sequence when there is no script.
+  [`disk.py:65`](../../tools/amiga_emulator/disk.py#L65)
+
+- The HDF builder uses that gate instead of an inline `if`.
+  [`build-amiga-test-disk:130`](../../scripts/build-amiga-test-disk#L130)
+
 - Interactive and amiga-e2e HDFs `make native` then pass `--load-nio`.
   [`tasks.py:126`](../../tools/build/nio_build/tasks.py#L126)
 
@@ -160,3 +166,6 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
 
 - Stage 3 backlog boxes ticked only after 3A and 3B verification.
   [`nio-broker.md:85`](../../backlog/nio-broker.md#L85)
+
+- Host tests cover the interactive patch gate, not only argv/`prepend`.
+  [`test_disk.py:36`](../../tools/amiga_emulator/tests/test_disk.py#L36)

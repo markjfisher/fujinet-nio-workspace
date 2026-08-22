@@ -124,7 +124,7 @@ class Build:
         self.runner.run("amiga-driver-sdk", ["make", "all", "sdk"], cwd=driver_amiga)
 
     def _ensure_amiga_nio_broker_artifacts(self) -> None:
-        """Build nio.device, load-resident, and disk binaries from a clean tree."""
+        """Ensure native broker, loader, and disk artifacts via make native."""
         driver_amiga = self.p("FUJINET_NIO_DRIVER") / "amiga"
         self.runner.require_dir(driver_amiga)
         self.runner.run("amiga-nio-broker-native", ["make", "native"], cwd=driver_amiga)

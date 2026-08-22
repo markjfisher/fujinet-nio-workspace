@@ -62,6 +62,17 @@ def prepend_fujinet_resident_loads(
     return test_commands
 
 
+def startup_sequence_needs_patch(
+    *,
+    startup_script: bool = False,
+    interactive: bool = False,
+    load_driver: bool = False,
+    load_nio: bool = False,
+) -> bool:
+    """True when S/Startup-Sequence must be rewritten for a script, generated CLI, or resident load."""
+    return startup_script or not interactive or load_driver or load_nio
+
+
 def startup_command_offset(startup: str, command: str) -> int | None:
     """Return the beginning of an AmigaDOS command line, ignoring C: prefix."""
     match = re.search(

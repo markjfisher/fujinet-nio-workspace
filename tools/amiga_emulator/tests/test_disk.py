@@ -7,6 +7,7 @@ from amiga_emulator.disk import (
     NIO_LOAD_RESIDENT,
     prepend_fujinet_resident_loads,
     startup_command_offset,
+    startup_sequence_needs_patch,
     validate_volume_label,
 )
 
@@ -31,6 +32,17 @@ class AmigaDiskTests(unittest.TestCase):
 
         interactive = prepend_fujinet_resident_loads("", load_nio=True)
         self.assertEqual(interactive, NIO_LOAD_RESIDENT)
+
+    def test_interactive_load_nio_requires_startup_patch(self) -> None:
+        self.assertTrue(
+            startup_sequence_needs_patch(interactive=True, load_nio=True)
+        )
+        payload = prepend_fujinet_resident_loads("", load_nio=True)
+        self.assertTrue(payload.startswith(NIO_LOAD_RESIDENT))
+
+        self.assertFalse(
+            startup_sequence_needs_patch(interactive=True)
+        )
 
     def test_startup_command_matches_plain_and_prefixed_loadwb(self) -> None:
         for line in ("LoadWB\n", "C:LoadWB\n", "  c:loadwb delay\n"):
