@@ -9,6 +9,14 @@ The deeper motivation is that serial.device is a temporary proving-ground
 transport; Zorro and other packet-native backends must be addable without
 touching any service, disk device, or application code.
 
+**Locked decisions**
+
+| Topic | Rule |
+|---|---|
+| Abort | `io_Error` = `IOERR_ABORTED`; `fn_nio_error` = `FN_ERR_ABORTED`. Never copy FN codes into `io_Error`. |
+| Recovery | Backend may reopen after a defined failure/reset (or expunge). “Open once” is normal steady-state, not a resident-lifetime prohibition. |
+| Concurrency | One `IORequest` per transport context / in-flight caller. No shared global `IORequest` across independent tasks. |
+
 ---
 
 ## 1. Responsibilities and dependency direction
@@ -65,8 +73,11 @@ touching any service, disk device, or application code.
 
 **fujinet-nio-lib Amiga transport shim (fn_transport.c)**
 - The only component in the library that names `fujinet-nio.device`.
-- `fn_transport_init` opens the broker; `fn_transport_exchange_buffers`
-  submits one `FujiNetNIORequest`; `fn_transport_close` closes the broker.
+- Each independently usable transport context owns its broker `FujiNetNIORequest`,
+  message port, and request/response state (§3).
+- `fn_transport_init` opens the broker on that context;
+  `fn_transport_exchange_buffers` submits that context's `FujiNetNIORequest`;
+  `fn_transport_close` closes the broker on that context.
 - All other library code (service, packet, session) is unchanged.
 
 **fujinet-disk.device**
@@ -115,7 +126,8 @@ struct FujiNetNIORequest {
     /*
      * Standard Exec IORequest header. io_Command must be
      * FUJINET_NIO_CMD_EXCHANGE. The broker worker never supports IOF_QUICK
-     * for this command; BeginIO clears it before queuing.
+     * for this command; BeginIO clears IOF_QUICK before any ReplyMsg
+     * (immediate reject or queue).
      *
      * io_Error carries native Exec/device-level completion errors only
      * (e.g. IOERR_ABORTED, IOERR_NOCMD). It is set to zero on a successful
@@ -184,40 +196,89 @@ The struct carries **two independent error fields** with different domains.
 Conflating them has caused real debugging confusion in this project and must not
 happen again.
 
+The two fields are independent domains. Never copy one into the other.
+
+| Field | Domain | Must not contain |
+|---|---|---|
+| `fn_io.io_Error` | Native Exec/device completion status only | `FN_ERR_*` (`FN_ERR_TRANSPORT`, `FN_ERR_TIMEOUT`, `FN_ERR_ABORTED`, …) |
+| `fn_nio_error` | FujiNet/NIO result only (`fujinet-nio.h`) | Exec `IOERR_*` |
+
 **`fn_io.io_Error` — native Exec/device errors only**
 
-Set by the broker to reflect the outcome of the Exec dispatch itself:
+Set by the broker to reflect the outcome of the Exec dispatch itself.
+Use the symbols from `exec/errors.h`; do not hard-code their numeric values
+in this architecture or in tests.
 
-| Value | Meaning |
+| Symbol (`exec/errors.h`) | Meaning |
 |---|---|
 | 0 | Dispatch succeeded; check `fn_nio_error` for NIO outcome |
-| `IOERR_ABORTED` (2) | Request was aborted before or during processing |
-| `IOERR_NOCMD` (3) | Unrecognised command (not `FUJINET_NIO_CMD_EXCHANGE`) |
-| `IOERR_BADLENGTH` (5) | `fn_struct_size` does not match the broker's ABI version |
+| `IOERR_ABORTED` | Request was aborted before or during processing |
+| `IOERR_NOCMD` | Unrecognised command (not `FUJINET_NIO_CMD_EXCHANGE`) |
+| `IOERR_BADLENGTH` | `fn_struct_size` does not match the broker's ABI version |
 
-The broker does **not** copy `fn_nio_error` into `io_Error`. Callers must not
-read `io_Error` to determine whether an NIO exchange succeeded or failed.
+Callers must not read `io_Error` to determine whether an NIO exchange
+succeeded or failed.
 
 **`fn_nio_error` — FN-space protocol errors**
 
-Carries the outcome of the NIO exchange itself, using codes from `fujinet-nio.h`.
-Valid only when `io_Error == 0` (dispatch succeeded).
+Carries the FujiNet/NIO result, using codes from `fujinet-nio.h`. When
+`io_Error` is 0, this is the exchange outcome. When `io_Error` is
+`IOERR_ABORTED`, this is `FN_ERR_ABORTED` (see AbortIO completion below).
+A non-zero `io_Error` never means “ignore `fn_nio_error` and treat `io_Error`
+as an FN code.”
 
 | Symbol | Value | Meaning in broker context |
 |---|---|---|
 | `FN_OK` | 0x00 | Exchange completed, response written to buffer |
-| `FN_ERR_TRANSPORT` | 0x10 | Physical layer failure (backend error) |
-| `FN_ERR_TIMEOUT` | 0x06 | No response received within the exchange timeout |
+| `FN_ERR_NOT_FOUND` | 0x01 | Invalid unit at `OpenDevice`, or equivalent documented mapping |
+| `FN_ERR_INVALID` | 0x02 | Bad ABI fields (size, flags/pad, pointers, length) |
 | `FN_ERR_IO` | 0x05 | Backend setup or IO error |
-| `FN_ERR_INVALID` | 0x02 | `fn_struct_size` mismatch or reserved fields non-zero |
+| `FN_ERR_TIMEOUT` | 0x06 | No response received within the exchange timeout |
+| `FN_ERR_TRANSPORT` | 0x10 | Physical layer failure (backend error) |
+| `FN_ERR_ABORTED` | 0x13 | Request aborted via `AbortIO` (Stage 1; see below) |
 
-**TODO before Stage 1:** `FN_ERR_ABORTED` does not exist in `fujinet-nio.h`.
-Add it with a value outside the current `0x00`–`0x12` range. Until then,
-`AbortIO` on a queued request sets `io_Error = IOERR_ABORTED` and
-`fn_nio_error = FN_ERR_TRANSPORT` as a placeholder.
+**AbortIO completion**
 
-The broker must not define new FN constants without coordinating with
-`fujinet-nio.h` to prevent future collisions.
+- `fn_io.io_Error` is set to `IOERR_ABORTED`.
+- `fn_nio_error` is set to `FN_ERR_ABORTED`.
+- FN-space errors are never copied into `io_Error`.
+
+This pair is used for both queued aborts (`AbortIO` replies) and in-progress
+aborts (the worker overwrites the exchange result, then replies). There is
+no `FN_ERR_TRANSPORT` placeholder for abort. On abort, `fn_response_length`
+is 0.
+
+**BeginIO / completion matrix**
+
+Two-domain separation is the contract. Native `io_Error` symbols for
+invalid-argument cases are taken from `exec/errors.h` at Stage 2; this table
+does not invent numeric values. Unit is checked at `OpenDevice`, not in
+`BeginIO`.
+
+| Condition | `io_Error` | `fn_nio_error` |
+|---|---|---|
+| Valid request accepted for queue | 0 until completion | undefined until `ReplyMsg` |
+| Wrong command | `IOERR_NOCMD` | `FN_ERR_INVALID` |
+| Bad `fn_struct_size` | `IOERR_BADLENGTH` | `FN_ERR_INVALID` |
+| Non-zero reserved / unsupported `fn_flags` | native invalid-request error | `FN_ERR_INVALID` |
+| Request pointer NULL with non-zero length | native invalid-request error | `FN_ERR_INVALID` |
+| Response pointer NULL with non-zero capacity | native invalid-request error | `FN_ERR_INVALID` |
+| Request too large (`fn_request_length` > `FN_MAX_PACKET_SIZE`) | `IOERR_BADLENGTH` | `FN_ERR_INVALID` |
+| Invalid unit | suitable native device error | `FN_ERR_NOT_FOUND` or documented equivalent |
+| Aborted | `IOERR_ABORTED` | `FN_ERR_ABORTED` |
+
+Immediate rejects reply from `BeginIO` without queuing. On every failed
+exchange path (BeginIO reject, abort, NIO/backend failure),
+`fn_response_length` is 0.
+
+**Stage 1 — `FN_ERR_ABORTED` in `fujinet-nio.h`**
+
+`FN_ERR_ABORTED` does not exist yet. Stage 1 must add it with value **`0x13`**,
+which is unused in the current `fujinet-nio.h` set (`FN_OK` `0x00`,
+`FN_ERR_NOT_FOUND`…`FN_ERR_UNSUPPORTED` `0x01`–`0x08`, `FN_ERR_TRANSPORT`…
+`FN_ERR_NO_HANDLES` `0x10`–`0x12`, `FN_ERR_UNKNOWN` `0xFF`). Do not use
+`0xFF` or any other existing `FN_ERR_*` value. The broker must not define
+new FN constants except by adding them to `fujinet-nio.h`.
 
 ### 2.2 ABI forward compatibility
 
@@ -231,9 +292,8 @@ The broker must not define new FN constants without coordinating with
   old header have a smaller `fn_struct_size`; the broker can detect this and
   either reject or apply defaults for the new fields. The exact policy is
   defined at the time of each extension.
-- `fn_flags` is reserved for future per-request flags (e.g. priority hints,
-  timeout overrides). Must be zero on submission; broker rejects non-zero with
-  `IOERR_BADLENGTH`.
+- `fn_flags` (and `fn_pad`) are reserved. Must be zero on submission;
+  non-zero is rejected per the BeginIO matrix in §2.1.
 
 ### 2.3 Other ABI invariants
 
@@ -255,39 +315,79 @@ The broker must not define new FN constants without coordinating with
 The Amiga platform transport shim (`src/platform/amiga/fn_transport.c`)
 becomes a thin client of the broker. It no longer touches any physical device.
 
+### Transport-shim ownership
+
+- A `FujiNetNIORequest` belongs to one transport context.
+- A transport context may have at most one exchange in flight.
+- No `FujiNetNIORequest` may be concurrently used by two tasks.
+- Different concurrently executing clients must use distinct transport
+  contexts, unless a higher layer serializes all access to a shared context.
+- The broker itself provides serialization between distinct client
+  `IORequest`s. It does not make a shared shim `IORequest` safe.
+- The Amiga transport shim must not use one globally shared `IORequest`
+  across independent tasks.
+
+Each independently usable Amiga transport context owns its own broker
+`IORequest`, message port, and request/response state:
+
 ```
-fn_transport_init()
-    → allocate FujiNetNIORequest and a response buffer
-    → OpenDevice(FUJINET_NIO_DEVICE_NAME, 0, &_broker_req.fn_io, 0)
-    → _device_open = 1
-
-fn_transport_exchange_buffers(request, req_len, response, resp_cap, resp_len)
-    → populate _nio_req fields (fn_request_data, lengths, response pointer)
-    → DoIO(&_nio_req.fn_io)           // blocks until broker worker replies
-    → *resp_len = _nio_req.fn_response_length
-    → return _nio_req.fn_nio_error
-
-fn_transport_close()
-    → CloseDevice(&_broker_req.fn_io)
-    → free FujiNetNIORequest and response buffer
-    → _device_open = 0
+struct fn_amiga_transport {
+    struct MsgPort *port;
+    struct FujiNetNIORequest req;
+    uint8_t device_open;
+};
 ```
 
-`FN_AMIGA_EXPLICIT_LIFECYCLE` remains meaningful: the disk device manages its
-own open/close lifecycle on the broker; CLI tools use `atexit(fn_transport_close)`.
+CLI programs may implement that as a process-local singleton: one context
+per process is fine because Amiga CLI processes do not share that state
+with other tasks. That is still one context, not a machine-global object.
+`fujinet-disk.device` is resident and must own its own transport context
+(not the CLI singleton). Its worker already serializes TD callers, so those
+callers share the disk device's one context legally. Arbitrary tasks must
+not share one `fn_transport` instance unless that higher-layer serialization
+is explicit.
 
-The change is transparent to all callers of `fn_transport_*`. `fn_init`,
-`fn_raw_call`, `fnsvc_*`, and `fn_disk_*` are unaffected.
+```
+fn_transport_init(ctx)
+    → CreateMsgPort → ctx->port; ctx->req.fn_io.mn_ReplyPort = ctx->port
+    → OpenDevice(FUJINET_NIO_DEVICE_NAME, 0, &ctx->req.fn_io, 0)
+    → ctx->device_open = 1
+
+fn_transport_exchange_buffers(ctx, request, req_len, response, resp_cap, resp_len)
+    → populate ctx->req (fn_request_data, lengths, response pointer)
+    → DoIO(&ctx->req.fn_io)           // blocks until broker worker replies
+    → if ctx->req.fn_io.io_Error != 0:
+          *resp_len = 0
+          return mapped local/device failure
+          (must not return stale fn_nio_error from a previous request)
+    → *resp_len = ctx->req.fn_response_length
+    → return ctx->req.fn_nio_error
+
+fn_transport_close(ctx)
+    → if pending: WaitIO/AbortIO on ctx->req before CloseDevice
+    → CloseDevice(&ctx->req.fn_io)
+    → delete port; ctx->device_open = 0
+```
+
+`FN_AMIGA_EXPLICIT_LIFECYCLE` remains meaningful: the disk device manages
+open/close of *its* context; CLI tools use `atexit(fn_transport_close)` on
+the process-local context.
+
+The `fn_transport_*` call sites stay the same. `fn_init`, `fn_raw_call`,
+`fnsvc_*`, and `fn_disk_*` are unaffected as public APIs. The Amiga
+implementation behind them must honour the ownership rule above.
 
 ---
 
 ## 4. How `fujinet-disk.device` submits NIO calls through the broker
 
-No structural change is needed. After Stage 3 of the migration (see §10),
-`fn_transport_init` opens the broker instead of `serial.device`. The disk
-device already calls `fn_init()` before each NIO operation; `fn_init` calls
-`fn_transport_init`; `fn_transport_init` now opens the broker. The disk device
-never learns that the broker exists.
+No structural change is needed at the TD_* surface. After Stage 3 of the
+migration (see the backlog staged plan), the disk device's own transport
+context opens the broker instead of `serial.device`. The disk worker already
+calls `fn_init()` before each NIO operation; `fn_init` / `fn_transport_init`
+open that context. The disk device never opens `fujinet-nio.device` itself.
+Its worker is the higher layer that serializes concurrent TD clients onto
+one context (§3).
 
 The disk device's worker loop can then be simplified (Stage 4): the idle-close
 cycle — `fn_transport_close` when the FIFO empties — is no longer needed.
@@ -318,14 +418,17 @@ callers.
 
 ### Multiple simultaneous callers
 
-Each caller allocates its own `FujiNetNIORequest` and its own
-request/response buffers (typically on its stack or in process memory).
-Multiple tasks may call `DoIO` on the broker simultaneously. Exec's message
-queue serialises them: each `IORequest` is appended to the FIFO inside
-`BeginIO` under `Disable`. The broker worker dequeues and processes one at a
-time over a single open physical transport handle. No caller requires knowledge
-of the others, and no semaphore or explicit coordination is needed at the
-caller level.
+Each concurrently executing client uses a distinct transport context and
+therefore a distinct `FujiNetNIORequest` plus its own request/response
+buffers (§3). Multiple tasks may `DoIO` those distinct requests at the same
+time. Exec's message queue serialises them: each `IORequest` is appended to
+the FIFO inside `BeginIO` under `Disable`. The broker worker dequeues and
+processes one at a time over a single open physical transport handle.
+
+The broker serializes *between* those `IORequest`s. It does not serialize
+two tasks that share one `FujiNetNIORequest`. Sharing a transport context
+requires an explicit higher-layer lock or a single-threaded worker (as
+`fujinet-disk.device` already has).
 
 ### IORequest buffer ownership
 
@@ -354,8 +457,18 @@ response buffer has been written. The physical transport remains open.
 
 ### Quick requests
 
-`IOF_QUICK` is not supported for `FUJINET_NIO_CMD_EXCHANGE`. Every exchange
-requires the worker. `BeginIO` clears `IOF_QUICK` before queuing.
+`IOF_QUICK` is not supported for `FUJINET_NIO_CMD_EXCHANGE`. Every accepted
+exchange requires the worker. **Before any immediate `ReplyMsg` from
+`BeginIO` (reject or queue), clear `IOF_QUICK`.** Do not inline-complete
+an exchange.
+
+### Failed length and shim mapping
+
+- On any failed exchange path, `fn_response_length` is 0 (and the shim
+  writes `*resp_len = 0`).
+- If `DoIO` returns with `io_Error != 0`, `fn_transport_exchange` returns a
+  mapped local/device failure and must not return stale `fn_nio_error` from
+  a previous request.
 
 ### 5.1 AbortIO and request state machine
 
@@ -372,16 +485,18 @@ A request is in one of four states:
 **Queued state:** the request is in the FIFO, not yet dequeued by the worker.
 `AbortIO` sets an abort flag on the request under `Disable` and attempts to
 remove the request from the FIFO (also under `Disable`). If removal succeeds,
-the broker sets `fn_nio_error` to `FN_ERR_TRANSPORT` (TODO: FN_ERR_ABORTED per
-§2.1), sets `io_Error` to the same, and calls `ReplyMsg` from `AbortIO`'s
-context. The request does not enter the worker.
+the broker applies AbortIO completion (§2.1): `fn_io.io_Error = IOERR_ABORTED`,
+`fn_nio_error = FN_ERR_ABORTED`, `fn_response_length = 0`, and `ReplyMsg`
+from `AbortIO`'s context. The request does not enter the worker.
 
 **In-progress state:** the worker has dequeued the request and is executing the
 exchange. `AbortIO` sets the abort flag but cannot interrupt an in-progress
 exchange safely (mid-SLIP-frame interruption is not reliable on all backends).
 The worker completes the physical exchange, then on transition to completing
-state checks the abort flag. If set, it overwrites the result with the abort
-error code and calls `ReplyMsg`. The physical response data is discarded.
+state checks the abort flag. If set, it discards the physical response and
+applies the same AbortIO completion (§2.1), including `fn_response_length = 0`,
+before `ReplyMsg`. Abort is completion-status only; it is not a remote
+rollback of the FujiBus transaction.
 
 **Completing and replied states:** `AbortIO` after the worker has set the
 completing state has no effect. `ReplyMsg` is called exactly once by the worker;
@@ -401,15 +516,29 @@ The synchronization protocol between `AbortIO` and the worker is:
 
 ## 6. Physical backend lifetime
 
-### Chosen policy: lazy-open on first exchange, close on expunge
+### Chosen policy: lazy-open, keep open, reopen only after close
 
-The backend is opened the first time `FUJINET_NIO_CMD_EXCHANGE` is received.
-After that it remains open for the broker's resident lifetime. It is closed
-only when:
-- `device_expunge` is called (broker about to be unloaded), or
-- the backend reports an unrecoverable error (see §7).
+The backend is normally opened lazily once (first `FUJINET_NIO_CMD_EXCHANGE`)
+and kept open. “Open once” is that **steady-state** behaviour, not a
+resident-lifetime prohibition on `backend_open`. `backend_close` /
+`backend_open` may occur again only for:
+
+- explicit broker expunge/shutdown, or
+- recovery after a backend failure that requires reset (see §7).
+
+That is exclusive ownership of the transport, not a once-per-lifetime open
+count. Reopen after a defined close gives recovery for serial now and for
+removable or failable hardware later.
 
 `lib_OpenCnt` reaching zero does **not** trigger a backend close.
+
+### Expunge while work remains
+
+`device_expunge` must not free broker, device, or backend state while queued
+or in-progress requests still exist, or while `OpenCnt` shows remaining opens.
+Expunge is deferred or refused until there is no active work and no remaining
+opens. A full drain/abort protocol is a Stage 2 detail; the invariant is that
+unload does not race live `IORequest`s.
 
 ### Why this is a policy choice, not the only race-free option
 
@@ -443,31 +572,22 @@ there is no shared-resource conflict.
 
 ## 7. Physical backend error recovery
 
-**Unresolved: mark as prerequisite for Stage 2 completion.**
-
-The draft had two contradictory statements. The contradiction is resolved by
-leaving the policy open, because the right choice depends on whether
-`fn_session` / SLIP framing can recover reliably after a mid-exchange failure.
-
-The candidate policy is:
+Reopen after a fatal/reset condition is allowed. Policy:
 
 ```
 fatal/unrecoverable backend error
-  → close/reset backend (CloseDevice serial etc.)
+  → backend_close (reset hardware and framing/session state)
   → fail the current request (fn_nio_error = FN_ERR_TRANSPORT)
-  → on next exchange attempt, one controlled lazy-reopen attempt
-  → if reopen fails, fail that request too and stay in failed state
+  → next exchange may attempt lazy backend_open
+  → if reopen fails, fail that request too and leave the backend closed
   → repeat on each subsequent attempt (never permanently give up until expunge)
 ```
 
-This is reasonable if `fn_stream_session_close` + `fn_stream_session_open`
-correctly resets SLIP framing and any pending partial frame state. If partial
-state is not cleanly reset, a reopen attempt could corrupt the next exchange.
-
-**TODO (Stage 2 prerequisite):** audit `fn_stream_session_close` and
-`fn_stream_session_open` to confirm whether they reset all framing state. If
-yes, adopt the candidate policy. If not, document what additional reset is
-required, or make permanent failure (until expunge/reload) the policy.
+`backend_close` must leave framing and session state fully reset so the next
+`backend_open` starts clean (§11). For the serial backend, Stage 2 must make
+`fn_stream_session_close` / `fn_stream_session_open` (or an additional reset)
+satisfy that; a dirty SLIP session after close is a backend defect, not a
+reason to forbid reopen.
 
 ---
 
@@ -651,17 +771,24 @@ A backend implements exactly three operations:
 **`backend_open()`**
 - Opens and initialises the physical hardware resource (e.g. `OpenDevice`,
   memory-mapped register setup).
-- Performs any one-time configuration (baud rate, buffer allocation, DMA
-  setup).
+- Performs configuration required to start clean (baud rate, buffers, DMA,
+  framing/session).
 - Returns success or an FN-space error code.
-- Called at most once during the broker's resident lifetime (lazy, on first
-  exchange). Not called per-request.
+- Called when the backend is currently closed and an exchange requires it.
+- Normally called once after broker startup (lazy, first exchange). That
+  “once” is steady-state, not a lifetime cap.
+- May be called again after `backend_close` during defined error recovery
+  (§7) or after a failed open (backend stayed closed).
+- Must never be called concurrently. Not called per-request while open.
 
 **`backend_close()`**
+- Safe only when the backend is open.
 - Releases the physical hardware resource.
-- Resets all internal framing/session state so that a subsequent
-  `backend_open()` starts clean.
-- Called on expunge or after an unrecoverable error.
+- Transitions the backend to a fully reset/closed state.
+- After close, a later `backend_open` must start from clean framing/session
+  state.
+- Called on expunge/shutdown or after a backend failure that requires reset
+  (§7). Not called if open never succeeded.
 
 **`backend_exchange(request, request_len, response, response_capacity, response_len_out)`**
 - Performs one complete, atomic NIO transaction:
@@ -669,7 +796,9 @@ A backend implements exactly three operations:
   complete response into `response`. Framing (SLIP encoding/decoding for
   stream backends; native packet format for packet backends) is handled
   entirely within this function.
-- Sets `*response_len_out` on success.
+- Sets `*response_len_out` on success. On any failure, sets
+  `*response_len_out = 0` before return (broker copies that to
+  `fn_response_length`).
 - Returns an FN-space error code (`FN_OK`, `FN_ERR_TRANSPORT`,
   `FN_ERR_TIMEOUT`, `FN_ERR_IO`).
 - **Must not return until the exchange is complete or has definitively failed.**

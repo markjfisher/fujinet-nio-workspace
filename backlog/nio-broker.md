@@ -1,19 +1,37 @@
 # NIO Broker Migration
 
-This is the backlog work for the [NIO Broker Architecture](../docs/amiga/nio-broker-architecture.md)
+This is the backlog work for the [NIO Broker Architecture](../docs/amiga/nio-broker-architecture.md).
+
+Locked decisions (full text in the architecture): abort is `IOERR_ABORTED` +
+`FN_ERR_ABORTED`; backend reopen after defined failure/reset is allowed
+(“open once” = steady-state); one `IORequest` per transport context, never a
+machine-global request shared by independent tasks.
 
 ## Staged migration plan
 
-Each stage ends with a testable invariant. Stages that share no dependency may
-proceed in parallel.
+Each stage ends with a testable invariant.
+
+| Order | Gate |
+|---|---|
+| Stage 1 | Blocks Stage 2. ABI, `FN_ERR_ABORTED`, and the `fn_session.c` include fix must exist first. |
+| Stage 2 | Broker + serial backend. Tests are **isolated** from the old serial-direct shim: do not load `fujinet-nio.device` on a system whose `fn_transport` still `OpenDevice("serial.device")`. |
+| Stage 3 | **Cut-over:** `fn_transport` stops opening `serial.device` and opens the broker instead. |
+| Stage 4 | Removes `fujinet-disk.device` idle-close (`fn_transport_close` when the FIFO empties). |
+| Stage 5 | Future backend. Independent of Stages 3–4 once the broker ABI is stable. |
+
+Do not run Stage 2 in parallel with Stage 1. Do not install the Stage 2 broker beside the pre-Stage-3 shim on a shared serial port.
 
 ### Stage 1 — Define public ABI and fix framing dependency
+
+**Blocks Stage 2.**
 
 Deliverables:
 - [ ] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` with
       `struct FujiNetNIORequest`, `FUJINET_NIO_CMD_EXCHANGE`, `FUJINET_NIO_REQUEST_SIZE`,
       and error codes (coordinated with `fujinet-nio.h`).
-- [ ] Add `FN_ERR_ABORTED` to `fujinet-nio.h` with a value outside `0x00`–`0x12`.
+- [ ] Add `FN_ERR_ABORTED` (`0x13`) to `fujinet-nio.h`. The value must not
+      collide with existing `FN_ERR_*` codes, including `FN_ERR_UNKNOWN`
+      (`0xFF`).
 - [ ] Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
       Verify that `fn_session.c` compiles without it and all existing tests pass.
 - [ ] This document finalised after peer review.
@@ -24,6 +42,9 @@ to pass. The existing integration suite is unaffected.
 
 ### Stage 2 — Implement `fujinet-nio.device` (serial backend)
 
+**Blocked on Stage 1.** Broker tests must be isolated from the old serial-direct
+shim (no dual `OpenDevice("serial.device")`).
+
 Deliverables:
 - [ ] New `repos/fujinet-nio-driver/amiga/nio.device/` directory.
 - [ ] Broker device: `device_init`, `device_open`, `device_close`,
@@ -32,21 +53,34 @@ Deliverables:
 - [ ] Serial backend implementing the contract from §11: `backend_open`,
       `backend_close`, `backend_exchange`. Uses serial.device + timer.device;
       SLIP framing via `fn_session`/`fn_slip` compiled from source.
-- [ ] Error recovery policy resolved per §7 TODO.
+- [ ] Error recovery per §7: fatal failure → `backend_close`/reset → fail
+      the current request → next exchange may lazy-reopen. Serial
+      `backend_close` must leave framing/session state clean for reopen.
 - [ ] Build system produces `fujinet-nio.device` binary.
-- [ ] A dedicated broker test program (not a stub, see §13) validates FIFO,
-      concurrency, buffer ownership, abort, and error propagation.
+- [ ] A dedicated broker test program (not a stub, see the broker test suite)
+      validates FIFO, concurrency, buffer ownership, abort, and error
+      propagation. Run it in an isolated image/environment that does **not**
+      start FLS, `fujinet-disk.device`, or any tool whose `fn_transport` still
+      opens `serial.device` directly.
 
 **Testable invariant:** a standalone test tool opens the broker, submits a
 `FUJINET_NIO_CMD_EXCHANGE` with a known FujiBus frame, receives the correct
-response, closes. The broker test suite passes (see §13).
+response, closes. The broker test suite passes. The old serial-direct shim is
+not loaded in that environment.
 
-### Stage 3 — Re-route `fn_transport.c` through the broker
+### Stage 3 — Cut-over: `fn_transport` stops opening `serial.device`
+
+This is the cut-over. After this stage, `fn_transport` opens the broker only;
+`OpenDevice("serial.device")` exists solely in the broker's serial backend.
 
 Deliverables:
-- [ ] `fn_transport.c` (Amiga) rewritten: `fn_transport_init` opens the broker,
+- [ ] `fn_transport.c` (Amiga) rewritten per §3: each transport context owns
+      its `FujiNetNIORequest`, message port, and open flag.
+      `fn_transport_init` opens the broker on that context,
       `fn_transport_exchange_buffers` submits `FUJINET_NIO_CMD_EXCHANGE`,
-      `fn_transport_close` closes the broker.
+      `fn_transport_close` closes the broker. CLI may use a process-local
+      context; `fujinet-disk.device` must use its own, not a machine-global
+      `IORequest`.
 - [ ] No application or service code changes.
 - [ ] Remove debug instrumentation (`DBG_PRINTF` blocks) added in the race
       investigation.
@@ -59,15 +93,19 @@ test assertions and startup-sequence operations as before Stage 3.
 `diskdevice-inspect-catalog` must pass reliably. No `OpenDevice("serial.device")`
 call exists anywhere outside the broker's serial backend.
 
-### Stage 4 — Simplify `fujinet-disk.device` worker
+### Stage 4 — Remove disk-device idle-close
+
+Removes `fujinet-disk.device` idle-close: the worker must not
+`fn_transport_close` when its FIFO empties. Transport close happens only on
+explicit teardown (`device_expunge` or equivalent).
 
 Deliverables:
 - [ ] Remove the idle-close cycle from `device_worker_entry` (the
       `fn_transport_close` + `client_initialized` reset when the FIFO empties).
 - [ ] The disk device calls `fn_transport_close` only in `device_expunge` (or
       equivalent explicit-lifecycle teardown).
-- [ ] Worker inner loop is now: dequeue → `fn_init` (no-op) → exchange →
-      `io_Error` → `ReplyMsg` → continue.
+- [ ] Worker inner loop is now: dequeue → `fn_init` (no-op if already open) →
+      exchange → `io_Error` → `ReplyMsg` → continue.
 
 **Testable invariant:** all integration tests pass; the worker code is visibly
 simpler; no test depends on the old idle-close behaviour.
@@ -87,7 +125,10 @@ production-ready.
 
 ---
 
-## 13. Broker test suite (replaces Stage 5 stub-backend)
+## Broker test suite
+
+Stage 2 only. Isolated from the old serial-direct shim (see Stage 2). Replaces
+an earlier stub-backend Stage 5 idea.
 
 Rather than a static-response stub backend, the broker test suite validates
 broker behaviour with a real serial backend and a controlled test environment.
@@ -103,8 +144,10 @@ The suite covers:
 | `AbortIO` — queued request | Request aborted before worker dequeues it; error returned; no exchange performed |
 | `AbortIO` — in-progress request | AbortIO arrives mid-exchange; exchange completes physically; result discarded; abort error returned; no double-reply |
 | Backend error propagation | Backend forced into error state (by injecting a bad frame); `FN_ERR_TRANSPORT` returned; broker remains usable |
-| Error recovery | After a backend error, a subsequent exchange either succeeds (lazy-reopen) or returns a consistent error (per resolved §7 policy) |
+| Error recovery | After a fatal backend error: close/reset, current request fails; the next exchange lazy-reopens or fails consistently with the backend still closed (§7) |
 | No service interpretation | Arbitrary payloads that do not correspond to valid FujiBus service commands are exchanged without modification |
+| BeginIO ABI reject | Wrong command, bad size, reserved flags/pad, NULL+nonzero, oversize: IOF_QUICK cleared, two-domain errors per §2.1, `fn_response_length` = 0 |
+| Expunge while busy | Expunge deferred/refused while opens or queued/in-progress requests remain |
 
 Real service integration tests continue to run against the real `fujinet-nio.device`
 with the serial backend. No fake backend is required to validate service
