@@ -4,7 +4,7 @@ title: Amiga NIO broker — staged acceptance
 
 # Staged acceptance
 
-Workspace checkbox tracking remains `backlog/nio-broker.md`. This companion is the acceptance contract. A stage is not done if its invariant fails.
+Workspace checkbox tracking remains `backlog/nio-broker.md`. This companion is the acceptance contract. Each stage is an independently verifiable delivery checkpoint, with the stated dependencies between stages. A stage is not done if its invariant fails.
 
 ## Gates
 
@@ -14,7 +14,7 @@ Workspace checkbox tracking remains `backlog/nio-broker.md`. This companion is t
 | 2 Broker + serial backend | Stage 3 | **Must not** load `fujinet-nio.device` on a machine whose `fn_transport` still opens `serial.device` |
 | 3 Shim cut-over | Stage 4 (idle-close still allowed until 4) | After this, `serial.device` open only in serial backend |
 | 4 Remove disk idle-close | — | Integration must not depend on idle-close |
-| 5 Future backend binary | Independent of 3–4 once ABI stable | Same higher-level assertions as Stage 3 |
+| 5 Future backend binary | After ABI is stable; does not depend on Stages 3–4 | Same higher-level assertions as Stage 3 |
 
 Do not run Stage 2 in parallel with Stage 1.
 

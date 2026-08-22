@@ -103,7 +103,7 @@ flowchart TD
 
 - **Binds:** implementation order, tests, bootstrap
 - **Prevents:** Stage 2 without the ABI; dual `OpenDevice("serial.device")` during overlap; idle-close after the broker owns the wire
-- **Rule:** Stage 1 blocks Stage 2. Stage 2 broker tests run isolated from the old serial-direct shim. Stage 3 is the cut-over: `fn_transport` stops opening `serial.device`. Stage 4 removes disk-device idle-close. Stage 5 is a future backend binary with the same public ABI.
+- **Rule:** Each stage is an independently verifiable delivery checkpoint, with the stated dependencies between stages. Stage 1 blocks Stage 2. Stage 2 broker tests run isolated from the old serial-direct shim. Stage 3 is the cut-over: `fn_transport` stops opening `serial.device`. Stage 4 removes disk-device idle-close. Stage 5 is a future backend binary with the same public ABI (after the ABI is stable; does not depend on Stages 3–4).
 
 ### AD-11 — Second backend as Option A [ADOPTED]
 

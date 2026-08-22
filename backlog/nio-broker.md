@@ -9,7 +9,8 @@ machine-global request shared by independent tasks.
 
 ## Staged migration plan
 
-Each stage ends with a testable invariant.
+Each stage is an independently verifiable delivery checkpoint, with the
+stated dependencies between stages. Each stage ends with a testable invariant.
 
 | Order | Gate |
 |---|---|
@@ -17,7 +18,7 @@ Each stage ends with a testable invariant.
 | Stage 2 | Broker + serial backend. Tests are **isolated** from the old serial-direct shim: do not load `fujinet-nio.device` on a system whose `fn_transport` still `OpenDevice("serial.device")`. |
 | Stage 3 | **Cut-over:** `fn_transport` stops opening `serial.device` and opens the broker instead. |
 | Stage 4 | Removes `fujinet-disk.device` idle-close (`fn_transport_close` when the FIFO empties). |
-| Stage 5 | Future backend. Independent of Stages 3–4 once the broker ABI is stable. |
+| Stage 5 | Future backend. After the broker ABI is stable; does not depend on Stages 3–4. |
 
 Do not run Stage 2 in parallel with Stage 1. Do not install the Stage 2 broker beside the pre-Stage-3 shim on a shared serial port.
 

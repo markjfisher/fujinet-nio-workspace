@@ -62,7 +62,7 @@ sources:
 - Internal backend is architecture §11: `backend_open` / `backend_close` / `backend_exchange` with the v1 signatures there. Stage 2 may add a private context pointer without changing semantics.
 - `backend_exchange` must finish in bounded time and return `FN_ERR_TIMEOUT` when the selected backend’s response deadline is exceeded. Baud, serial/timer units, poll interval, and timeout values are serial-backend private named constants/config, not broker ABI.
 - Framing (`fn_slip`, `fn_session`) compiles into the serial backend by path; no library-symbol cycle; only runtime `OpenDevice` string from lib to broker.
-- Stage order is a gate: Stage 1 before Stage 2; do not install Stage 2 broker beside pre-Stage-3 shim on a shared serial port.
+- Stage order is a gate. Each stage is an independently verifiable delivery checkpoint, with the stated dependencies between stages. Stage 1 before Stage 2; do not install Stage 2 broker beside pre-Stage-3 shim on a shared serial port.
 - New FN constants are added only in `fujinet-nio.h`, not invented in the broker.
 - Exec error symbols come from `exec/errors.h`; do not hard-code numeric `IOERR_*` values in architecture or tests.
 - Near-term: one serial-backed broker binary as `DEVS:fujinet-nio.device` (Option A). Loadable-backend Option B is out of this spec.
