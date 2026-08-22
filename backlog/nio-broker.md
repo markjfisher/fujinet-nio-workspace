@@ -38,7 +38,6 @@ Deliverables:
 - [x] Source-check Amiga GCC `exec/errors.h` and record the native symbol for
       malformed-request `io_Error` (unsupported flags/pad, NULL+nonzero).
       Do not guess numeric values. `fn_nio_error` remains `FN_ERR_INVALID`.
-- [ ] Finalize this document after peer review.
 
 **Testable invariant:** the header compiles cleanly against the Amiga GCC
 toolchain with no warnings. The amiga and amiga-driver library builds continue
