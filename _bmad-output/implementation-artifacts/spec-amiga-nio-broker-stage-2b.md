@@ -83,16 +83,22 @@ context:
 ## Spec Change Log
 
 - 2026-08-22: Carried two-task concurrent FIFO + single backend ownership into 2B acceptance; not a 2A host-test item.
+- 2026-08-22: Correction pass — sticky serial read errors map to `FN_ERR_TRANSPORT`; timeout drains RX then `backend_close` so the next exchange lazy-reopens; concurrent jobs use CLOCK_GET vs CLOCK_GET_TZ; spawn-wait uses CreateNewProc success, not `started`; synchronous `CMD_WRITE` documented as the bounded-write policy for this serial.device.
 
 ## Design Notes
 
 Host 2A tests may keep an injectable backend. The Amiga `fujinet-nio.device` binary and the guest tool use **real** serial (backlog: not a static stub as the Stage 2 suite). Guest need not re-prove every 2A BeginIO row if host tests already did.
+
+**Timeout recovery:** draining available `serial.device` bytes is not enough for a late SLIP frame that arrives after the deadline. Timeout therefore fails the request with `FN_ERR_TIMEOUT` (`io_Error` remains Exec-ok, length 0), drains RX, and the worker calls `backend_close`. The next exchange lazy-reopens. Serial is *not* kept across timeout.
+
+**Writes:** `session_write_byte` uses synchronous `DoIO(CMD_WRITE)` and ignores `timeout_ms`. Aborting an outstanding serial write is not reliable on Amiga `serial.device` (same reason the read path polls `SDCMD_QUERY`). Each write is one SLIP byte into a finite TX buffer; the bound is driver completion of that byte, not an application timer.
 
 ## Verification
 
 2B is incomplete if these were not run. Do not substitute DiskDevice pytest or the full Amiberry suite. If guest media/toolchain is missing, stop and report.
 
 **Commands (after `source "$NIO_WORKSPACE/scripts/env.sh"`):**
+- `cd "$NIO_WORKSPACE/repos/fujinet-nio-driver/amiga" && make tests` -- expected: host nio.device + serial-channel tests PASS (timeout closes backend; poll timeout vs sticky IO)
 - `cd "$NIO_WORKSPACE/repos/fujinet-nio-driver/amiga" && make native` -- expected: `../build/amiga/fujinet-nio.device` and the dedicated tool build
 - `cd "$NIO_WORKSPACE" && uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_nio_broker.py::test_isolated_exchange` -- expected: PASS; fail if disk.device/FLS/shim appear in that image
 

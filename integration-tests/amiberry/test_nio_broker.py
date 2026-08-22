@@ -9,10 +9,12 @@ def test_isolated_exchange(run_amiga_case):
     assert "RESIDENT serial-busy-after-opencnt0=1" in exchange
     assert "AFTER_OPENCNT0 io=0 nio=0" in exchange
     assert "TIMEOUT io=0 nio=6 len=0" in exchange
-    assert "TIMEOUT_KEPT_SERIAL busy=1" in exchange
+    assert "TIMEOUT_RESET serial-busy=0" in exchange
     assert "RECOVERY io=0 nio=0" in exchange
     assert "CONCURRENT a_io=0 a_nio=0" in exchange
+    assert "a_cmd=1" in exchange
     assert "b_io=0 b_nio=0" in exchange
+    assert "b_cmd=4" in exchange
     assert "CONCURRENT serial-busy-after-concurrent=1" in exchange
     assert "PASS isolated-exchange" in exchange
     assert "TOOL RC=0" in results["nio-tool-rc.result"]
