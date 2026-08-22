@@ -78,6 +78,10 @@ not loaded in that environment.
 
 ### Stage 3 — Cut-over: `fn_transport` stops opening `serial.device`
 
+**Accepted 2026-08-22.** Child specs 3A and 3B are `done`. Do not reopen this
+cut-over unless a regression is found. Stage 4 (idle-close) is the next
+checkpoint.
+
 This is the cut-over. After this stage, `fn_transport` opens the broker only.
 Production FujiNet NIO `OpenDevice("serial.device")` exists solely in the
 broker's serial backend. Documented test-only probes may open serial to

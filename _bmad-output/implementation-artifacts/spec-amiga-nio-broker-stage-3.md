@@ -2,7 +2,7 @@
 title: 'Amiga NIO broker Stage 3 — parent cut-over gate'
 type: 'feature'
 created: '2026-08-22'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
 context:
   - docs/amiga/nio-broker-architecture.md
@@ -59,9 +59,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Accept and implement `spec-amiga-nio-broker-stage-3a.md` first -- context-sized lib cut-over
-- [ ] Accept and implement `spec-amiga-nio-broker-stage-3b.md` after 3A verification -- bootstrap + guest race proof
-- [ ] `backlog/nio-broker.md` -- mark Stage 3 only when both child specs are `done` and their commands were run
+- [x] Accept and implement `spec-amiga-nio-broker-stage-3a.md` first -- context-sized lib cut-over
+- [x] Accept and implement `spec-amiga-nio-broker-stage-3b.md` after 3A verification -- bootstrap + guest race proof
+- [x] `backlog/nio-broker.md` -- mark Stage 3 only when both child specs are `done` and their commands were run
 
 **Acceptance Criteria:**
 - Given 3A verification has passed and 3B has not, when someone asks if Stage 3 is done, then the answer is no.
@@ -71,6 +71,7 @@ context:
 
 - 2026-08-22: Split from a combined Stage 3 implementation spec for token budget. Scope stays 3A+3B under this parent gate.
 - 2026-08-22: Human edit — 3A request-init/close precondition and 3B classified source search; no scope expansion.
+- 2026-08-22: Parent Stage 3 accepted — 3A and 3B are `done`; named Verification ran; `--load-driver` requires `--load-nio`.
 
 ## Verification
 

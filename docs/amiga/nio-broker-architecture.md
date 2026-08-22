@@ -1,7 +1,7 @@
 # FujiNet NIO Broker Architecture
 
-*Status: Stage 3 cut-over is implemented (broker + lib client). Stage 4
-idle-close removal and Stage 5 extra backends remain backlog.*
+*Status: Stage 3 cut-over is accepted (3A lib client + 3B guest bootstrap).
+Stage 4 idle-close removal and Stage 5 extra backends remain backlog.*
 
 This document defines the architecture for the Amiga NIO transport layer.
 The original motivation was a proven race: FLS and `fujinet-disk.device`

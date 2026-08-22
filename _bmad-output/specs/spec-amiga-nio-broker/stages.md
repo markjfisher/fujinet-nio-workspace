@@ -68,6 +68,8 @@ Malformed-request `io_Error` is the `exec/errors.h` symbol recorded in Stage 1/2
 
 ## Stage 3 — Cut-over
 
+**Accepted 2026-08-22** (parent spec `done`; 3A + 3B).
+
 **Capabilities:** CAP-6, CAP-8.
 
 Deliverables:

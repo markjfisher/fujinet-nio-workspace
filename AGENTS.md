@@ -91,6 +91,14 @@ the associated architecture section. Do not load completed Stage 8/Phase 2
 history unless the ticket explicitly concerns a regression or an established
 contract.
 
+## Amiga NIO broker Stage 3
+
+Stage 3 cut-over is accepted. Do not reopen its implementation or replay 3A/3B
+unless a regression is found. The completed record is
+`completed/amiga-nio-broker-stage-3.md`; the durable contract is
+`docs/amiga/nio-broker-architecture.md`. Remaining checkpoints are Stage 4
+(disk idle-close) and Stage 5 (extra backends) in `backlog/nio-broker.md`.
+
 ## Git commits
 
 Never add a `Co-authored-by` (or `Co-Authored-By`) trailer to any commit.
