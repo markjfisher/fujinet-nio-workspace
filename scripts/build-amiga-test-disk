@@ -33,6 +33,8 @@ def main() -> int:
                         help="extract an LHA/archive tree into the disk root")
     parser.add_argument("--disk-device", type=Path,
                         help="native fujinet-disk.device to install in DEVS:")
+    parser.add_argument("--nio-device", type=Path,
+                        help="native fujinet-nio.device to install in DEVS:")
     parser.add_argument("--resident-loader", type=Path,
                         help="resident module loader to install in C:")
     parser.add_argument("--load-driver", action="store_true",
@@ -63,6 +65,7 @@ def main() -> int:
         if not archive.is_file():
             raise SystemExit(f"installation archive not found: {archive}")
     for path, label in ((args.disk_device, "disk device"),
+                        (args.nio_device, "nio device"),
                         (args.resident_loader, "resident loader"),
                         (args.disk_mount_tool, "disk mount tool")):
         if path is not None and not path.is_file():
@@ -98,6 +101,8 @@ def main() -> int:
         run_xdf(args.output, "write", str(args.app), f"C/{args.app_name}")
         if args.disk_device:
             run_xdf(args.output, "write", str(args.disk_device), "Devs/fujinet-disk.device")
+        if args.nio_device:
+            run_xdf(args.output, "write", str(args.nio_device), "Devs/fujinet-nio.device")
         if args.resident_loader:
             run_xdf(args.output, "write", str(args.resident_loader), "C/fujinet-load-resident")
         if args.disk_mount_tool:

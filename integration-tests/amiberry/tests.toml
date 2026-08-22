@@ -743,3 +743,20 @@ results = [
   "inspect-dd.result",
   "progress.result",
 ]
+
+[[test]]
+name = "nio-broker-isolated"
+project = "driver"
+app = "fujinet-nio-exchange"
+nio_broker = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/nio-broker-isolated.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/nio-broker-isolated"
+results = [
+  "nio-load.result",
+  "nio-exchange.result",
+  "nio-tool-rc.result",
+]

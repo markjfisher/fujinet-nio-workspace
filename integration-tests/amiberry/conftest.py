@@ -751,8 +751,25 @@ def run_amiga_case(amiga_environment: dict[str, str],
             raise AssertionError(
                 f"Amiberry case '{name}' uses expected_timeout but declares completion_log"
             )
-        app_dir = ROOT / "repos" / ("nio-apps" if case["project"] == "apps" else "nio-core-apps") / "build" / "amiga" / "bin"
-        app = app_dir / case["app"]
+        if case.get("nio_broker") and case.get("driver"):
+            raise AssertionError(
+                f"Amiberry case '{name}' sets nio_broker and driver; "
+                "isolated broker images must not install fujinet-disk.device"
+            )
+        if case.get("nio_broker"):
+            driver_root = ROOT / "repos/fujinet-nio-driver"
+            subprocess.run(
+                ["make", "native"],
+                cwd=driver_root / "amiga",
+                env=amiga_environment,
+                check=True,
+            )
+            app = driver_root / "build/amiga" / case["app"]
+        else:
+            app_dir = ROOT / "repos" / (
+                "nio-apps" if case["project"] == "apps" else "nio-core-apps"
+            ) / "build" / "amiga" / "bin"
+            app = app_dir / case["app"]
         if not app.is_file():
             raise AssertionError(f"Amiga test application was not built: {app}")
 
@@ -767,7 +784,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         host_root.mkdir(parents=True, exist_ok=True)
         if completion_mode == "nio_marker":
             (host_root / "amiga-e2e-complete" / name).mkdir(parents=True, exist_ok=True)
-        if case.get("driver"):
+        if case.get("driver") and not case.get("nio_broker"):
             subprocess.run(
                 ["make", "amiga"],
                 cwd=ROOT / "repos/fujinet-nio-driver",
@@ -816,13 +833,22 @@ def run_amiga_case(amiga_environment: dict[str, str],
             "--base-hdf", base_hdf,
             "--app", app,
             "--app-name", case["app"],
-            "--extra-app-dir", ROOT / "repos/nio-apps/build/amiga/bin",
-            "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
             "--startup-script", startup,
             "--no-workbench",
             "--output", image,
         ]
-        if case.get("driver"):
+        if not case.get("nio_broker"):
+            build_cmd.extend([
+                "--extra-app-dir", ROOT / "repos/nio-apps/build/amiga/bin",
+                "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
+            ])
+        if case.get("nio_broker"):
+            driver_root = ROOT / "repos/fujinet-nio-driver"
+            build_cmd.extend([
+                "--nio-device", driver_root / "build/amiga/fujinet-nio.device",
+                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
+            ])
+        if case.get("driver") and not case.get("nio_broker"):
             driver_root = ROOT / "repos/fujinet-nio-driver"
             build_cmd.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",

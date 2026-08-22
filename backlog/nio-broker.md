@@ -49,23 +49,23 @@ to pass. The existing integration suite is unaffected.
 shim (no dual `OpenDevice("serial.device")`).
 
 Deliverables:
-- [ ] New `repos/fujinet-nio-driver/amiga/nio.device/` directory.
-- [ ] Broker device: `device_init`, `device_open`, `device_close`,
+- [x] New `repos/fujinet-nio-driver/amiga/nio.device/` directory.
+- [x] Broker device: `device_init`, `device_open`, `device_close`,
       `device_expunge`, `device_begin_io`, `device_abort_io`, FIFO worker,
       request state machine (§5.1). `BeginIO` validates `fn_struct_size`.
-- [ ] Serial backend implementing the contract from §11: `backend_open`,
+- [x] Serial backend implementing the contract from §11: `backend_open`,
       `backend_close`, `backend_exchange`. Uses serial.device + timer.device;
       SLIP framing via `fn_session`/`fn_slip` compiled from source.
       Baud, serial/timer units, poll interval, and timeout are named
       constants or config (not magic numbers). `backend_exchange` returns
       `FN_ERR_TIMEOUT` when that deadline is exceeded.
-- [ ] `device_expunge` refuses while OpenCnt, queued, or in-progress work
+- [x] `device_expunge` refuses while OpenCnt, queued, or in-progress work
       remains; does not abort live requests.
-- [ ] Error recovery per §7: fatal failure → `backend_close`/reset → fail
+- [x] Error recovery per §7: fatal failure → `backend_close`/reset → fail
       the current request → next exchange may lazy-reopen. Serial
       `backend_close` must leave framing/session state clean for reopen.
-- [ ] Build system produces `fujinet-nio.device` binary.
-- [ ] A dedicated broker test program (not a stub, see the broker test suite)
+- [x] Build system produces `fujinet-nio.device` binary.
+- [x] A dedicated broker test program (not a stub, see the broker test suite)
       validates FIFO, concurrency, buffer ownership, abort, and error
       propagation. Run it in an isolated image/environment that does **not**
       start FLS, `fujinet-disk.device`, or any tool whose `fn_transport` still

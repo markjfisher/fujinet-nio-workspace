@@ -2,7 +2,8 @@
 title: 'Amiga NIO broker Stage 2B — serial backend and isolated guest'
 type: 'feature'
 created: '2026-08-22'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'd703e673849c24ac4ad96bb79694d260911e2aae'
 review_loop_iteration: 0
 context:
   - docs/amiga/nio-broker-architecture.md
@@ -66,12 +67,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Serial backend TU: `backend_open`/`close`/`exchange`; serial+timer ownership; named constants; path-compile session/slip -- physical backend
-- [ ] Wire 2A worker to real backend (drop injectable-only linkage in the Amiga binary) -- Stage 2 device
-- [ ] `amiga/Makefile` `native` -- `fujinet-nio.device` + dedicated guest tool
-- [ ] Isolated tests.toml/startup/pytest + harness flag without disk.device -- isolation
-- [ ] Two independent Amiga tasks submit concurrent exchanges; FIFO serialize; each correct response; single backend ownership -- Stage 2 suite, guest not host 2A
-- [ ] `backlog/nio-broker.md` -- Stage 2 boxes only after 2A and 2B Verification ran
+- [x] Serial backend TU: `backend_open`/`close`/`exchange`; serial+timer ownership; named constants; path-compile session/slip -- physical backend
+- [x] Wire 2A worker to real backend (drop injectable-only linkage in the Amiga binary) -- Stage 2 device
+- [x] `amiga/Makefile` `native` -- `fujinet-nio.device` + dedicated guest tool
+- [x] Isolated tests.toml/startup/pytest + harness flag without disk.device -- isolation
+- [x] Two independent Amiga tasks submit concurrent exchanges; FIFO serialize; each correct response; single backend ownership -- Stage 2 suite, guest not host 2A
+- [x] `backlog/nio-broker.md` -- Stage 2 boxes only after 2A and 2B Verification ran
 
 **Acceptance Criteria:**
 - Given 2A is `done`, when 2B builds, then `make native` produces `fujinet-nio.device`.
@@ -94,3 +95,60 @@ Host 2A tests may keep an injectable backend. The Amiga `fujinet-nio.device` bin
 **Commands (after `source "$NIO_WORKSPACE/scripts/env.sh"`):**
 - `cd "$NIO_WORKSPACE/repos/fujinet-nio-driver/amiga" && make native` -- expected: `../build/amiga/fujinet-nio.device` and the dedicated tool build
 - `cd "$NIO_WORKSPACE" && uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_nio_broker.py::test_isolated_exchange` -- expected: PASS; fail if disk.device/FLS/shim appear in that image
+
+## Suggested Review Order
+
+**Serial backend**
+
+- Named baud/unit/poll/timeout; `serial.device` plus `timer.device` ownership.
+  [`fujinet_nio_serial_backend.c:17`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_serial_backend.c#L17)
+
+- Lazy-open, idempotent close, session/SLIP reset before reopen.
+  [`fujinet_nio_serial_backend.c:172`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_serial_backend.c#L172)
+
+- Exchange maps I/O to `FN_ERR_TRANSPORT`; requires serial, timer, and session.
+  [`fujinet_nio_serial_backend.c:248`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_serial_backend.c#L248)
+
+- §11 C signatures kept private to the Amiga binary.
+  [`fujinet_nio_backend.h:6`](../../repos/fujinet-nio-driver/amiga/include/fujinet_nio_backend.h#L6)
+
+**Broker wiring**
+
+- Amiga `fujinet-nio.device` links the real backend; host tests stay injectable.
+  [`fujinet_nio_device.c:201`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L201)
+
+- Fatal `FN_ERR_TRANSPORT` closes the backend before `ReplyMsg`; FN stays off `io_Error`.
+  [`fujinet_nio_device.c:152`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L152)
+
+- `make native` emits the broker and guest tool; path-compiles session/slip, not `fn_transport.c`.
+  [`Makefile:12`](../../repos/fujinet-nio-driver/amiga/Makefile#L12)
+
+**Isolated guest**
+
+- Dedicated tool: isolation, CLOCK_GET, OpenCnt 0, timeout, two-task FIFO.
+  [`fujinet-nio-exchange.c:199`](../../repos/fujinet-nio-driver/amiga/tools/fujinet-nio-exchange.c#L199)
+
+- Concurrent jobs wait out spawn/timeout races; serial stays busy after both replies.
+  [`fujinet-nio-exchange.c:310`](../../repos/fujinet-nio-driver/amiga/tools/fujinet-nio-exchange.c#L310)
+
+- Loader-only startup; skip the tool unless `fujinet-load-resident` succeeds.
+  [`nio-broker-isolated.sequence:2`](../../integration-tests/amiberry/startup/nio-broker-isolated.sequence#L2)
+
+**Harness**
+
+- `nio_broker` copies broker + loader only and refuses `driver = true`.
+  [`conftest.py:754`](../../integration-tests/amiberry/conftest.py#L754)
+
+- Isolated case must not set `driver = true`.
+  [`tests.toml:747`](../../integration-tests/amiberry/tests.toml#L747)
+
+- Disk image can install `DEVS:fujinet-nio.device` without the disk device.
+  [`build-amiga-test-disk:36`](../../scripts/build-amiga-test-disk#L36)
+
+**Peripherals**
+
+- Pytest asserts isolation, timeout length 0, concurrent serial ownership, PASS.
+  [`test_nio_broker.py:1`](../../integration-tests/amiberry/test_nio_broker.py#L1)
+
+- Stage 2 backlog boxes after 2A and 2B verification ran.
+  [`nio-broker.md:52`](../../backlog/nio-broker.md#L52)
