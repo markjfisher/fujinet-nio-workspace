@@ -70,14 +70,18 @@ context:
 - [ ] Wire 2A worker to real backend (drop injectable-only linkage in the Amiga binary) -- Stage 2 device
 - [ ] `amiga/Makefile` `native` -- `fujinet-nio.device` + dedicated guest tool
 - [ ] Isolated tests.toml/startup/pytest + harness flag without disk.device -- isolation
+- [ ] Two independent Amiga tasks submit concurrent exchanges; FIFO serialize; each correct response; single backend ownership -- Stage 2 suite, guest not host 2A
 - [ ] `backlog/nio-broker.md` -- Stage 2 boxes only after 2A and 2B Verification ran
 
 **Acceptance Criteria:**
 - Given 2A is `done`, when 2B builds, then `make native` produces `fujinet-nio.device`.
 - Given the isolated guest image, when `test_isolated_exchange` runs, then a known frame round-trips and neither `fujinet-disk.device` nor a serial-direct `fn_transport` client is present.
+- Given two independent Amiga tasks submit broker exchanges at the same time, when the isolated Stage 2 suite runs, then the worker serializes them, each task receives its own correct response, and the backend remains singly owned.
 - Given 2B Verification passed, when 2A also passed, then parent Stage 2 may be marked complete; otherwise it stays open.
 
 ## Spec Change Log
+
+- 2026-08-22: Carried two-task concurrent FIFO + single backend ownership into 2B acceptance; not a 2A host-test item.
 
 ## Design Notes
 

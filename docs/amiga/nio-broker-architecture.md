@@ -505,6 +505,18 @@ removable or failable hardware later.
 
 `lib_OpenCnt` reaching zero does **not** trigger a backend close.
 
+If `device_expunge` is called while OpenCnt, the queue, or an in-progress
+exchange is busy, it sets `LIBF_DELEXP` and returns 0. The last
+`CloseDevice` that drops OpenCnt to zero, with `LIBF_DELEXP` still set and
+the queue/in-progress slot idle, completes that delayed expunge (stop
+worker, `backend_close` if open, release resident state). A later
+`OpenDevice` before that last close clears `LIBF_DELEXP`.
+
+Callers must `AbortIO`/`WaitIO` before `CloseDevice` on that `IORequest`.
+Close does not abort an in-progress exchange; the worker still `ReplyMsg`s
+once. A still-queued request on the same `IORequest` is completed as
+aborted so it is not left in the FIFO.
+
 ### Expunge while work remains
 
 Ordinary expunge must not abort or destroy live requests. If Amiga Exec has
@@ -512,14 +524,19 @@ delayed-expunge conventions, Stage 2 follows them. The semantic contract:
 
 ```
 device_expunge():
-  if lib_OpenCnt != 0:           defer/refuse
-  if queue not empty:            defer/refuse
-  if request in progress:        defer/refuse
+  if lib_OpenCnt != 0:           set LIBF_DELEXP; return 0
+  if queue not empty:            set LIBF_DELEXP; return 0
+  if request in progress:        set LIBF_DELEXP; return 0
   otherwise:
+    clear LIBF_DELEXP
     stop worker
     close backend if open
     release worker/resources
     remove resident state
+
+device_close() last open (OpenCnt becomes 0) with LIBF_DELEXP:
+  return device_expunge()   // still refuses if queue/in-progress busy
+
 ```
 
 Active work finishes and clients close first. Expunge is not an implicit

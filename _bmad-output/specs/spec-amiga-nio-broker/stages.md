@@ -52,7 +52,7 @@ Deliverables:
 | Test | Passes when |
 | --- | --- |
 | Single-client exchange | Known frame/response round-trip |
-| Concurrent-client FIFO ordering | Simultaneous tasks; correct caller; FIFO order |
+| Concurrent-client FIFO ordering | Two independent Amiga tasks submit concurrently; broker serializes; each gets its own correct response; backend ownership remains single |
 | Buffer ownership | Response fully written before `ReplyMsg`; caller buffer not aliased |
 | Backend lazy-open | First exchange opens `serial.device`; later exchanges reuse it |
 | Backend resident-lifetime | `lib_OpenCnt` 0 does not close `serial.device`; next exchange succeeds without reopen |

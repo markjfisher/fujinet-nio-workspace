@@ -148,7 +148,7 @@ The suite covers:
 | Test | What it proves |
 |---|---|
 | Single-client exchange | Basic frame/response round-trip |
-| Concurrent-client FIFO ordering | Multiple tasks submit simultaneously; responses are delivered to the correct caller in FIFO order |
+| Concurrent-client FIFO ordering | Two independent Amiga tasks submit broker requests concurrently; the broker serializes them on one worker; each receives its own correct response; backend ownership remains single |
 | Buffer ownership | Response data is fully written before ReplyMsg; the caller's buffer is not aliased |
 | Backend lazy-open | First exchange opens serial.device; subsequent exchanges reuse it |
 | Backend resident-lifetime | lib_OpenCnt reaching zero does not close serial.device; next exchange succeeds without reopen |
