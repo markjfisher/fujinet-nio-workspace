@@ -275,12 +275,21 @@ class Build:
 
         if not base_hdf and env_id:
             # Resolve base HDF from the built environment manifest.
-            from .amiga_config import _load_env_manifest, _load_machine_profile
+            from .amiga_config import (
+                _load_env_manifest,
+                _load_machine_profile,
+                resolve_fast_file_system,
+            )
             manifest = _load_env_manifest(self.ctx.root, env_id, machine_id or None)
             base_hdf = manifest["base_hdf"]
             self.ctx.env["AMIBERRY_KICKSTART"] = manifest["kickstart"]
             if manifest.get("rom_key"):
                 self.ctx.env["AMIBERRY_ROM_KEY"] = manifest["rom_key"]
+            fast_file_system = resolve_fast_file_system(
+                manifest, self.ctx.root, self.ctx.env
+            )
+            if fast_file_system:
+                self.ctx.env["AMIBERRY_FAST_FILE_SYSTEM"] = fast_file_system
             if machine_id:
                 machine = _load_machine_profile(self.ctx.root, machine_id)
                 settings = machine.get("settings", {})

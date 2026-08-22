@@ -45,6 +45,32 @@ def _expand(value: Any, root: Path, environment: dict[str, str]) -> Any:
     return str(path)
 
 
+def resolve_fast_file_system(
+    manifest: dict[str, Any],
+    root: Path,
+    environment: dict[str, str] | None = None,
+) -> str | None:
+    """Return the host FastFileSystem path for a built Amiga environment."""
+    recorded = manifest.get("fast_file_system")
+    if recorded and Path(recorded).is_file():
+        return str(Path(recorded).resolve())
+
+    base_hdf = manifest.get("base_hdf")
+    if base_hdf:
+        sibling = Path(base_hdf).parent / "FastFileSystem"
+        if sibling.is_file():
+            return str(sibling.resolve())
+
+    local_env = {**_load_local_amiga_env(root), **(environment or {})}
+    expanded = local_env.get("AMIGA_WB32_EXPANDED", "")
+    if expanded:
+        for rel in ("L/FastFileSystem", "FastFileSystem"):
+            candidate = Path(expanded).expanduser() / rel
+            if candidate.is_file():
+                return str(candidate.resolve())
+    return None
+
+
 def _load_env_manifest(root: Path, env_id: str, machine_id: str | None) -> dict[str, Any]:
     """Load build/amiga-envs/<env_id>[/<machine_id>]/manifest.json."""
     envs_root = root / "build" / "amiga-envs"

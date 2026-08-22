@@ -28,6 +28,8 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / "integration-tests" / "amiberry"
+sys.path.insert(0, str(ROOT / "tools" / "build"))
+from nio_build.amiga_config import resolve_fast_file_system
 DEFAULT_EVIDENCE_DIR = ROOT / "test-evidence"
 
 # Add tools/ to path so we can call amiga_emulator.ipc directly.
@@ -504,6 +506,9 @@ def amiga_environment(pytestconfig: Any) -> dict[str, str]:
         environment["AMIBERRY_KICKSTART"] = manifest["kickstart"]
         if manifest.get("rom_key"):
             environment["AMIBERRY_ROM_KEY"] = manifest["rom_key"]
+        fast_file_system = resolve_fast_file_system(manifest, ROOT, environment)
+        if fast_file_system:
+            environment["AMIBERRY_FAST_FILE_SYSTEM"] = fast_file_system
     else:
         pytest.skip(
             "No AmigaOS environment specified. "

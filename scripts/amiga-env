@@ -551,6 +551,16 @@ def cmd_build(env_id: str, force: bool, machine_id: str | None) -> None:
         volume_label = hdf_settings.get("volume_label", env_id)
         size = hdf_settings.get("size", "128M")
 
+        ffs_src = os_tree / "L" / "FastFileSystem"
+        if not ffs_src.is_file():
+            ffs_src = os_tree / "FastFileSystem"
+        if not ffs_src.is_file():
+            raise SystemExit(
+                f"Assembled OS tree for '{build_label}' is missing FastFileSystem"
+            )
+        ffs_out = out_dir / "FastFileSystem"
+        shutil.copy2(ffs_src, ffs_out)
+
         print(f"  Packing base HDF ({size}) ...")
         subprocess.run(
             [
@@ -572,6 +582,7 @@ def cmd_build(env_id: str, force: bool, machine_id: str | None) -> None:
         "base_hdf": str(base_hdf.resolve()),
         "kickstart": str(kickstart.resolve()),
         "rom_key": str(rom_key.resolve()) if rom_key and rom_key.is_file() else None,
+        "fast_file_system": str(ffs_out.resolve()),
         "input_hash": input_hash,
         "built_at": datetime.now(timezone.utc).isoformat(),
     }
