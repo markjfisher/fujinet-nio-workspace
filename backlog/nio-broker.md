@@ -27,15 +27,15 @@ Do not run Stage 2 in parallel with Stage 1. Do not install the Stage 2 broker b
 **Blocks Stage 2.**
 
 Deliverables:
-- [ ] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` with
+- [x] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` with
       `struct FujiNetNIORequest`, `FUJINET_NIO_CMD_EXCHANGE`, `FUJINET_NIO_REQUEST_SIZE`,
       and error codes (coordinated with `fujinet-nio.h`).
-- [ ] Add `FN_ERR_ABORTED` (`0x13`) to `fujinet-nio.h`. The value must not
+- [x] Add `FN_ERR_ABORTED` (`0x13`) to `fujinet-nio.h`. The value must not
       collide with existing `FN_ERR_*` codes, including `FN_ERR_UNKNOWN`
       (`0xFF`).
-- [ ] Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
+- [x] Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
       Verify that `fn_session.c` compiles without it and all existing tests pass.
-- [ ] Source-check Amiga GCC `exec/errors.h` and record the native symbol for
+- [x] Source-check Amiga GCC `exec/errors.h` and record the native symbol for
       malformed-request `io_Error` (unsupported flags/pad, NULL+nonzero).
       Do not guess numeric values. `fn_nio_error` remains `FN_ERR_INVALID`.
 - [ ] Finalize this document after peer review.

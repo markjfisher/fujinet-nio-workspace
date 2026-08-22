@@ -2,7 +2,8 @@
 title: 'Amiga NIO broker Stage 1 — public ABI and framing isolation'
 type: 'feature'
 created: '2026-08-22'
-status: 'draft'
+status: 'done'
+baseline_commit: '6730422222a44435ca0783a6deb1723269430529'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-nio-broker/SPEC.md'
@@ -68,13 +69,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-lib/include/fujinet-nio.h` -- add client-visible `FN_ERR_ABORTED` `0x13` -- Stage 1 FN API, not FujiBus wire
-- [ ] `repos/fujinet-nio-lib/src/common/fn_util.c` -- map abort in `fn_error_string` -- keep public string helper complete
-- [ ] `repos/fujinet-nio-lib/docs/api.md` -- document `0x13` as local FN -- API table matches header
-- [ ] `repos/fujinet-nio-lib/src/common/fn_session.c` -- remove `#include "fn_internal.h"` only -- broker can compile session by path
-- [ ] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` -- self-sufficient architecture §2 public ABI -- Stage 2 compile surface
-- [ ] `docs/amiga/nio-broker-architecture.md` -- record per-class sourced `io_Error` symbols -- source-check, not one symbol for all classes
-- [ ] `backlog/nio-broker.md` -- check Stage 1 boxes that this work completes -- workspace tracker
+- [x] `repos/fujinet-nio-lib/include/fujinet-nio.h` -- add client-visible `FN_ERR_ABORTED` `0x13` -- Stage 1 FN API, not FujiBus wire
+- [x] `repos/fujinet-nio-lib/src/common/fn_util.c` -- map abort in `fn_error_string` -- keep public string helper complete
+- [x] `repos/fujinet-nio-lib/docs/api.md` -- document `0x13` as local FN -- API table matches header
+- [x] `repos/fujinet-nio-lib/src/common/fn_session.c` -- remove `#include "fn_internal.h"` only -- broker can compile session by path
+- [x] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` -- self-sufficient architecture §2 public ABI -- Stage 2 compile surface
+- [x] `docs/amiga/nio-broker-architecture.md` -- record per-class sourced `io_Error` symbols -- source-check, not one symbol for all classes
+- [x] `backlog/nio-broker.md` -- check Stage 1 boxes that this work completes -- workspace tracker
 
 **Acceptance Criteria:**
 - Given a translation unit whose only preprocessor include is `fujinet_nio_device.h`, when it is compiled with Amiga GCC/NDK from `scripts/env.sh` and `-Wall -Werror`, then it compiles with no warnings (the public header includes `exec/io.h`, `CMD_NONSTD`, and Amiga types itself).
@@ -86,14 +87,51 @@ context:
 
 ## Spec Change Log
 
+- 2026-08-22: `fn_session.c` still calls `fn_slip_decode`, whose prototype lived only in `fn_internal.h`. After removing that include, a local prototype was added so session compiles without library globals. No `fn_slip.h` was introduced.
+
 ## Verification
 
 **Commands:**
 - `source "$NIO_WORKSPACE/scripts/env.sh"` -- expected: Amiga toolchain and NDK on PATH / readable headers
 - `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make check` -- expected: all configured `TARGETS` (including `amiga`) build; host tests including `test-session` pass
-- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make TARGET=amiga-driver lib` -- expected: `amiga-driver` archive builds (`make all` / `make check` do not include `EXTRA_TARGETS`)
+- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make amiga-driver` -- expected: `amiga-driver` archive builds (confirmed canonical extra-target invocation; `make all` / `make check` do not include `EXTRA_TARGETS`)
 - Compile a TU that contains only `#include "fujinet_nio_device.h"` (plus an empty `main` if the driver requires it) with Amiga GCC `-Wall -Werror` and NDK include paths, **without** extra NDK includes in the TU -- expected: no warnings
 
 **Manual checks (if no CLI):**
 - Confirm `FN_ERR_ABORTED` was not added to Atari/BBC `fn_protocol.inc`.
 - Confirm architecture §2.1 records per-class native symbols, not a single forced symbol for every malformed-request row.
+
+## Suggested Review Order
+
+**Public ABI**
+
+- Self-sufficient broker `IORequest`; only `#include` is `<exec/io.h>`.
+  [`fujinet_nio_device.h:4`](../../repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h#L4)
+
+- Exchange command and v1 size guard; no broker enforcement yet.
+  [`fujinet_nio_device.h:10`](../../repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h#L10)
+
+**Client-visible abort**
+
+- Local FN `0x13`, not a FujiBus wire status.
+  [`fujinet-nio.h:108`](../../repos/fujinet-nio-lib/include/fujinet-nio.h#L108)
+
+- String helper maps abort for callers that print errors.
+  [`fn_util.c:18`](../../repos/fujinet-nio-lib/src/common/fn_util.c#L18)
+
+- API table matches the header.
+  [`api.md:581`](../../repos/fujinet-nio-lib/docs/api.md#L581)
+
+**Framing isolation**
+
+- Drop `fn_internal.h`; local `fn_slip_decode` prototype only.
+  [`fn_session.c:6`](../../repos/fujinet-nio-lib/src/common/fn_session.c#L6)
+
+**Native error classes**
+
+- NDK 47.1 source-check; flags/pad vs NULL pointers differ.
+  [`nio-broker-architecture.md:218`](../../docs/amiga/nio-broker-architecture.md#L218)
+
+- BeginIO matrix: `IOERR_NOCMD` vs `IOERR_BADADDRESS`.
+  [`nio-broker-architecture.md:231`](../../docs/amiga/nio-broker-architecture.md#L231)
+

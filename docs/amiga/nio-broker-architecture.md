@@ -131,7 +131,7 @@ struct FujiNetNIORequest {
 
     /* Opaque FujiBus frame; caller-owned until reply (see §5) */
     const UBYTE *fn_request_data;
-    UWORD        fn_request_length;  /* bounded by platform FN_MAX_PACKET_SIZE */ */
+    UWORD        fn_request_length;  /* oversize vs platform FN_MAX_PACKET_SIZE */
 
     /* Caller-owned response buffer; fn_response_length valid only on FN_OK */
     UBYTE       *fn_response_data;
@@ -172,8 +172,9 @@ in this architecture or in tests.
 |---|---|
 | 0 | Dispatch succeeded; check `fn_nio_error` for NIO outcome |
 | `IOERR_ABORTED` | Request was aborted before or during processing |
-| `IOERR_NOCMD` | Unrecognized command (not `FUJINET_NIO_CMD_EXCHANGE`) |
+| `IOERR_NOCMD` | Unrecognized command, or non-zero reserved `fn_flags`/`fn_pad` (NDK: “command not supported by device”; no dedicated reserved-field error) |
 | `IOERR_BADLENGTH` | `fn_struct_size` rejected (§2.2) or request length oversize |
+| `IOERR_BADADDRESS` | Request/response pointer NULL with non-zero length/capacity |
 
 Callers must not read `io_Error` to determine whether an NIO exchange
 succeeded or failed.
@@ -214,20 +215,23 @@ Two-domain separation is the contract. Malformed broker `IORequest`s use:
 - `io_Error` = the appropriate native Exec/device request-validation error
 - `fn_nio_error` = `FN_ERR_INVALID`
 
-Stage 1/2 inspects the Amiga GCC `exec/errors.h` in the build and chooses the
-actual available symbol for unsupported flags/reserved fields and NULL +
-nonzero length/capacity. Do not invent or hard-code guessed numeric
-`IOERR_*` values in this document or in tests. Unit is checked at
-`OpenDevice`, not in `BeginIO`.
+Stage 1 sourced these symbols from the Amiga GCC NDK `exec/errors.h`
+(`$VER: errors.h 47.1`, `ndk-include` and `ndk13-include` agree):
+`IOERR_NOCMD` is “command not supported by device”; `IOERR_BADADDRESS` is
+“invalid address (misaligned or bad range)”; `IOERR_BADLENGTH` is “not a
+valid length (usually IO_LENGTH)”. Host-test stubs of `exec/errors.h` are
+not the numeric source of truth. Do not hard-code guessed `IOERR_*`
+values in this document or in tests. Unit is checked at `OpenDevice`, not
+in `BeginIO`.
 
 | Condition | `io_Error` | `fn_nio_error` |
 |---|---|---|
 | Valid request accepted for queue | 0 until completion | undefined until `ReplyMsg` |
 | Wrong command | `IOERR_NOCMD` | `FN_ERR_INVALID` |
 | Bad `fn_struct_size` | `IOERR_BADLENGTH` | `FN_ERR_INVALID` |
-| Non-zero reserved / unsupported `fn_flags` | native invalid-request error | `FN_ERR_INVALID` |
-| Request pointer NULL with non-zero length | native invalid-request error | `FN_ERR_INVALID` |
-| Response pointer NULL with non-zero capacity | native invalid-request error | `FN_ERR_INVALID` |
+| Non-zero reserved / unsupported `fn_flags` or `fn_pad` | `IOERR_NOCMD` | `FN_ERR_INVALID` |
+| Request pointer NULL with non-zero length | `IOERR_BADADDRESS` | `FN_ERR_INVALID` |
+| Response pointer NULL with non-zero capacity | `IOERR_BADADDRESS` | `FN_ERR_INVALID` |
 | Request too large (`fn_request_length` > `FN_MAX_PACKET_SIZE`) | `IOERR_BADLENGTH` | `FN_ERR_INVALID` |
 | Invalid unit | suitable native device error | `FN_ERR_NOT_FOUND` or documented equivalent |
 | Aborted | `IOERR_ABORTED` | `FN_ERR_ABORTED` |
@@ -238,12 +242,12 @@ exchange path (BeginIO reject, abort, NIO/backend failure),
 
 **Stage 1 — `FN_ERR_ABORTED` in `fujinet-nio.h`**
 
-`FN_ERR_ABORTED` does not exist yet. Stage 1 must add it with value **`0x13`**,
-which is unused in the current `fujinet-nio.h` set (`FN_OK` `0x00`,
+`FN_ERR_ABORTED` is **`0x13`** in `fujinet-nio.h`. That value is unused in
+the rest of the current `FN_ERR_*` set (`FN_OK` `0x00`,
 `FN_ERR_NOT_FOUND`…`FN_ERR_UNSUPPORTED` `0x01`–`0x08`, `FN_ERR_TRANSPORT`…
-`FN_ERR_NO_HANDLES` `0x10`–`0x12`, `FN_ERR_UNKNOWN` `0xFF`). Do not use
-`0xFF` or any other existing `FN_ERR_*` value. The broker must not define
-new FN constants except by adding them to `fujinet-nio.h`.
+`FN_ERR_NO_HANDLES` `0x10`–`0x12`, `FN_ERR_UNKNOWN` `0xFF`). It is a
+local/client-visible FN error, not a FujiBus wire status. The broker must
+not define new FN constants except by adding them to `fujinet-nio.h`.
 
 ### 2.2 ABI forward compatibility
 
