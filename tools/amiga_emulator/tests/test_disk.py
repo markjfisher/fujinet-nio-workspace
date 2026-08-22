@@ -8,6 +8,7 @@ from amiga_emulator.disk import (
     prepend_fujinet_resident_loads,
     startup_command_offset,
     startup_sequence_needs_patch,
+    validate_fujinet_resident_load_flags,
     validate_volume_label,
 )
 
@@ -18,6 +19,27 @@ class AmigaDiskTests(unittest.TestCase):
         for invalid in ("", "bad:name", "bad/name", "x" * 31):
             with self.assertRaises(ValueError):
                 validate_volume_label(invalid)
+
+    def test_load_driver_without_load_nio_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            validate_fujinet_resident_load_flags(load_driver=True, load_nio=False)
+        self.assertEqual(str(caught.exception), "--load-driver requires --load-nio")
+        validate_fujinet_resident_load_flags(load_driver=False, load_nio=True)
+        validate_fujinet_resident_load_flags(load_driver=False, load_nio=False)
+
+    def test_load_driver_with_load_nio_is_valid_and_nio_first(self) -> None:
+        validate_fujinet_resident_load_flags(load_driver=True, load_nio=True)
+        generated = "C:Assign T: RAM:\nC:wifitest >DH0:wifitest.result\n"
+        patched = prepend_fujinet_resident_loads(
+            generated, load_driver=True, load_nio=True
+        )
+        self.assertEqual(
+            patched,
+            NIO_LOAD_RESIDENT + DISK_LOAD_RESIDENT + generated,
+        )
+        nio_at = patched.find(NIO_LOAD_RESIDENT.strip())
+        disk_at = patched.find(DISK_LOAD_RESIDENT.strip())
+        self.assertLess(nio_at, disk_at)
 
     def test_load_nio_is_first_on_generated_and_interactive_startup(self) -> None:
         generated = "C:Assign T: RAM:\nC:wifitest >DH0:wifitest.result\n"

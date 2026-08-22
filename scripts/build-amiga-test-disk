@@ -18,6 +18,7 @@ from amiga_emulator.disk import (
     run_xdf,
     startup_command_offset,
     startup_sequence_needs_patch,
+    validate_fujinet_resident_load_flags,
 )
 
 
@@ -78,6 +79,10 @@ def main() -> int:
         raise SystemExit("--load-driver requires --disk-device and --resident-loader")
     if args.load_nio and (args.nio_device is None or args.resident_loader is None):
         raise SystemExit("--load-nio requires --nio-device and --resident-loader")
+    validate_fujinet_resident_load_flags(
+        load_driver=args.load_driver,
+        load_nio=args.load_nio,
+    )
     for path in args.disk_mountlist:
         if not path.is_file():
             raise SystemExit(f"disk MountList not found: {path}")

@@ -63,7 +63,7 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
         return build, runner
 
     def _assert_broker_build_then_load_nio(
-        self, runner: RecordingRunner, *, interactive: bool
+        self, runner: RecordingRunner, *, interactive: bool, with_driver: bool = False
     ) -> None:
         names = [name for name, _, _ in runner.calls]
         self.assertIn("amiga-nio-broker-native", names)
@@ -81,6 +81,14 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
         self.assertIn("--nio-device", disk_cmd)
         self.assertIn("--resident-loader", disk_cmd)
         self.assertNotIn("--startup-script", disk_cmd)
+        if with_driver:
+            self.assertIn("--load-driver", disk_cmd)
+            self.assertLess(
+                disk_cmd.index("--load-nio"),
+                disk_cmd.index("--load-driver"),
+            )
+        else:
+            self.assertNotIn("--load-driver", disk_cmd)
         if interactive:
             self.assertIn("--interactive", disk_cmd)
         else:
@@ -110,6 +118,23 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
             build, runner = self._prepare(tmp, interactive=True)
             build.amiga_test_disk()
             self._assert_broker_build_then_load_nio(runner, interactive=True)
+
+    def test_with_driver_amiga_test_disk_passes_load_driver_and_load_nio(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            build, runner = self._prepare(tmp, interactive=False)
+            build.amiga_test_disk(with_driver=True)
+            self._assert_broker_build_then_load_nio(
+                runner, interactive=False, with_driver=True
+            )
+            _, disk_cmd, _ = runner.calls[
+                [name for name, _, _ in runner.calls].index("amiga-test-disk")
+            ]
+            disk_device = runner.driver_root / "build" / "amiga" / "fujinet-disk.device"
+            self.assertEqual(
+                Path(disk_cmd[disk_cmd.index("--disk-device") + 1]),
+                disk_device,
+            )
 
 
 if __name__ == "__main__":

@@ -55,5 +55,3 @@ C:Echo "24 AFTER POST TYPE RC=$RC"
 C:Echo "25 BEFORE FLS"
 C:FLS host:/amiga-e2e-complete/diskdevice-inspect-catalog >DH0:fls.result
 C:Echo "26 AFTER FLS RC=$RC"
-C:Echo "Exiting"
-C:Echo "Exiting" > DH0:trace.result

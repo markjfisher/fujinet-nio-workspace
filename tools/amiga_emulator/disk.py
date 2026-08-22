@@ -48,6 +48,16 @@ def validate_volume_label(label: str) -> str:
     return label
 
 
+def validate_fujinet_resident_load_flags(
+    *,
+    load_driver: bool = False,
+    load_nio: bool = False,
+) -> None:
+    """Reject disk LoadResident prepend unless the broker is also prepended first."""
+    if load_driver and not load_nio:
+        raise SystemExit("--load-driver requires --load-nio")
+
+
 def prepend_fujinet_resident_loads(
     test_commands: str,
     *,
