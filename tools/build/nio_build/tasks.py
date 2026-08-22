@@ -323,11 +323,15 @@ class Build:
             disk_args.extend([
                 "--extra-app-dir", self.p("NIO_APPS") / "build" / "amiga" / "bin",
             ])
+        driver_root = self.p("FUJINET_NIO_DRIVER")
+        disk_args.extend([
+            "--nio-device", driver_root / "build/amiga/fujinet-nio.device",
+            "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
+            "--load-nio",
+        ])
         if with_driver:
-            driver_root = self.p("FUJINET_NIO_DRIVER")
             disk_args.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
-                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
                 "--load-driver",
             ])

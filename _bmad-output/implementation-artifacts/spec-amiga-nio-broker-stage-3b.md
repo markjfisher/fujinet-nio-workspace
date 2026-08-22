@@ -2,8 +2,9 @@
 title: 'Amiga NIO broker Stage 3B — bootstrap and guest race proof'
 type: 'feature'
 created: '2026-08-22'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: '0f63b42f36ac017a6c05b59c347cc5467a2b8d31'
 context:
   - docs/amiga/nio-broker-architecture.md
   - docs/agent-test-policy.md
@@ -72,12 +73,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `scripts/build-amiga-test-disk` + `integration-tests/amiberry/conftest.py` -- copy nio.device and LoadResident it first on all non-isolated NIO cases -- §8 bootstrap
-- [ ] Rebuild `fujinet-disk.device` against cut-over `amiga-driver` -- disk uses broker via lib; no idle-close edit
-- [ ] Isolated pytest still passes; inspect-catalog pytest run **twice** -- original race gone; no shim+broker coexistence
-- [ ] App/core-apps READMEs + `amiberry-testing.md` serial sentences -- Stage 3 README remainder
-- [ ] Classified source search (serial/timer symbols **and** `OpenDevice` sites) -- Stage 3 invariant; literal `OpenDevice("serial.device")` regex is not enough
-- [ ] `backlog/nio-broker.md` -- Stage 3 boxes only after 3A and 3B Verification ran
+- [x] `scripts/build-amiga-test-disk` + `integration-tests/amiberry/conftest.py` -- copy nio.device and LoadResident it first on all non-isolated NIO cases -- §8 bootstrap
+- [x] Rebuild `fujinet-disk.device` against cut-over `amiga-driver` -- disk uses broker via lib; no idle-close edit
+- [x] Isolated pytest still passes; inspect-catalog pytest run **twice** -- original race gone; no shim+broker coexistence
+- [x] App/core-apps READMEs + `amiberry-testing.md` serial sentences -- Stage 3 README remainder
+- [x] Classified source search (serial/timer symbols **and** `OpenDevice` sites) -- Stage 3 invariant; literal `OpenDevice("serial.device")` regex is not enough
+- [x] `backlog/nio-broker.md` -- Stage 3 boxes only after 3A and 3B Verification ran
 
 **Acceptance Criteria:**
 - Given 3A is `done`, when 3B builds a `driver: true` image, then `fujinet-nio.device` is resident before disk or CLI NIO.
@@ -116,3 +117,44 @@ Do not change inspect-catalog assertions; FLS is already the last NIO step.
 
 **Manual checks (if no CLI):**
 - Confirm non-isolated guest Startup-Sequence lists nio `LoadResident` before disk `LoadResident` or FLS/`fn_transport_init`
+
+## Suggested Review Order
+
+**Guest bootstrap**
+
+- Non-isolated cases copy the broker and prepend LoadResident; isolated does not double-prepend.
+  [`conftest.py:854`](../../integration-tests/amiberry/conftest.py#L854)
+
+- CLI-only cases now build `fujinet-nio.device` via `make native`.
+  [`conftest.py:829`](../../integration-tests/amiberry/conftest.py#L829)
+
+- `--load-nio` prepends nio after disk in source so nio is first on the HDF.
+  [`build-amiga-test-disk:147`](../../scripts/build-amiga-test-disk#L147)
+
+- Interactive and amiga-e2e HDFs get the same nio-first bootstrap.
+  [`tasks.py:327`](../../tools/build/nio_build/tasks.py#L327)
+
+**Unchanged race proof**
+
+- Inspect-catalog still loads disk then FLS; nio is injected ahead of this file.
+  [`diskdevice-inspect-catalog.sequence:2`](../../integration-tests/amiberry/startup/diskdevice-inspect-catalog.sequence#L2)
+
+- Isolated sequence already LoadResidents nio; harness must not prepend again.
+  [`nio-broker-isolated.sequence:3`](../../integration-tests/amiberry/startup/nio-broker-isolated.sequence#L3)
+
+**Docs and Stage 3 close-out**
+
+- CLI atexit closes the broker context, not physical serial.
+  [`amiberry-testing.md:794`](../../docs/amiga/amiberry-testing.md#L794)
+
+- Core apps no longer say the Amiga lib opens `serial.device`.
+  [`nio-core-apps/README.md:36`](../../repos/nio-core-apps/README.md#L36)
+
+- Example apps match the broker client wording.
+  [`nio-apps/README.md:54`](../../repos/nio-apps/README.md#L54)
+
+- RS-232 adapter README names the broker as serial owner.
+  [`rs232/README.md:4`](../../repos/fujinet-nio-driver/amiga/channels/rs232/README.md#L4)
+
+- Stage 3 backlog boxes ticked only after 3A and 3B verification.
+  [`nio-broker.md:85`](../../backlog/nio-broker.md#L85)

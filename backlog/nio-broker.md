@@ -82,20 +82,20 @@ This is the cut-over. After this stage, `fn_transport` opens the broker only;
 `OpenDevice("serial.device")` exists solely in the broker's serial backend.
 
 Deliverables:
-- [ ] `fn_transport.c` (Amiga) rewritten per §3: each transport context owns
+- [x] `fn_transport.c` (Amiga) rewritten per §3: each transport context owns
       its `FujiNetNIORequest`, message port, and open flag.
       `fn_transport_init` opens the broker on that context,
       `fn_transport_exchange_buffers` submits `FUJINET_NIO_CMD_EXCHANGE`,
       `fn_transport_close` closes the broker. CLI may use a process-local
       context; `fujinet-disk.device` must use its own, not a machine-global
       `IORequest`.
-- [ ] No application or service code changes.
-- [ ] Remove debug instrumentation (`DBG_PRINTF` blocks) added in the race
+- [x] No application or service code changes.
+- [x] Remove debug instrumentation (`DBG_PRINTF` blocks) added in the race
       investigation.
-- [ ] Update Amiga `nio-core-apps` / `nio-apps` READMEs that still say the
+- [x] Update Amiga `nio-core-apps` / `nio-apps` READMEs that still say the
       lib uses `serial.device` directly; those sentences stay true until this
       cut-over and should change with it.
-- [ ] Update the Amiberry integration-test bootstrap to load `fujinet-nio.device`
+- [x] Update the Amiberry integration-test bootstrap to load `fujinet-nio.device`
       before any FujiNet tool. This is an environment change, not a test-logic
       change: assertions, startup sequences, and expected results are unchanged.
 

@@ -791,10 +791,11 @@ operations. `fhost` exercises the host-device protocol. The generated NIO
 configuration uses the simulated Wi-Fi backend, so the Wi-Fi test can verify
 decoded status, configuration, and scan records without requiring host Wi-Fi.
 
-The Amiga transport registers cleanup for `serial.device` at process exit.
-This matters because Amiga applications are normally short-lived CLI commands;
-without releasing the device, a second invocation could fail at `fn_init()`
-with `device not found` before producing any FujiBus traffic.
+CLI Amiga tools still register `fn_transport_close` at process exit so each
+process closes its broker context. Physical `serial.device` stays with the
+resident `fujinet-nio.device` broker, which must be LoadResident before any
+`fn_transport_init`. If the broker is absent, init returns `FN_ERR_NOT_FOUND`
+instead of contending for serial.
 
 This keeps the architecture split clean: Amiga code uses the platform
 transport in `fujinet-nio-lib`, Amiberry supplies the guest serial device, and

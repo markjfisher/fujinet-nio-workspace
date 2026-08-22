@@ -39,6 +39,8 @@ def main() -> int:
                         help="resident module loader to install in C:")
     parser.add_argument("--load-driver", action="store_true",
                         help="load fujinet-disk.device during startup")
+    parser.add_argument("--load-nio", action="store_true",
+                        help="load fujinet-nio.device during startup (before disk/app NIO)")
     parser.add_argument("--disk-mount-tool", type=Path,
                         help="fujinet-mount command to install in C:")
     parser.add_argument("--disk-mountlist", action="append", type=Path,
@@ -72,6 +74,8 @@ def main() -> int:
             raise SystemExit(f"{label} not found: {path}")
     if args.load_driver and (args.disk_device is None or args.resident_loader is None):
         raise SystemExit("--load-driver requires --disk-device and --resident-loader")
+    if args.load_nio and (args.nio_device is None or args.resident_loader is None):
+        raise SystemExit("--load-nio requires --nio-device and --resident-loader")
     for path in args.disk_mountlist:
         if not path.is_file():
             raise SystemExit(f"disk MountList not found: {path}")
@@ -121,7 +125,7 @@ def main() -> int:
             extract_archive(archive, archive_root)
             install_tree(args.output, archive_root)
 
-        if args.startup_script or not args.interactive or args.load_driver:
+        if args.startup_script or not args.interactive or args.load_driver or args.load_nio:
             if args.startup_script:
                 if not args.startup_script.is_file():
                     raise SystemExit(f"startup script not found: {args.startup_script}")
@@ -138,6 +142,12 @@ def main() -> int:
                 test_commands = (
                     "C:fujinet-load-resident "
                     "DEVS:fujinet-disk.device fujinet-disk.device\n"
+                    + test_commands
+                )
+            if args.load_nio:
+                test_commands = (
+                    "C:fujinet-load-resident "
+                    "DEVS:fujinet-nio.device fujinet-nio.device\n"
                     + test_commands
                 )
 

@@ -29,3 +29,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2a.md`
   summary: Allocate the worker signal on the worker task and name/type the `struct Task` instead of copying disk.device's init-task `AllocSignal`/`AddTask` setup
   evidence: Host tests never run `AddTask`/`Wait`/`Signal`; the disk resident uses the same pattern and is out of 2A scope.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3b.md`
+  summary: Host test that `amiga_test_disk` / `--load-nio` patches `S/Startup-Sequence` with nio `LoadResident` first on interactive and generated-command HDFs
+  evidence: Named 3B pytest nodes only cover `conftest.py` `--startup-script` images; dropping `--load-nio` from `tools/build/nio_build/tasks.py` would not fail inspect-catalog.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-3b.md`
+  summary: Refresh `docs/amiga/nio-broker-architecture.md` status line and the opening claim that FLS and disk.device independently `OpenDevice("serial.device")`
+  evidence: After 3A/3B that sentence is no longer current; 3B only updated the listed app READMEs and `amiberry-testing.md`.

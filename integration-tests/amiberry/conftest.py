@@ -756,8 +756,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 f"Amiberry case '{name}' sets nio_broker and driver; "
                 "isolated broker images must not install fujinet-disk.device"
             )
+        driver_root = ROOT / "repos/fujinet-nio-driver"
+        nio_device = driver_root / "build/amiga/fujinet-nio.device"
+        resident_loader = driver_root / "build/amiga/fujinet-load-resident"
         if case.get("nio_broker"):
-            driver_root = ROOT / "repos/fujinet-nio-driver"
             subprocess.run(
                 ["make", "native"],
                 cwd=driver_root / "amiga",
@@ -787,7 +789,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         if case.get("driver") and not case.get("nio_broker"):
             subprocess.run(
                 ["make", "amiga"],
-                cwd=ROOT / "repos/fujinet-nio-driver",
+                cwd=driver_root,
                 env=amiga_environment,
                 check=True,
             )
@@ -824,6 +826,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
             if case.get("mapping_readonly"):
                 catalog_dir.chmod(0o555)
                 readonly_catalog_dir = catalog_dir
+        elif not case.get("nio_broker"):
+            subprocess.run(
+                ["make", "native"],
+                cwd=driver_root / "amiga",
+                env=amiga_environment,
+                check=True,
+            )
 
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
@@ -843,16 +852,19 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 "--extra-app-dir", ROOT / "repos/nio-core-apps/build/amiga/bin",
             ])
         if case.get("nio_broker"):
-            driver_root = ROOT / "repos/fujinet-nio-driver"
             build_cmd.extend([
-                "--nio-device", driver_root / "build/amiga/fujinet-nio.device",
-                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
+                "--nio-device", nio_device,
+                "--resident-loader", resident_loader,
+            ])
+        else:
+            build_cmd.extend([
+                "--nio-device", nio_device,
+                "--resident-loader", resident_loader,
+                "--load-nio",
             ])
         if case.get("driver") and not case.get("nio_broker"):
-            driver_root = ROOT / "repos/fujinet-nio-driver"
             build_cmd.extend([
                 "--disk-device", driver_root / "build/amiga/fujinet-disk.device",
-                "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
                 "--disk-mount-tool", driver_root / "build/amiga/fujinet-mount",
             ])
             if not case.get("no_static_mountlists"):
