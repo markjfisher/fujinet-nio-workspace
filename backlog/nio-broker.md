@@ -34,6 +34,9 @@ Deliverables:
       (`0xFF`).
 - [ ] Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
       Verify that `fn_session.c` compiles without it and all existing tests pass.
+- [ ] Source-check Amiga GCC `exec/errors.h` and record the native symbol for
+      malformed-request `io_Error` (unsupported flags/pad, NULL+nonzero).
+      Do not guess numeric values. `fn_nio_error` remains `FN_ERR_INVALID`.
 - [ ] Finalize this document after peer review.
 
 **Testable invariant:** the header compiles cleanly against the Amiga GCC
@@ -53,6 +56,11 @@ Deliverables:
 - [ ] Serial backend implementing the contract from §11: `backend_open`,
       `backend_close`, `backend_exchange`. Uses serial.device + timer.device;
       SLIP framing via `fn_session`/`fn_slip` compiled from source.
+      Baud, serial/timer units, poll interval, and timeout are named
+      constants or config (not magic numbers). `backend_exchange` returns
+      `FN_ERR_TIMEOUT` when that deadline is exceeded.
+- [ ] `device_expunge` refuses while OpenCnt, queued, or in-progress work
+      remains; does not abort live requests.
 - [ ] Error recovery per §7: fatal failure → `backend_close`/reset → fail
       the current request → next exchange may lazy-reopen. Serial
       `backend_close` must leave framing/session state clean for reopen.

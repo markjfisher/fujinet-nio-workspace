@@ -91,13 +91,13 @@ flowchart TD
 
 - **Binds:** `device_expunge`, OpenCnt
 - **Prevents:** freeing broker/backend memory under queued or in-progress `IORequest`s
-- **Rule:** Expunge is deferred or refused while opens remain or requests are queued/in-progress. Drain/abort mechanics are Stage 2; the invariant is no unload race.
+- **Rule:** Expunge is deferred or refused while `OpenCnt != 0`, the queue is nonempty, or an exchange is in progress. Ordinary expunge does not abort live requests. Then stop worker, close backend if open, release resources. Follow Exec delayed-expunge if present.
 
 ### AD-9 — BeginIO reject and shim mapping [ADOPTED]
 
 - **Binds:** `BeginIO`, Amiga `fn_transport_exchange`
 - **Prevents:** `IOF_QUICK` inline-complete; returning stale `fn_nio_error` after `DoIO` `io_Error != 0`
-- **Rule:** Clear `IOF_QUICK` before any `BeginIO` `ReplyMsg`. BeginIO matrix in the architecture doc (wrong command, bad size, reserved flags/pad, NULL+nonzero, oversize, abort). Native invalid-argument symbols come from `exec/errors.h` at Stage 2. If `DoIO` returns `io_Error != 0`, the shim zeros length and returns a mapped local/device failure — except `IOERR_ABORTED` which is `FN_ERR_ABORTED` (AD-4).
+- **Rule:** Clear `IOF_QUICK` before any `BeginIO` `ReplyMsg`. BeginIO matrix in the architecture doc (wrong command, bad size, reserved flags/pad, NULL+nonzero, oversize, abort). Malformed request: native validation `io_Error` from the build’s `exec/errors.h` (source-check; no guessed numerics) + `FN_ERR_INVALID`. If `DoIO` returns `io_Error != 0`, the shim zeros length and returns a mapped local/device failure — except `IOERR_ABORTED` which is `FN_ERR_ABORTED` (AD-4).
 
 ### AD-10 — Staged cut-over [ADOPTED]
 
@@ -128,7 +128,7 @@ flowchart TD
 | Concern | Convention |
 | --- | --- |
 | Naming | Device `fujinet-nio.device`; command `FUJINET_NIO_CMD_EXCHANGE`; struct `FujiNetNIORequest`; unit 0 |
-| Data & formats | Lengths `UWORD`; Amiga oversize vs `FN_MAX_PACKET_SIZE` 1024 (`fn_protocol.h` non-cc65). `fn_struct_size` exact-match reject until a later extension policy is named |
+| Data & formats | Lengths `UWORD` (ABI max 65535); oversize vs platform `FN_MAX_PACKET_SIZE` (1024 Amiga). v1 `fn_struct_size` exact match; later prefix policy in architecture §2.2 |
 | Errors | Two fields, never merged; Abort pair in AD-4; BeginIO matrix in the architecture doc |
 | State | One in-flight exchange per transport context; broker FIFO serializes distinct requests |
 | Logging / debug | Stage 3 removes race-investigation `DBG_PRINTF` from the Amiga transport path |
@@ -185,11 +185,8 @@ flowchart LR
 
 ## Deferred
 
-- Exact `exec/errors.h` symbol for generic invalid-request (Stage 2; two-domain split is fixed).
-- Concrete C signatures for `backend_open` / `close` / `exchange` (semantics fixed in the architecture §11).
-- Numeric exchange timeout and serial baud/unit/timer (backend-private; must time out internally; not public ABI).
-- `fn_struct_size` accept-smaller-with-defaults policy (named per future ABI growth).
-- Expunge drain/abort sequence beyond refuse-while-busy (Stage 2).
+- Concrete `exec/errors.h` *identifier* for malformed-request `io_Error` (source-check at Stage 1/2; policy is native validation error + `FN_ERR_INVALID`; no guessed numerics).
+- Numeric serial baud/unit/timer/timeout values (serial-backend named constants; broker requires only bounded `FN_ERR_TIMEOUT`).
+- `fn_struct_size` compatibility *table* (policy is in architecture §2.2; implement when the struct grows).
 - Zorro/packet-native implementation and HDF/RDB media (other backlog; not this cut-over).
 - Loadable-backend Option B (only if backends must coexist without reboot).
-- Architecture doc still says “512 today” for `FN_MAX_PACKET_SIZE`; Amiga code is 1024 — align that prose when Stage 1 edits the ABI section.

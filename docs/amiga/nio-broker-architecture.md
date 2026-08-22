@@ -131,7 +131,7 @@ struct FujiNetNIORequest {
 
     /* Opaque FujiBus frame; caller-owned until reply (see §5) */
     const UBYTE *fn_request_data;
-    UWORD        fn_request_length;  /* bounded by FN_MAX_PACKET_SIZE (≤ 512) */
+    UWORD        fn_request_length;  /* bounded by platform FN_MAX_PACKET_SIZE */ */
 
     /* Caller-owned response buffer; fn_response_length valid only on FN_OK */
     UBYTE       *fn_response_data;
@@ -144,10 +144,12 @@ struct FujiNetNIORequest {
 };
 ```
 
-`UWORD` (16-bit) is used for lengths because FujiBus frames are bounded by
-`FN_MAX_PACKET_SIZE` (currently 512 bytes). If that bound is ever raised above
-65535, the fields must become `ULONG`; that change is a future ABI version bump
-tracked through `fn_struct_size`.
+Length fields are `UWORD` (ABI representational capacity 65535). Stage 1
+validates `fn_request_length` against the platform's `FN_MAX_PACKET_SIZE`
+(currently 1024 on Amiga; see `fn_protocol.h` when not `__CC65__`). The public
+ABI does not hard-code 1024. If a future platform bound exceeds 65535, the
+fields must become `ULONG`; that change is an ABI version bump tracked through
+`fn_struct_size`.
 
 ### 2.1 Error domain
 
@@ -171,7 +173,7 @@ in this architecture or in tests.
 | 0 | Dispatch succeeded; check `fn_nio_error` for NIO outcome |
 | `IOERR_ABORTED` | Request was aborted before or during processing |
 | `IOERR_NOCMD` | Unrecognized command (not `FUJINET_NIO_CMD_EXCHANGE`) |
-| `IOERR_BADLENGTH` | `fn_struct_size` does not match the broker's ABI version |
+| `IOERR_BADLENGTH` | `fn_struct_size` rejected (§2.2) or request length oversize |
 
 Callers must not read `io_Error` to determine whether an NIO exchange
 succeeded or failed.
@@ -207,10 +209,16 @@ is 0.
 
 **BeginIO / completion matrix**
 
-Two-domain separation is the contract. Native `io_Error` symbols for
-invalid-argument cases are taken from `exec/errors.h` at Stage 2; this table
-does not invent numeric values. Unit is checked at `OpenDevice`, not in
-`BeginIO`.
+Two-domain separation is the contract. Malformed broker `IORequest`s use:
+
+- `io_Error` = the appropriate native Exec/device request-validation error
+- `fn_nio_error` = `FN_ERR_INVALID`
+
+Stage 1/2 inspects the Amiga GCC `exec/errors.h` in the build and chooses the
+actual available symbol for unsupported flags/reserved fields and NULL +
+nonzero length/capacity. Do not invent or hard-code guessed numeric
+`IOERR_*` values in this document or in tests. Unit is checked at
+`OpenDevice`, not in `BeginIO`.
 
 | Condition | `io_Error` | `fn_nio_error` |
 |---|---|---|
@@ -239,18 +247,26 @@ new FN constants except by adding them to `fujinet-nio.h`.
 
 ### 2.2 ABI forward compatibility
 
-`fn_struct_size` is the version/size guard. The protocol is:
-- Caller sets `fn_struct_size = sizeof(struct FujiNetNIORequest)` before
-  `DoIO`. This encodes the ABI version the caller was compiled against.
-- The broker checks this field in `BeginIO`. If it does not match the
-  broker's compiled size, the broker sets `io_Error = IOERR_BADLENGTH` and
-  `fn_nio_error = FN_ERR_INVALID` and replies immediately without queuing.
-- When the struct grows (new fields at the end), callers compiled against the
-  old header have a smaller `fn_struct_size`; the broker can detect this and
-  either reject or apply defaults for the new fields. The exact policy is
-  defined at the time of each extension.
-- `fn_flags` (and `fn_pad`) are reserved. They must be zero on submission;
-  non-zero is rejected per the BeginIO matrix in §2.1.
+`fn_struct_size` is the version/size guard.
+
+**v1 (current struct):** require exact size.
+`fn_struct_size == sizeof(struct FujiNetNIORequest)`. Any other value is
+`IOERR_BADLENGTH` + `FN_ERR_INVALID` without queuing.
+
+**Once the ABI is extended** (new fields at the end), prefix compatibility:
+
+| Caller `fn_struct_size` | Broker action |
+|---|---|
+| Less than the minimum supported prefix | Reject (`IOERR_BADLENGTH` + `FN_ERR_INVALID`) |
+| Equal to a known older size | Accept if all fields required for that version are present; missing newer tail fields receive documented defaults |
+| Greater than the driver-known size | Reject. An older driver cannot know whether new fields alter semantics |
+
+One-way model: old caller → newer broker may be compatible; new caller → older
+broker is rejected. Do not implement the compatibility table until the struct
+actually grows.
+
+`fn_flags` (and `fn_pad`) are reserved. They must be zero on submission;
+non-zero is rejected per the BeginIO matrix in §2.1.
 
 ### 2.3 Other ABI invariants
 
@@ -487,11 +503,23 @@ removable or failable hardware later.
 
 ### Expunge while work remains
 
-`device_expunge` must not free broker, device, or backend state while queued
-or in-progress requests still exist, or while `OpenCnt` shows remaining opens.
-Expunge is deferred or refused until there is no active work and no remaining
-opens. A full drain/abort protocol is a Stage 2 detail; the invariant is that
-unload does not race live `IORequest`s.
+Ordinary expunge must not abort or destroy live requests. If Amiga Exec has
+delayed-expunge conventions, Stage 2 follows them. The semantic contract:
+
+```
+device_expunge():
+  if lib_OpenCnt != 0:           defer/refuse
+  if queue not empty:            defer/refuse
+  if request in progress:        defer/refuse
+  otherwise:
+    stop worker
+    close backend if open
+    release worker/resources
+    remove resident state
+```
+
+Active work finishes and clients close first. Expunge is not an implicit
+`AbortIO` of the queue.
 
 ### Why this is a policy choice, not the only race-free option
 
@@ -680,20 +708,35 @@ installed files per configuration.
 ## 11. Internal physical-backend contract
 
 The broker's internal backend interface is not part of the public ABI (callers
-never see it), but its semantics must be fixed now so that both a stream/SLIP
-backend (serial) and a packet-native backend (Zorro, floppy) can implement it
-without requiring changes to the broker or to any caller.
+never see it). Serial baud, `serial.device` unit, `timer.device` unit, poll
+interval, and exchange timeout are **serial-backend private configuration**
+(named constants or config, not magic numbers, not public ABI). A Zorro
+backend may have none of those concepts.
 
-### Semantic contract
+v1 C contract (Stage 2 may add a private context pointer without changing
+semantics; do not add multi-adapter support before there is one adapter):
 
-A backend implements exactly three operations:
+```c
+uint8_t backend_open(void);
 
-**`backend_open()`**
-- Opens and initializes the physical hardware resource (e.g. `OpenDevice`,
-  memory-mapped register setup).
-- Performs configuration required to start clean (baud rate, buffers, DMA,
-  framing/session).
-- Returns success or an FN-space error code.
+void backend_close(void);
+
+uint8_t backend_exchange(
+    const uint8_t *request,
+    uint16_t request_len,
+    uint8_t *response,
+    uint16_t response_capacity,
+    uint16_t *response_len
+);
+```
+
+Do not pass broker/device objects into this interface unless implementation
+proves they are necessary.
+
+**`backend_open`**
+- Opens and initializes the physical hardware resource.
+- Performs configuration required to start clean.
+- Returns `FN_OK` or an FN-space transport/setup error.
 - Called when the backend is currently closed and an exchange requires it.
 - Normally called once after broker startup (lazy, first exchange). That
   “once” is steady-state, not a lifetime cap.
@@ -701,41 +744,33 @@ A backend implements exactly three operations:
   (§7) or after a failed open (backend stayed closed).
 - Must never be called concurrently. Not called per-request while open.
 
-**`backend_close()`**
-- Safe only when the backend is open.
-- Releases the physical hardware resource.
-- Transitions the backend to a fully reset/closed state.
-- After close, a later `backend_open` must start from clean framing/session
-  state.
+**`backend_close`**
+- Idempotent and safe when already closed.
+- Releases the physical hardware resource if open.
+- Leaves backend/session/framing state fully reset so a later `backend_open`
+  starts clean.
 - Called on expunge/shutdown or after a backend failure that requires reset
-  (§7). Not called if open never succeeded.
+  (§7).
 
-**`backend_exchange(request, request_len, response, response_capacity, response_len_out)`**
-- Performs one complete, atomic NIO transaction:
-  sends the entire `request` buffer to the remote device, then receives the
-  complete response into `response`. Framing (SLIP encoding/decoding for
-  stream backends; native packet format for packet backends) is handled
-  entirely within this function.
-- Sets `*response_len_out` on success. On any failure, sets
-  `*response_len_out = 0` before return (broker copies that to
-  `fn_response_length`).
-- Returns an FN-space error code (`FN_OK`, `FN_ERR_TRANSPORT`,
-  `FN_ERR_TIMEOUT`, `FN_ERR_IO`).
-- **Must not return until the exchange is complete or has definitively failed.**
-  The broker calls `ReplyMsg` only after this function returns.
-- **May be called again after it returns, but never concurrently.** The broker
-  worker never calls it from two tasks at once.
+**`backend_exchange`**
+- Called only while the backend is open.
+- Exactly one complete request → response transaction. Framing is entirely
+  inside this function (SLIP for stream; native packets otherwise).
+- Sets `*response_len = 0` before doing work. On success, sets the actual
+  length. The broker copies that to `fn_response_length`.
+- Returns FN-space status (`FN_OK`, `FN_ERR_TRANSPORT`, `FN_ERR_TIMEOUT`,
+  `FN_ERR_IO`, …).
+- Must terminate in bounded time and return `FN_ERR_TIMEOUT` when the
+  selected backend's response deadline is exceeded.
+- Never retains caller buffers after return.
+- The broker calls `ReplyMsg` only after this function returns.
+- May be called again after it returns, but never concurrently.
 
 ### Invariants the contract enforces across backends
-
-Same opacity and neutrality as §1; here they constrain `backend_exchange`:
 
 - **Service-agnostic.** Raw bytes in and out; no FujiBus or disk parsing.
 - **Transport-neutral.** Stream backends apply SLIP; packet backends do not.
 - **No disk semantics** in the backend interface.
 - **Private backend state** between calls (partial frames are not the broker's).
-- **Deterministic completion.** Time out internally; do not block the FIFO
+- **Deterministic completion.** Bound time internally; do not block the FIFO
   forever.
-
-The concrete C function signatures will be defined at Stage 2. This semantic
-contract is fixed.
