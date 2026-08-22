@@ -2,7 +2,8 @@
 title: 'Amiga NIO broker Stage 2A — Exec core'
 type: 'feature'
 created: '2026-08-22'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '97bd677695848a94e9dce70eaa05f7d844d3cba5'
 review_loop_iteration: 0
 context:
   - docs/amiga/nio-broker-architecture.md
@@ -76,11 +77,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-lib/include/fn_slip.h` -- encode/decode declarations; session + `fn_internal.h` use them -- Stage 1 deferred slip surface
-- [ ] `repos/fujinet-nio-driver/amiga/tests/stubs/exec/errors.h` -- NDK 47.1 numerics -- host tests must not use swapped stub values
-- [ ] `repos/fujinet-nio-driver/amiga/nio.device/` -- init/open/close/expunge/BeginIO/AbortIO/FIFO worker/§5.1 -- Exec core
-- [ ] Host native tests with injectable backend covering the I/O matrix -- cheapest driver gate; no RS-232
-- [ ] `repos/fujinet-nio-driver/amiga/tests/Makefile` -- `make tests` builds and **runs** the new binary -- policy
+- [x] `repos/fujinet-nio-lib/include/fn_slip.h` -- encode/decode declarations; session + `fn_internal.h` use them -- Stage 1 deferred slip surface
+- [x] `repos/fujinet-nio-driver/amiga/tests/stubs/exec/errors.h` -- NDK 47.1 numerics -- host tests must not use swapped stub values
+- [x] `repos/fujinet-nio-driver/amiga/nio.device/` -- init/open/close/expunge/BeginIO/AbortIO/FIFO worker/§5.1 -- Exec core
+- [x] Host native tests with injectable backend covering the I/O matrix -- cheapest driver gate; no RS-232
+- [x] `repos/fujinet-nio-driver/amiga/tests/Makefile` -- `make tests` builds and **runs** the new binary -- policy
 
 **Acceptance Criteria:**
 - Given overlapping malformations, when BeginIO runs, then only the first-match `io_Error` applies, `fn_nio_error` is `FN_ERR_INVALID`, and the request is not queued.
@@ -102,3 +103,49 @@ Injectable backend implements architecture §11 call shape so 2B can swap in ser
 **Commands (after `source "$NIO_WORKSPACE/scripts/env.sh"`):**
 - `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make check` -- expected: all configured targets and host tests pass (`fn_slip.h` / session)
 - `cd "$NIO_WORKSPACE/repos/fujinet-nio-driver/amiga" && make tests` -- expected: existing tests plus new broker host tests pass (BeginIO matrix, abort, FIFO, expunge, aligned stubs)
+
+## Suggested Review Order
+
+**Resident and worker**
+
+- Device base, injectable §11 backend hooks, and unit-0 FIFO worker.
+  [`fujinet_nio_device.c:44`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L44)
+
+- Lazy-open; OpenCnt 0 does not close the backend.
+  [`fujinet_nio_device.c:116`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L116)
+
+- Completing-state: abort vs result, clamp length, clear in_progress, then ReplyMsg.
+  [`fujinet_nio_device.c:141`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L141)
+
+**BeginIO, AbortIO, expunge**
+
+- First-match validation; clear IOF_QUICK before any ReplyMsg.
+  [`fujinet_nio_device.c:348`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L348)
+
+- Queued abort replies here; in-progress only sets the abort flag.
+  [`fujinet_nio_device.c:405`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L405)
+
+- Busy expunge refused; idle path closes backend and unloads AUTOINIT.
+  [`fujinet_nio_device.c:290`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_device.c#L290)
+
+**Shared SLIP surface**
+
+- Encode/decode live in the shared header session can include.
+  [`fn_slip.h:22`](../../repos/fujinet-nio-lib/include/fn_slip.h#L22)
+
+- Internal header re-exports the same declarations.
+  [`fn_internal.h:99`](../../repos/fujinet-nio-lib/include/fn_internal.h#L99)
+
+**Host tests and stubs**
+
+- Injectable backend plus I/O-matrix cases invoked from main.
+  [`test_fujinet_nio_device.c:168`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_device.c#L168)
+
+- Isolated first-match rows beyond the overlapping-malformed case.
+  [`test_fujinet_nio_device.c:243`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_device.c#L243)
+
+- NDK 47.1 `IOERR_NOCMD` / `IOERR_BADLENGTH` numerics.
+  [`errors.h:6`](../../repos/fujinet-nio-driver/amiga/tests/stubs/exec/errors.h#L6)
+
+- `make tests` builds and runs the new binary.
+  [`Makefile:57`](../../repos/fujinet-nio-driver/amiga/tests/Makefile#L57)
