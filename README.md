@@ -1,35 +1,37 @@
 # fujinet-nio-workspace
 
-Workspace and build orchestration for the fujinet-nio development stack.
+Workspace and build orchestration for the **FujiNet NIO** product (the
+`fujinet-nio` adapter/runtime repo is one component, not the whole stack).
 
 This repository owns no product source code. It pins the related repositories as
 submodules and provides one place to set environment variables, build the stack,
-create MS-DOS images, and record exactly which commits were used.
+create images, and record exactly which commits were used.
 
 ## Repository Layout
+
+Product and integration repos (see `.gitmodules` and `repos/` for the source of
+truth):
 
 ```text
 fujinet-nio-workspace/
   repos/
-    fujinet-nio/
-    fujinet-nio-lib/
-    nio-apps/
+    fujinet-nio/                 # adapter/runtime
+    fujinet-nio-lib/             # client library
+    fujinet-nio-driver/          # MS-DOS + Amiga native drivers
+    nio-core-apps/               # portable F* utilities
+    nio-config/                  # config-nio
+    nio-apps/                    # examples / diagnostics
+    fn-rom/                      # BBC/Master native ROM + boot utils
     fujinet-qemu-msdos/
-    fujinet-nio-driver/
-    fn-rom/
     bounce-world-client-nio/
+    cc65/  cc65-clib/            # toolchains
+    AltirraSDL/  fujinet-emulator-bridge/  qemu-msdos-init/
   scripts/
-    env.sh
-    build.sh
-    build-all.sh
-    make-msdos-image.sh
-    status-all.sh
-    update-all.sh
-  build/
-    logs/
-    images/
-  local/
-    config.env
+  docs/
+  backlog/
+  completed/
+  build/                         # gitignored
+  local/                         # gitignored config
 ```
 
 `build/` and `local/config.env` are intentionally ignored.
@@ -70,10 +72,12 @@ The defaults point at the submodules:
 ```sh
 FUJINET_NIO=repos/fujinet-nio
 FUJINET_NIO_LIB=repos/fujinet-nio-lib
-NIO_APPS=repos/nio-apps
-FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
 FUJINET_NIO_DRIVER=repos/fujinet-nio-driver
+NIO_CORE_APPS=repos/nio-core-apps
+NIO_CONFIG=repos/nio-config
+NIO_APPS=repos/nio-apps
 FN_ROM=repos/fn-rom
+FUJINET_QEMU_MSDOS=repos/fujinet-qemu-msdos
 BOUNCE_WORLD_CLIENT_NIO=repos/bounce-world-client-nio
 ```
 

@@ -7,11 +7,17 @@ updated: 2026-08-22
 
 # Product Brief: FujiNet NIO
 
+## Naming
+
+**FujiNet NIO** is the umbrella product: the whole client/device I/O ecosystem (adapter runtime, client library, native drivers, apps, ROMs, workspace). **`fujinet-nio`** is one repository inside that ecosystem — the adapter/runtime implementation (ESP32-class and POSIX hosts). Other repos (`fujinet-nio-lib`, `fujinet-nio-driver`, `fn-rom`, `nio-core-apps`, …) are also FujiNet NIO; they are not “the firmware repo with extra folders.”
+
 ## Executive summary
 
 FujiNet NIO is a ground-up reworking of FujiNet client and device I/O. Classic FujiNet already delivers network-connected disk, file, network, clock, printer, modem, and related services to many retro machines. That ecosystem grew platform-by-platform and transport-by-transport. Service logic, physical I/O, and client interfaces are often more tightly coupled than a long-lived foundation can afford.
 
-NIO keeps the useful product ideas and user-facing capabilities. It replaces historical coupling with a shared NIO/FujiBus request/response model, platform-independent service semantics, reusable client libraries, thin platform drivers, and physical transports that can be swapped without rewriting applications or service payloads. Strong automated tests across machines, transports, and services are part of the architecture, not an afterthought.
+FujiNet NIO aims to **preserve and evolve** the useful capabilities and user-facing concepts of FujiNet. Compatibility with historical internal APIs, implementation structure, or wire details is **not assumed** unless explicitly documented for a particular interface. Optional bridges (for example the library’s legacy appkey helpers) are bridges, not a blanket compatibility promise.
+
+It replaces historical coupling with a shared NIO/FujiBus request/response model, platform-independent service semantics, reusable client libraries, thin platform drivers, and physical transports that can be swapped without rewriting applications or service payloads. Strong automated tests across machines, transports, and services are part of the architecture, not an afterthought.
 
 This is not a port of the old implementation. The project is pre-production: demos and early users exist, but accidental internal APIs and architectural mistakes are not compatibility obligations. Prefer a better long-term foundation now.
 
@@ -44,7 +50,9 @@ A disk device implements disk semantics. A network client implements network sem
 
 **Multi-service, not disk-centric.** DiskService matters. The project is not a disk-only stack. An implementation that starts with disk must not force later services through disk abstractions.
 
-**Native integration.** NIO enables Amiga Exec/AmigaDOS, MS-DOS drivers, BBC filing-system/ROM, Atari native interfaces, POSIX reference hosts, and ESP32-class adapter firmware. It does not force one UI or OS model.
+**Native integration.** NIO enables Amiga Exec/AmigaDOS, MS-DOS drivers, BBC filing-system/ROM, Atari native interfaces, POSIX reference hosts, and ESP32-class adapter firmware (`fujinet-nio`). It does not force one UI, OS model, or **repository shape**. Portable `F*` utilities live in `nio-core-apps` where that model fits; BBC-equivalent user-facing functions live in `fn-rom` because that is the right native shape for the BBC. Do not “normalize” BBC into `nio-core-apps`.
+
+**Platform support is component-specific.** A platform can be in product scope while some components do not yet ship there. Example: Atari is an active NIO platform; `nio-config`’s Atari UI is currently excluded from `all-targets` because of cc65 memory limits. That is build/maturity status, not a scope contradiction.
 
 **Concurrency as a principle.** On a multitasking OS, concurrent clients are real. Shared physical transports need explicit ownership and serialization, not sleeps, retries, or scheduling luck. The Amiga FLS vs disk-device `serial.device` race is an instance of this principle, not the whole of it.
 
@@ -85,7 +93,8 @@ A disk device implements disk semantics. A network client implements network sem
 - Specifying every future hardware backend before one is needed.
 - Duplicating service protocols independently in every port.
 - Timing hacks in place of ownership and concurrency design.
-- Claiming classic FujiNet wire or client-API compatibility where docs do not guarantee it.
+- Blanket historical FujiNet wire or client-API compatibility (see Naming / Executive summary).
+- Forcing every platform into the same application repository or native binary shape.
 
 ## Principles that bind new work
 
@@ -99,16 +108,26 @@ A disk device implements disk semantics. A network client implements network sem
 8. Dependency direction stays acyclic across firmware, lib, drivers, and apps.
 9. Prefer simple implementations that remain correct.
 10. While pre-production, prefer structural correctness over temporary compatibility hacks.
+11. The common product model does not require every platform to use the same repository or native application shape.
+12. Platform support is per component: “in scope” is not “every repo ships for this target.”
 
 ## Scope and maturity (product altitude)
 
-NIO is a **multi-repository product**, not a single firmware binary. Workspace platform workflows today cover **Linux/POSIX, BBC/Master, MS-DOS, Atari, and Amiga**, plus ESP32-class adapter builds in `fujinet-nio`. Emulator and QEMU paths exist as development surfaces.
+FujiNet NIO is a **multi-repository product**. `fujinet-nio` is the adapter/runtime repo, not the whole product. Workspace platform workflows today cover **Linux/POSIX, BBC/Master, MS-DOS, Atari, and Amiga**, plus ESP32-class adapter builds in `fujinet-nio`. Emulator and QEMU paths exist as development surfaces.
 
-Not every mentioned host is equally mature or permanently committed. Firmware docs also list embeddable-library, emulator, and possible WebAssembly futures; C64 appears as a host example in firmware architecture, not as a workspace platform workflow. Treat those as intent or exploration until a backlog/completed record says otherwise.
+Use this vocabulary so a mention in an architecture doc is not an accidental roadmap:
 
-**Proven enough to build on:** POSIX and ESP32 adapter cores with layered channels/transports/devices; multi-compiler `fujinet-nio-lib`; MS-DOS `FUJINET.SYS`; BBC `fn-rom` disk+network product shape; Amiga DiskDevice Phase 2 (standard DD/HD ADF) with catalogue mapping. **Active:** Amiga NIO broker (design for review, not implemented); Wi-Fi/network configuration; faster Amiga backends (depends on a replaceable transport). **Later:** whole-volume HDF/RDB; additional packet-native hardware.
+| Label | Meaning |
+| --- | --- |
+| **Active / current** | Workspace workflows, completed acceptance, or shipping-shaped components |
+| **Experimental / exploratory** | Exercised or documented as a path, not a commitment |
+| **Future architectural possibility** | Named in design docs (e.g. WebAssembly, C64 as a host example in firmware architecture) until backlog/completed says otherwise |
 
-Detail, repository map, and open questions: `addendum.md`.
+**Active / current (enough to build on):** POSIX and ESP32 adapter cores; multi-compiler `fujinet-nio-lib` (6502 is an important class of targets, not the definition of the library); MS-DOS `FUJINET.SYS`; BBC `fn-rom` disk+network product shape; Amiga DiskDevice Phase 2 (standard DD/HD ADF). **Active work:** Amiga NIO broker (design for review, not implemented); Wi-Fi/network configuration; faster Amiga backends. **Future:** whole-volume HDF/RDB; additional packet-native hardware.
+
+**Open product question:** how long the legacy `fujinet-lib` stack is supported relative to FujiNet NIO has not been defined.
+
+Detail and repository map: `addendum.md`.
 
 ## Where this brief sits
 

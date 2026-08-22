@@ -84,6 +84,9 @@ Deliverables:
 - [ ] No application or service code changes.
 - [ ] Remove debug instrumentation (`DBG_PRINTF` blocks) added in the race
       investigation.
+- [ ] Update Amiga `nio-core-apps` / `nio-apps` READMEs that still say the
+      lib uses `serial.device` directly; those sentences stay true until this
+      cut-over and should change with it.
 - [ ] Update the Amiberry integration-test bootstrap to load `fujinet-nio.device`
       before any FujiNet tool. This is an environment change, not a test-logic
       change: assertions, startup sequences, and expected results are unchanged.
