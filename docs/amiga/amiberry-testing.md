@@ -220,6 +220,15 @@ The first tests cover Wi-Fi SET/GET/status/scan using the public
 exercises the application argument paths and persistence mechanism rather
 than only launching an executable.
 
+An individual test can be run specifying the exact test directly, for example:
+
+```sh
+source scripts/env.sh && \
+  uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 -q --tb=no \
+  integration-tests/amiberry/test_diskdevice_adf.py::test_hd_adf_mount_geometry_dir_and_type
+```
+
+
 Every run creates a timestamped evidence tree at
 `test-evidence/amiberry-YYYYMMDD-HHMMSS/`. Each case leaves a guest-only IPC
 screenshot at `<run>/<case>/amiberry-screen.png`, alongside its HDF and
