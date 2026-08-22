@@ -14,71 +14,74 @@ context:
 
 ## Intent
 
-**Problem:** Stage 2 cannot implement `fujinet-nio.device` until the public `IORequest` ABI exists, abort has a first-class FN code that does not collide with `FN_ERR_UNKNOWN`, and `fn_session.c` can compile into the broker without `fn_internal.h`.
+**Problem:** Stage 2 cannot implement `fujinet-nio.device` until the public `IORequest` ABI exists, abort has a first-class local FN code that does not collide with `FN_ERR_UNKNOWN`, and `fn_session.c` can compile into the broker without `fn_internal.h`.
 
-**Approach:** Publish `fujinet_nio_device.h` from architecture §2, add `FN_ERR_ABORTED` (`0x13`) to the shared error header (and its string helper), drop the unused session include, and record the native malformed-request `io_Error` symbol by inspecting the Amiga GCC `exec/errors.h` used in this workspace.
+**Approach:** Publish a self-sufficient `fujinet_nio_device.h` from architecture §2, add client-visible `FN_ERR_ABORTED` (`0x13`) to the shared C error header (and its string helper), drop the unused session include, and inspect the real NDK `exec/errors.h` to choose a semantically appropriate native `io_Error` **per validation class**.
 
 ## Boundaries & Constraints
 
 **Always:**
 - Match architecture §2 layout, names, and command (`FUJINET_NIO_CMD_EXCHANGE` = `CMD_NONSTD + 0`). Base type `IORequest`, not `IOStdReq`.
-- `FN_ERR_ABORTED` is `0x13` in `fujinet-nio.h` only. Do not reuse `0xFF` or any existing `FN_ERR_*`.
+- `fujinet_nio_device.h` must include everything it requires (`exec/io.h`, the header that actually defines `CMD_NONSTD`, Amiga integer types, etc.). A TU whose only include is this public header must compile; the test TU must not pre-include NDK headers to paper over an incomplete header.
+- `FN_ERR_ABORTED` is `0x13` in `fujinet-nio.h` only. It is a **local/client-visible FN error**, not a new FujiBus wire-status requirement. Do not reuse `0xFF` or any existing `FN_ERR_*`.
+- Do not add `FN_ERR_ABORTED` to Atari/BBC `fn_protocol.inc`. Those tables are not this C ABI; do not “synchronize” numeric error tables across platforms.
 - Length fields are `UWORD`. Do not hard-code 1024 in the public ABI; oversize policy is vs platform `FN_MAX_PACKET_SIZE`.
-- v1 `fn_struct_size` exact-match policy in comments only; no broker device yet.
-- Malformed-request rule: native Exec/device validation `io_Error` + `FN_ERR_INVALID`. Tests and docs must use `exec/errors.h` symbols, never guessed numeric `IOERR_*` literals.
+- v1 `fn_struct_size` exact-match policy is **documentation only** in Stage 1. There is no broker yet to enforce it.
+- Malformed-request FN side is always `FN_ERR_INVALID`. Native `io_Error` is chosen **per validation class** from the real NDK `exec/errors.h` (e.g. NULL pointer vs unsupported flags/pad need not share a symbol). Tests and docs use those symbols, never guessed numeric `IOERR_*` literals.
 - Source `scripts/env.sh` before Amiga/lib builds. After lib changes, run complete `make check` in `repos/fujinet-nio-lib`.
 
 **Ask First:**
-- If NDK `exec/errors.h` has no suitable request-validation symbol for flags/pad or NULL+nonzero, stop; do not invent a numeric.
+- If NDK `exec/errors.h` has no suitable symbol for a given validation class, stop and report that class; do not invent a numeric or force one symbol onto every class.
 
 **Never:**
 - Implement `amiga/nio.device/`, rewrite `fn_transport.c`, change DiskDevice, or load the broker.
 - Dual `OpenDevice("serial.device")` work, idle-close changes, or Stage 5 backends.
-- Change `FN_MAX_PACKET_SIZE` or Atari/BBC `fn_protocol.inc` error numbering (those files are not the C ABI).
+- Change `FN_MAX_PACKET_SIZE`.
+- Treat `FN_ERR_ABORTED` as a FujiBus on-the-wire status that other platforms must emit.
 
 ## I/O & Edge-Case Matrix
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| Compile public ABI | New header included with NDK `exec/io.h` / `devices.h` | Warning-clean Amiga GCC compile of a TU that includes only that header | Fail the stage if warnings or missing `CMD_NONSTD` |
-| Abort code | `FN_ERR_ABORTED` | Equals `0x13`; distinct from `0x12` and `0xFF` | Collision is a spec violation |
-| Session isolation | `fn_session.c` without `fn_internal.h` | Same session behavior; `make test-session` and `make check` pass | Restore nothing; do not reintroduce the include |
-| Malformed `io_Error` | Inspect toolchain `exec/errors.h` | Named symbol recorded in architecture §2.1 (flags/pad and NULL+nonzero rows) | HALT if no symbol exists |
+| Compile public ABI | TU contains only `#include <fujinet_nio_device.h>` (or the equivalent quoted include of that public header) | Warning-clean Amiga GCC compile; header pulled in `CMD_NONSTD` and types itself | Fail the stage if warnings or missing includes |
+| Abort code | `FN_ERR_ABORTED` in `fujinet-nio.h` | Equals `0x13`; distinct from `0x12` and `0xFF`; client-visible FN only | Collision is a spec violation |
+| Session isolation | `fn_session.c` without `fn_internal.h` | Same session behavior; `make check` (includes `test-session`) passes | Restore nothing; do not reintroduce the include |
+| Native `io_Error` per class | Inspect toolchain `exec/errors.h` | Architecture §2.1 records the appropriate symbol **per class** (flags/pad vs NULL+nonzero may differ) | HALT and report any class with no suitable symbol |
 
 </frozen-after-approval>
 
 ## Code Map
 
-- `docs/amiga/nio-broker-architecture.md` §2 — ABI owner (struct ~L107–144). Copy names/layout; the architecture snippet currently has a stray `*/` on the `fn_request_length` comment — emit a valid C comment in the header. §2.1 matrix still says “native invalid-request error”; replace those cells with the sourced symbol after inspection.
-- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_device.h` — sibling header style (`CMD_NONSTD + n`, device name `#define`, include `<exec/io.h>`).
+- `docs/amiga/nio-broker-architecture.md` §2 — ABI owner (struct ~L107–144). Copy names/layout; the architecture snippet currently has a stray `*/` on the `fn_request_length` comment — emit a valid C comment in the header. §2.1 rows that say “native invalid-request error” become sourced **per-class** symbols after inspection, not one shared symbol forced onto every row.
+- `repos/fujinet-nio-driver/amiga/include/fujinet_disk_device.h` — sibling header style (`CMD_NONSTD + n`, device name `#define`, include `<exec/io.h>`). The new header must still be self-sufficient even if the disk header is not a complete model.
 - `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` — **create**. Not referenced by the disk device or lib yet (Stage 3 opens it).
-- `repos/fujinet-nio-lib/include/fujinet-nio.h` L72–109 — insert `#define FN_ERR_ABORTED 0x13` after `FN_ERR_NO_HANDLES`, before `FN_ERR_UNKNOWN`.
+- `repos/fujinet-nio-lib/include/fujinet-nio.h` L72–109 — insert `#define FN_ERR_ABORTED 0x13` after `FN_ERR_NO_HANDLES`, before `FN_ERR_UNKNOWN`. Comment: local/client-visible, not a FujiBus wire status.
 - `repos/fujinet-nio-lib/src/common/fn_util.c` L3–19 — add `fn_error_string` case for abort (default already maps unknown).
-- `repos/fujinet-nio-lib/docs/api.md` ~L580 — error table; add `0x13`.
+- `repos/fujinet-nio-lib/docs/api.md` ~L580 — error table; add `0x13` as client-visible FN, not wire status.
 - `repos/fujinet-nio-lib/src/common/fn_session.c` L1–5 — `#include "fn_internal.h"` is unused (file never references internals; uses `fn_session.h`, `fujinet-nio.h`, `fn_protocol.h` / SLIP). Delete that include only.
 - `repos/fujinet-nio-lib/include/fn_protocol.h` L250–255 — Amiga/non-cc65 `FN_MAX_PACKET_SIZE` is 1024; header comments may cite the macro, not a literal 1024.
-- `repos/fujinet-nio-driver/amiga/tests/stubs/exec/errors.h` — host-test stub (`IOERR_OPENFAIL` … `IOERR_BADADDRESS`). Not the NDK source of truth.
-- Toolchain NDK `exec/errors.h` via `AMIGA_TOOLCHAIN_BIN` / NDK include path from `scripts/env.sh` — inspect for the malformed-request symbol (candidates in the stub set include `IOERR_BADADDRESS`; pick what the real header documents, do not assume).
-- `repos/fujinet-nio-lib/Makefile` — `TARGETS` includes `amiga`; `EXTRA_TARGETS` includes `amiga-driver`; `check` = `all` then `test` (includes `test-session`).
+- `repos/fujinet-nio-driver/amiga/tests/stubs/exec/errors.h` — host-test stub (`IOERR_OPENFAIL` … `IOERR_BADADDRESS`). Not the NDK source of truth; do not copy stub values into architecture or tests as guesses.
+- Toolchain NDK `exec/errors.h` via `AMIGA_TOOLCHAIN_BIN` / NDK include path from `scripts/env.sh` — inspect **per validation class**. A NULL pointer may map to something like `IOERR_BADADDRESS` if the NDK documents that; unsupported flags may use a different symbol or have none (then HALT).
+- `repos/fujinet-nio-lib/Makefile` — `TARGETS` includes `amiga`; `EXTRA_TARGETS` includes `amiga-driver`; `check` = `all` then `test` (`all` does **not** loop `EXTRA_TARGETS`).
 - `backlog/nio-broker.md` Stage 1 checkboxes — mark done only after verification; do not start Stage 2.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-lib/include/fujinet-nio.h` -- add `FN_ERR_ABORTED` `0x13` -- Stage 1 ABI coordination
+- [ ] `repos/fujinet-nio-lib/include/fujinet-nio.h` -- add client-visible `FN_ERR_ABORTED` `0x13` -- Stage 1 FN API, not FujiBus wire
 - [ ] `repos/fujinet-nio-lib/src/common/fn_util.c` -- map abort in `fn_error_string` -- keep public string helper complete
-- [ ] `repos/fujinet-nio-lib/docs/api.md` -- document `0x13` -- API table matches header
-- [ ] `repos/fujinet-nio-lib/src/common/fn_session.c` -- remove `#include "fn_internal.h"` -- broker can compile session by path
-- [ ] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` -- emit architecture §2 public ABI -- Stage 2 compile surface
-- [ ] `docs/amiga/nio-broker-architecture.md` -- record sourced `io_Error` symbol on malformed-request rows -- source-check, not invention
+- [ ] `repos/fujinet-nio-lib/docs/api.md` -- document `0x13` as local FN -- API table matches header
+- [ ] `repos/fujinet-nio-lib/src/common/fn_session.c` -- remove `#include "fn_internal.h"` only -- broker can compile session by path
+- [ ] `repos/fujinet-nio-driver/amiga/include/fujinet_nio_device.h` -- self-sufficient architecture §2 public ABI -- Stage 2 compile surface
+- [ ] `docs/amiga/nio-broker-architecture.md` -- record per-class sourced `io_Error` symbols -- source-check, not one symbol for all classes
 - [ ] `backlog/nio-broker.md` -- check Stage 1 boxes that this work completes -- workspace tracker
 
 **Acceptance Criteria:**
-- Given the Amiga GCC/NDK from `scripts/env.sh`, when a translation unit includes only `fujinet_nio_device.h`, then it compiles with no warnings.
-- Given `fujinet-nio.h`, when `FN_ERR_ABORTED` is used, then its value is `0x13` and existing `FN_ERR_*` values are unchanged.
+- Given a translation unit whose only preprocessor include is `fujinet_nio_device.h`, when it is compiled with Amiga GCC/NDK from `scripts/env.sh` and `-Wall -Werror`, then it compiles with no warnings (the public header includes `exec/io.h`, `CMD_NONSTD`, and Amiga types itself).
+- Given `fujinet-nio.h`, when `FN_ERR_ABORTED` is used, then its value is `0x13`, existing `FN_ERR_*` values are unchanged, and it is documented as a local/client-visible FN error, not a FujiBus wire status.
 - Given `fn_session.c` without `fn_internal.h`, when `make check` runs in `repos/fujinet-nio-lib`, then all configured library targets and host tests pass.
-- Given `make TARGET=amiga` and `make TARGET=amiga-driver` in `repos/fujinet-nio-lib`, when Stage 1 files are in place, then those library builds still pass.
-- Given toolchain `exec/errors.h`, when Stage 1 finishes, then architecture §2.1 names the real symbol for unsupported flags/pad and NULL+nonzero, and no test or doc hard-codes a guessed `IOERR_*` number.
+- Given Stage 1 files in place, when the canonical Makefile invocations for the normal Amiga library target and the `amiga-driver` library/archive target are run, then both build successfully.
+- Given toolchain `exec/errors.h`, when Stage 1 finishes, then architecture §2.1 names a semantically appropriate native `io_Error` **per validation class** (flags/pad vs NULL+nonzero need not match); any class without a suitable symbol was reported and not invented; no test or doc hard-codes a guessed `IOERR_*` number.
 - Given the repo, when Stage 1 is done, then there is still no `amiga/nio.device/` implementation.
 
 ## Spec Change Log
@@ -87,10 +90,10 @@ context:
 
 **Commands:**
 - `source "$NIO_WORKSPACE/scripts/env.sh"` -- expected: Amiga toolchain and NDK on PATH / readable headers
-- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make check` -- expected: all configured targets build; host tests including `test-session` pass
-- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make TARGET=amiga-driver lib` -- expected: amiga-driver archive still builds (also covered by `make all` inside `check` if `EXTRA_TARGETS` is in `all`; if not, run this explicitly — `all` loops `TARGETS` only, so **must** run `amiga-driver` separately)
-- Compile-check the new header with Amiga GCC `-Wall -Werror` against NDK includes -- expected: no warnings
+- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make check` -- expected: all configured `TARGETS` (including `amiga`) build; host tests including `test-session` pass
+- `cd "$NIO_WORKSPACE/repos/fujinet-nio-lib" && make TARGET=amiga-driver lib` -- expected: `amiga-driver` archive builds (`make all` / `make check` do not include `EXTRA_TARGETS`)
+- Compile a TU that contains only `#include "fujinet_nio_device.h"` (plus an empty `main` if the driver requires it) with Amiga GCC `-Wall -Werror` and NDK include paths, **without** extra NDK includes in the TU -- expected: no warnings
 
 **Manual checks (if no CLI):**
-- Confirm `FN_ERR_ABORTED` is absent from Atari/BBC `fn_protocol.inc` (those are not this ABI) unless a test fails for missing it — do not add there without a failure.
-- Confirm architecture §2.1 no longer says only “native invalid-request error” for flags/NULL rows.
+- Confirm `FN_ERR_ABORTED` was not added to Atari/BBC `fn_protocol.inc`.
+- Confirm architecture §2.1 records per-class native symbols, not a single forced symbol for every malformed-request row.
