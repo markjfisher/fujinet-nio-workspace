@@ -228,6 +228,9 @@ source scripts/env.sh && \
   integration-tests/amiberry/test_diskdevice_adf.py::test_hd_adf_mount_geometry_dir_and_type
 ```
 
+Agents and BMAD Build: `docs/agent-test-policy.md` (targeted tests; do not
+default to this full suite).
+
 
 Every run creates a timestamped evidence tree at
 `test-evidence/amiberry-YYYYMMDD-HHMMSS/`. Each case leaves a guest-only IPC

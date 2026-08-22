@@ -91,8 +91,11 @@ the associated architecture section. Do not load completed Stage 8/Phase 2
 history unless the ticket explicitly concerns a regression or an established
 contract.
 
-Amiga validation remains environment-sensitive. Source the environment first;
-when changing `repos/fujinet-nio-lib`, run the complete `make check`; for Amiga
-changes, run the native driver tests/build and focused Amiberry cases before a
-complete `scripts/build.sh amiga-tests` gate when the active acceptance task
-requires it.
+## Verification (FujiNet NIO product)
+
+Follow `docs/agent-test-policy.md`. Every repo you touch needs the cheapest
+test that can fail for that change, recorded and run. Do not default to the
+full Amiberry suite, every firmware preset, or `scripts/build.sh all`.
+
+When changing `repos/fujinet-nio-lib`, run complete `make check`. Amiga guest
+procedure: `docs/amiga/amiberry-testing.md`.
