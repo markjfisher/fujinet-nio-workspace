@@ -21,3 +21,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2.md`
   summary: Stage 2B serial backend and isolated guest is a sequenced implementation spec under the same Stage 2 parent gate (not dropped scope, not a second checkpoint)
   evidence: Combined Stage 2 implementation spec exceeded the 1600-token budget; user chose S and forbade splitting Stage 2 into independent deliveries or deferring Stage 2 backlog items.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2a.md`
+  summary: Wire `nio.device` into the Amiga native `Makefile` so `make native` produces a loadable `fujinet-nio.device`
+  evidence: 2A verification is host `make tests` with an injectable backend; `amiga/Makefile` still builds only `fujinet-disk.device`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2a.md`
+  summary: Allocate the worker signal on the worker task and name/type the `struct Task` instead of copying disk.device's init-task `AllocSignal`/`AddTask` setup
+  evidence: Host tests never run `AddTask`/`Wait`/`Signal`; the disk resident uses the same pattern and is out of 2A scope.
