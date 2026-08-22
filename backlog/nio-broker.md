@@ -34,7 +34,7 @@ Deliverables:
       (`0xFF`).
 - [ ] Remove `#include "fn_internal.h"` from `fn_session.c` (§9 required fix).
       Verify that `fn_session.c` compiles without it and all existing tests pass.
-- [ ] This document finalised after peer review.
+- [ ] Finalize this document after peer review.
 
 **Testable invariant:** the header compiles cleanly against the Amiga GCC
 toolchain with no warnings. The amiga and amiga-driver library builds continue
@@ -104,11 +104,11 @@ Deliverables:
       `fn_transport_close` + `client_initialized` reset when the FIFO empties).
 - [ ] The disk device calls `fn_transport_close` only in `device_expunge` (or
       equivalent explicit-lifecycle teardown).
-- [ ] Worker inner loop is now: dequeue → `fn_init` (no-op if already open) →
+- [ ] Worker inner loop becomes: dequeue → `fn_init` (no-op if already open) →
       exchange → `io_Error` → `ReplyMsg` → continue.
 
 **Testable invariant:** all integration tests pass; the worker code is visibly
-simpler; no test depends on the old idle-close behaviour.
+simpler; no test depends on the old idle-close behavior.
 
 ### Stage 5 — Future backend (Zorro or other)
 
@@ -131,14 +131,14 @@ Stage 2 only. Isolated from the old serial-direct shim (see Stage 2). Replaces
 an earlier stub-backend Stage 5 idea.
 
 Rather than a static-response stub backend, the broker test suite validates
-broker behaviour with a real serial backend and a controlled test environment.
+broker behavior with a real serial backend and a controlled test environment.
 The suite covers:
 
 | Test | What it proves |
 |---|---|
 | Single-client exchange | Basic frame/response round-trip |
 | Concurrent-client FIFO ordering | Multiple tasks submit simultaneously; responses are delivered to the correct caller in FIFO order |
-| Buffer ownership | Response data is fully written before ReplyMsg; caller's buffer is not aliased |
+| Buffer ownership | Response data is fully written before ReplyMsg; the caller's buffer is not aliased |
 | Backend lazy-open | First exchange opens serial.device; subsequent exchanges reuse it |
 | Backend resident-lifetime | lib_OpenCnt reaching zero does not close serial.device; next exchange succeeds without reopen |
 | `AbortIO` — queued request | Request aborted before worker dequeues it; error returned; no exchange performed |
@@ -151,4 +151,4 @@ The suite covers:
 
 Real service integration tests continue to run against the real `fujinet-nio.device`
 with the serial backend. No fake backend is required to validate service
-behaviour.
+behavior.
