@@ -5,8 +5,10 @@
 
 activation_steps_append = [
   "Verification policy: follow docs/agent-test-policy.md. Every Build spec must name exact targeted test commands for each repo/owner the change touches (fujinet-nio preset+ctest, lib make check, driver natives, fn-rom unit tests, one Amiberry node, etc.). Do not default to the full Amiberry suite or every firmware/board. Implementation is incomplete until those commands are run and pass, or an environment blocker is reported.",
+  "Git commits: never add a Co-authored-by (or Co-Authored-By) trailer. Do not attribute Cursor, Copilot, Claude, or any other agent as a co-author.",
 ]
 
 persistent_facts = [
   "file:{project-root}/docs/agent-test-policy.md",
+  "Never add Co-authored-by to any git commit. The commit author is the human repo identity only.",
 ]

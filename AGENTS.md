@@ -91,6 +91,11 @@ the associated architecture section. Do not load completed Stage 8/Phase 2
 history unless the ticket explicitly concerns a regression or an established
 contract.
 
+## Git commits
+
+Never add a `Co-authored-by` (or `Co-Authored-By`) trailer to any commit.
+Do not attribute Cursor, Copilot, Claude, or any other agent as a co-author.
+
 ## Verification (FujiNet NIO product)
 
 Follow `docs/agent-test-policy.md`. Every repo you touch needs the cheapest
