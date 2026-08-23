@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import ipc
+from .ffs import resolve_fast_file_system
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -132,6 +133,11 @@ class AmigaRunner:
             "harddrive" if args.harddrive or self.disk.suffix.lower() in {".hdf", ".vhd"}
             else "floppy"
         )
+        if self.disk_kind == "harddrive" and self.fast_file_system is None:
+            resolved = resolve_fast_file_system(ROOT)
+            if resolved:
+                self.fast_file_system = Path(resolved)
+                os.environ["AMIBERRY_FAST_FILE_SYSTEM"] = resolved
         self.serial_mode = os.environ.get("AMIBERRY_SERIAL_MODE", "tcp")
         self.host = os.environ.get("AMIBERRY_HOST", "127.0.0.1")
         self.nio_host = os.environ.get("FUJINET_HOST", "127.0.0.1")
@@ -163,8 +169,9 @@ class AmigaRunner:
         if self.disk_kind == "harddrive":
             if self.fast_file_system is None:
                 raise SystemExit(
-                    "AMIBERRY_FAST_FILE_SYSTEM is not set. "
-                    "Set it in local/amiga.env or the environment."
+                    "AMIBERRY_FAST_FILE_SYSTEM is not set and could not be resolved.\n"
+                    "Rebuild with: scripts/amiga-env build <env_id> [--machine <id>]\n"
+                    "or set AMIGA_WB32_EXPANDED / AMIBERRY_FAST_FILE_SYSTEM."
                 )
             require_file(self.fast_file_system)
         if self.serial_mode not in ("tcp", "pty"):

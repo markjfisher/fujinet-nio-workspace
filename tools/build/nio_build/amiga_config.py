@@ -51,6 +51,15 @@ def resolve_fast_file_system(
     environment: dict[str, str] | None = None,
 ) -> str | None:
     """Return the host FastFileSystem path for a built Amiga environment."""
+    # Prefer the Amiberry runner module so every boot path shares one resolver.
+    # build.sh may only put tools/build on PYTHONPATH; fall back to local logic.
+    try:
+        from amiga_emulator.ffs import resolve_fast_file_system as resolve_from_runner
+    except ImportError:
+        resolve_from_runner = None
+    if resolve_from_runner is not None:
+        return resolve_from_runner(root, environment=environment, manifest=manifest)
+
     recorded = manifest.get("fast_file_system")
     if recorded and Path(recorded).is_file():
         return str(Path(recorded).resolve())
@@ -140,6 +149,9 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
         result.setdefault("kickstart", manifest["kickstart"])
         if manifest.get("rom_key"):
             result.setdefault("rom_key", manifest["rom_key"])
+        fast_file_system = resolve_fast_file_system(manifest, root, environment)
+        if fast_file_system:
+            result.setdefault("fast_file_system", fast_file_system)
         result["_env_id"] = env_id
         result["_machine_id"] = machine_id
     if machine_id and not env_id:

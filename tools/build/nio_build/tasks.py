@@ -278,24 +278,21 @@ class Build:
         env_id = self.ctx.env.get("AMIGA_ENV_ID", "")
         machine_id = self.ctx.env.get("AMIGA_MACHINE_ID", "")
         base_hdf = self.ctx.env.get("AMIGA_ENV_BASE_HDF", "")
+        manifest = None
 
-        if not base_hdf and env_id:
-            # Resolve base HDF from the built environment manifest.
+        if env_id:
+            # Resolve base HDF / kickstart / FFS from the built environment manifest.
             from .amiga_config import (
                 _load_env_manifest,
                 _load_machine_profile,
                 resolve_fast_file_system,
             )
             manifest = _load_env_manifest(self.ctx.root, env_id, machine_id or None)
-            base_hdf = manifest["base_hdf"]
+            if not base_hdf:
+                base_hdf = manifest["base_hdf"]
             self.ctx.env["AMIBERRY_KICKSTART"] = manifest["kickstart"]
             if manifest.get("rom_key"):
                 self.ctx.env["AMIBERRY_ROM_KEY"] = manifest["rom_key"]
-            fast_file_system = resolve_fast_file_system(
-                manifest, self.ctx.root, self.ctx.env
-            )
-            if fast_file_system:
-                self.ctx.env["AMIBERRY_FAST_FILE_SYSTEM"] = fast_file_system
             if machine_id:
                 machine = _load_machine_profile(self.ctx.root, machine_id)
                 settings = machine.get("settings", {})
@@ -304,6 +301,15 @@ class Build:
                 )
                 if machine.get("uae_config"):
                     self.ctx.env["AMIBERRY_UAE_CONFIG"] = machine["uae_config"]
+
+        if not self.ctx.env.get("AMIBERRY_FAST_FILE_SYSTEM"):
+            from .amiga_config import resolve_fast_file_system
+            lookup = manifest or ({"base_hdf": base_hdf} if base_hdf else {})
+            fast_file_system = resolve_fast_file_system(
+                lookup, self.ctx.root, self.ctx.env
+            )
+            if fast_file_system:
+                self.ctx.env["AMIBERRY_FAST_FILE_SYSTEM"] = fast_file_system
 
         if not base_hdf or not Path(base_hdf).is_file():
             raise SystemExit(
@@ -514,7 +520,10 @@ class Build:
         self.ctx.env["AMIBERRY_DISK_KIND"] = (
             "harddrive" if harddrive or disk.suffix.lower() in {".hdf", ".vhd"} else "floppy"
         )
-        self.amiga_run(runner_args, build_adf=False)
+        # Preserve the '--' separator so amiga_run forwards Amiberry options
+        # instead of treating them as amiga-run build-target flags.
+        forwarded = ["--", *runner_args] if runner_args else []
+        self.amiga_run(forwarded, build_adf=False)
 
     def amiga_tests(self, args: list[str]) -> None:
         """Build all Amiga artefacts then run the integration-test suite.

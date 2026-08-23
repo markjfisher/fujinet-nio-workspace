@@ -108,6 +108,44 @@ class AmigaRunnerTests(unittest.TestCase):
         override_position = command.index("cpu_model=68030")
         self.assertLess(config_position, override_position)
 
+    def test_harddrive_auto_resolves_ffs_from_expanded_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "workbench.hdf"
+            rom = root / "kickstart.rom"
+            expanded = root / "amigaos"
+            ffs = expanded / "L" / "FastFileSystem"
+            ffs.parent.mkdir(parents=True)
+            for path in (disk, rom, ffs):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIGA_WB32_EXPANDED": str(expanded),
+            }
+            # Force auto-resolve: clear any ambient FFS from the host shell.
+            with patch.dict(
+                os.environ,
+                {**environment, "AMIBERRY_FAST_FILE_SYSTEM": ""},
+                clear=False,
+            ):
+                os.environ.pop("AMIBERRY_FAST_FILE_SYSTEM", None)
+                with patch("amiga_emulator.run.ROOT", root):
+                    with patch(
+                        "amiga_emulator.ffs.load_local_amiga_env",
+                        return_value={},
+                    ):
+                        runner = AmigaRunner(
+                            parse_args(
+                                ["--harddrive", str(disk), "--external-nio"]
+                            )
+                        )
+                self.assertEqual(runner.fast_file_system, ffs.resolve())
+                self.assertEqual(
+                    os.environ.get("AMIBERRY_FAST_FILE_SYSTEM"),
+                    str(ffs.resolve()),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
