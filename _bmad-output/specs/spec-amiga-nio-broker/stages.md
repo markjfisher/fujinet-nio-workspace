@@ -12,8 +12,8 @@ Workspace checkbox tracking remains `backlog/nio-broker.md`. This companion is t
 | --- | --- | --- |
 | 1 ABI + `FN_ERR_ABORTED` + `fn_session.c` include | Stage 2 | Existing integration unchanged |
 | 2 Broker + serial backend | Stage 3 | **Must not** load `fujinet-nio.device` on a machine whose `fn_transport` still opens `serial.device` |
-| 3 Shim cut-over | Stage 4 (idle-close still allowed until 4) | After this, `serial.device` open only in serial backend |
-| 4 Remove disk idle-close | — | Integration must not depend on idle-close |
+| 3 Shim cut-over | Stage 4 (accepted) | After this, `serial.device` open only in serial backend |
+| 4 Remove disk idle-close | — | Native lifecycle + named Amiberry nodes; no idle-close |
 | 5 Future backend binary | After ABI is stable; does not depend on Stages 3–4 | Same higher-level assertions as Stage 3 |
 
 Do not run Stage 2 in parallel with Stage 1.
@@ -84,15 +84,17 @@ Deliverables:
 
 ## Stage 4 — Disk idle-close removal
 
+**Accepted 2026-08-23.**
+
 **Capabilities:** CAP-9.
 
 Deliverables:
 
 - Remove `fn_transport_close` + `client_initialized` reset when the disk worker FIFO empties.
-- `fn_transport_close` only in `device_expunge` (or equivalent explicit teardown).
-- Worker loop: dequeue → `fn_init` (no-op if open) → exchange → `io_Error` → `ReplyMsg` → continue.
+- `fn_transport_close` only in pending-`LIBF_DELEXP` teardown (`complete_pending_expunge`).
+- Worker loop: dequeue → `fn_init` (no-op if open) → exchange → `io_Error` → `ReplyMsg` → continue. Ordinary idle does not close.
 
-**Invariant:** All integration tests pass; worker is visibly simpler; no test depends on idle-close.
+**Invariant:** Named native resident lifecycle tests pass; Amiberry HD-ADF mount and inspect-catalog (twice) pass. Worker is visibly simpler; no test depends on the old idle-close behavior.
 
 ## Stage 5 — Future backend (not this cut-over’s implementation)
 

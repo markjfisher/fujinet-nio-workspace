@@ -79,8 +79,7 @@ not loaded in that environment.
 ### Stage 3 — Cut-over: `fn_transport` stops opening `serial.device`
 
 **Accepted 2026-08-22.** Child specs 3A and 3B are `done`. Do not reopen this
-cut-over unless a regression is found. Stage 4 (idle-close) is the next
-checkpoint.
+cut-over unless a regression is found. Stage 4 (idle-close) is accepted.
 
 This is the cut-over. After this stage, `fn_transport` opens the broker only.
 Production FujiNet NIO `OpenDevice("serial.device")` exists solely in the
@@ -114,16 +113,19 @@ test-only probe, not a production serial owner.
 
 ### Stage 4 — Remove disk-device idle-close
 
+**Accepted 2026-08-23** after native resident lifecycle tests and the named
+Amiberry nodes. Do not restore FIFO-empty `fn_transport_close`.
+
 Removes `fujinet-disk.device` idle-close: the worker must not
 `fn_transport_close` when its FIFO empties. Transport close happens only on
-explicit teardown (`device_expunge` or equivalent).
+explicit teardown (`LIBF_DELEXP` complete helper).
 
 Deliverables:
-- [ ] Remove the idle-close cycle from `device_worker_entry` (the
+- [x] Remove the idle-close cycle from `device_worker_entry` (the
       `fn_transport_close` + `client_initialized` reset when the FIFO empties).
-- [ ] The disk device calls `fn_transport_close` only in `device_expunge` (or
+- [x] The disk device calls `fn_transport_close` only in `device_expunge` (or
       equivalent explicit-lifecycle teardown).
-- [ ] Worker inner loop becomes: dequeue → `fn_init` (no-op if already open) →
+- [x] Worker inner loop becomes: dequeue → `fn_init` (no-op if already open) →
       exchange → `io_Error` → `ReplyMsg` → continue.
 
 **Testable invariant:** all integration tests pass; the worker code is visibly

@@ -96,8 +96,10 @@ contract.
 Stage 3 cut-over is accepted. Do not reopen its implementation or replay 3A/3B
 unless a regression is found. The completed record is
 `completed/amiga-nio-broker-stage-3.md`; the durable contract is
-`docs/amiga/nio-broker-architecture.md`. Remaining checkpoints are Stage 4
-(disk idle-close) and Stage 5 (extra backends) in `backlog/nio-broker.md`.
+`docs/amiga/nio-broker-architecture.md`. Remaining checkpoint is Stage 5
+(extra backends) in `backlog/nio-broker.md`. Stage 4 idle-close removal is
+accepted (`completed/amiga-nio-broker-stage-4.md`); do not restore FIFO-empty
+`fn_transport_close` on `fujinet-disk.device`.
 
 ## Git commits
 

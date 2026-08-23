@@ -1,7 +1,8 @@
 # FujiNet NIO Broker Architecture
 
 *Status: Stage 3 cut-over is accepted (3A lib client + 3B guest bootstrap).
-Stage 4 idle-close removal and Stage 5 extra backends remain backlog.*
+Stage 4 idle-close removal is accepted. Stage 5 extra backends remain
+backlog.*
 
 This document defines the architecture for the Amiga NIO transport layer.
 The original motivation was a proven race: FLS and `fujinet-disk.device`
@@ -362,8 +363,11 @@ implementation behind them must honor the ownership rule in this section.
 
 The disk device is a lib client with its own transport context (§3). That
 context opens the broker, not `serial.device`. The worker serializes TD
-callers onto that one context. Stage 4 (backlog) removes idle-close; the
-worker must not `fn_transport_close` when its FIFO empties.
+callers onto that one context. Ordinary FIFO-empty idle does not
+`fn_transport_close`; the broker client stays open. Transport close happens
+only in pending-`LIBF_DELEXP` teardown (safe `device_expunge`, last
+`CloseDevice` when that flag is set, or worker transition to idle with the
+flag already pending).
 
 ---
 

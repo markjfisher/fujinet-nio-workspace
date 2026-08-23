@@ -29,3 +29,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-2a.md`
   summary: Allocate the worker signal on the worker task and name/type the `struct Task` instead of copying disk.device's init-task `AllocSignal`/`AddTask` setup
   evidence: Host tests never run `AddTask`/`Wait`/`Signal`; the disk resident uses the same pattern and is out of 2A scope.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-4.md`
+  summary: Pending `LIBF_DELEXP` can stay incomplete if the FIFO still has CMD_STOP-blocked nodes when the worker has no runnable request
+  evidence: Drain treats next-runnable-empty as idle, but `complete_pending_expunge` requires `io_queue.head == NULL`; Stage 4 did not change STOP/FLUSH semantics.

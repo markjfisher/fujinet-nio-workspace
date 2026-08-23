@@ -2,7 +2,7 @@
 title: 'Amiga NIO broker Stage 4 — remove disk-device idle-close'
 type: 'feature'
 created: '2026-08-22'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '25bfaad048f992226a3ad30386295d1a470eb581'
 context:
@@ -74,11 +74,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `fujinet_disk_device.c` -- shared drain; worker `Wait` + drain; native BeginIO uses drain
-- [ ] `fujinet_disk_device.c` -- remove ordinary FIFO-empty close/reset
-- [ ] `fujinet_disk_device.c` -- pending-`LIBF_DELEXP` helper; expunge / last-close / worker-idle complete once; discard only on complete; no unload
-- [ ] `test_fujinet_disk_resident.c` -- close counter; five lifecycle cases below
-- [ ] `nio-broker-architecture.md`, `backlog/nio-broker.md`, `stages.md` -- Stage 4 after commands pass
+- [x] `fujinet_disk_device.c` -- shared drain; worker `Wait` + drain; native BeginIO uses drain
+- [x] `fujinet_disk_device.c` -- remove ordinary FIFO-empty close/reset
+- [x] `fujinet_disk_device.c` -- pending-`LIBF_DELEXP` helper; expunge / last-close / worker-idle complete once; discard only on complete; no unload
+- [x] `test_fujinet_disk_resident.c` -- close counter; five lifecycle cases below
+- [x] `nio-broker-architecture.md`, `backlog/nio-broker.md`, `stages.md` -- Stage 4 after commands pass
 
 **Acceptance Criteria:**
 - Given native resident tests, when the I/O-matrix lifecycle rows run, then close counts match (0 on ordinary idle; exactly one per pending expunge).
@@ -104,3 +104,35 @@ Source workspace env first (`source "$NIO_WORKSPACE/scripts/env.sh"`). Lib `make
 - Repeat the previous inspect-catalog pytest -- expected: PASS (run 2)
 
 Do not run `scripts/amiga-tests`.
+
+## Suggested Review Order
+
+**Idle drain**
+
+- Shared drain: empty sets `io_processing = 0`, then try pending teardown; no idle-close.
+  [`fujinet_disk_device.c:755`](../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L755)
+
+- Native BeginIO uses that same drain so lifecycle tests see the idle arm.
+  [`fujinet_disk_device.c:897`](../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L897)
+
+**Pending expunge**
+
+- One helper: claim `LIBF_DELEXP` once, discard ints, `fn_transport_close`, clear init flags.
+  [`fujinet_disk_device.c:373`](../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L373)
+
+- Unsafe expunge only sets the flag; last close completes if OpenCnt hits 0 and idle is safe.
+  [`fujinet_disk_device.c:293`](../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L293)
+
+- Open still cancels a deferred expunge.
+  [`fujinet_disk_device.c:255`](../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L255)
+
+**Tests and contract**
+
+- Close counter plus ordinary-idle and in-progress-then-idle rows.
+  [`test_fujinet_disk_resident.c:65`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c#L65)
+
+- Last close while queued must not close; worker idle finishes once.
+  [`test_fujinet_disk_resident.c:349`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c#L349)
+
+- Architecture §4 now states idle-open and `LIBF_DELEXP` teardown.
+  [`nio-broker-architecture.md:365`](../../docs/amiga/nio-broker-architecture.md#L365)
