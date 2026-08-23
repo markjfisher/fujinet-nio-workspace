@@ -108,6 +108,34 @@ class AmigaRunnerTests(unittest.TestCase):
         override_position = command.index("cpu_model=68030")
         self.assertLess(config_position, override_position)
 
+    def test_dir_mounts_emit_filesystem2_ro_setting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "workbench.hdf"
+            rom = root / "kickstart.rom"
+            ffs = root / "FastFileSystem"
+            share = root / "amiga-share"
+            share.mkdir()
+            for path in (disk, rom, ffs):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+                "AMIBERRY_DIR_MOUNTS": f"ro,DH1:NIO:{share},0",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--harddrive", str(disk)]))
+                command = runner.amiberry_command(None)
+
+        setting = f"filesystem2=ro,DH1:NIO:{share},0"
+        self.assertIn("-s", command)
+        self.assertIn(setting, command)
+        # Boot hardfile remains DH0; share is a separate filesystem2 unit.
+        self.assertIn("DH0:" + str(disk), command)
+        self.assertNotIn("-M", command)
+        self.assertNotIn("-m", command)
+
     def test_harddrive_auto_resolves_ffs_from_expanded_tree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,5 +1,16 @@
 default: wb32-a1200
 
+# Host directories Amiberry mounts as guest volumes for interactive workbench.
+# Profiles opt in by listing share names under `shares:`. The launcher never
+# writes these into the persistent Workbench HDF; sync (default true) only
+# refreshes the host directory with symlinks to current build artifacts.
+shares:
+  NIO:
+    volume: NIO
+    path: ${NIO_WORKSPACE}/build/amiga-share
+    writable: false
+    sync: true
+
 profiles:
   # Interactive Workbench sessions — point harddrive at your own persistent VHD/HDF.
   # The environment provides kickstart; the machine provides CPU/chipset/RAM settings.
@@ -10,16 +21,22 @@ profiles:
     environment: wb32
     machine: a1200-030
     harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-run.vhd
+    shares:
+      - NIO
 
   wb32-a500:
     environment: wb32
     machine: a500-030
     harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-a500-run.vhd
+    shares:
+      - NIO
 
   wb31-a1200:
     environment: wb31
     machine: a1200-030
     harddrive: ${NIO_WORKSPACE}/images/amigaos3.1-run.hdf
+    shares:
+      - NIO
 
   wb1.3:
     disk: ${AMIGA_WB13_ADF_WORKBENCH}

@@ -311,9 +311,50 @@ class AmigaRunner:
         extra_floppy = os.environ.get("AMIBERRY_EXTRA_FLOPPY_0", "")
         if extra_floppy:
             command.extend(["-0", extra_floppy])
+        for mount in self.dir_mount_settings():
+            command.extend(["-s", mount])
         for setting in settings:
             command.extend(["-s", setting])
         return command
+
+    def dir_mount_settings(self) -> list[str]:
+        """Return ``filesystem2=…`` settings from AMIBERRY_DIR_MOUNTS.
+
+        Values match Amiberry GUI saves, e.g. ``filesystem2=ro,DH1:NIO:/path,0``.
+        Read-only vs read/write is the leading ``ro``/``rw`` token.
+        """
+        raw = os.environ.get("AMIBERRY_DIR_MOUNTS", "").strip()
+        if not raw:
+            return []
+        settings: list[str] = []
+        for entry in raw.split(";"):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if entry.startswith("filesystem2="):
+                entry = entry.split("=", 1)[1]
+            try:
+                mode, remainder = entry.split(",", 1)
+                mode = mode.lower()
+                if mode not in {"ro", "rw"}:
+                    raise ValueError("mode")
+                device_volume_path, bootpri = remainder.rsplit(",", 1)
+                _ = int(bootpri)
+                device, volume, host_path = device_volume_path.split(":", 2)
+            except ValueError as exc:
+                raise SystemExit(
+                    f"Invalid AMIBERRY_DIR_MOUNTS entry {entry!r}; "
+                    "expected ro|rw,DEV:VOLUME:PATH,bootpri"
+                ) from exc
+            if not device or not volume:
+                raise SystemExit(
+                    f"Invalid AMIBERRY_DIR_MOUNTS device/volume in {entry!r}"
+                )
+            path = Path(host_path).expanduser()
+            if not path.is_dir():
+                raise SystemExit(f"Development share path is not a directory: {path}")
+            settings.append(f"filesystem2={mode},{device}:{volume}:{path},{bootpri}")
+        return settings
 
     def stage_rom_files(self) -> None:
         shutil.copy2(self.kickstart, self.rom_dir / "kickstart.rom")

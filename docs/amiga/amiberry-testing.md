@@ -29,9 +29,19 @@ Configure licensed AmigaOS paths in `local/amiga.env` (copy from
 scripts/amiga-env build wb32 --machine a1200-030
 ```
 
-See `docs/amiga/environment-setup.md` for full environment and profile setup.
+See [`docs/amiga/environment-setup.md`](environment-setup.md) for full environment and profile setup.
 
 ### Interactive Workbench (try FujiNet by hand)
+
+Three image roles matter:
+
+```text
+BASE HDF        pristine/reproducible (from scripts/amiga-env)
+TEST HDF        disposable copy of BASE; tests inject exact artifacts
+RUN/WORKBENCH   persistent developer-owned machine (not modified by the launcher)
+development share (e.g. NIO:)
+                host directory mounted into the guest with current build artifacts
+```
 
 1. Start FujiNet NIO yourself on TCP port `65504` (your usual config is fine;
    the TCP channel must be enabled).
@@ -45,8 +55,19 @@ See `docs/amiga/environment-setup.md` for full environment and profile setup.
 ```
 
 Amiberry opens visibly. Open `System/Shell` and run commands such as
-`fhost`, `fls`, `wifitest`, `fmount`. Built Amiga `nio-core-apps` utilities
-are what you use day to day; install them onto your persistent disk as needed.
+`fhost`, `fls`, `wifitest`, `fmount`.
+
+Default WB3.x profiles attach a read-only development share `NIO:` that exposes
+current driver and app binaries from `build/amiga-share` (refreshed with
+symlinks at launch; the persistent Workbench image is never written). Use it
+to install or run fresh builds explicitly:
+
+```text
+Copy NIO:fujinet-nio.device DEVS:
+Copy NIO:fujinet-disk.device DEVS:
+Copy NIO:fujinet-load-resident C:
+NIO:FLS ...
+```
 
 Profiles declare an `environment` (e.g. `wb32`) and `machine` (e.g.
 `a1200-030`). Kickstart and machine settings come from the built environment;
@@ -66,6 +87,19 @@ AMIGA_WORKBENCH_CONFIG=my-profile \
 
 Amiberry runner options go after `--` (for example `--external-nio`). See
 `./scripts/build.sh --explain amiga-workbench`.
+
+#### Getting current build artifacts into Workbench
+
+Interactive Workbench images are deliberately not rewritten on every launch.
+Mount the workspace's Amiga build-output directory as a host-directory volume
+in Amiberry (for example `NIO:`).
+
+You can then either run CLI utilities directly from that volume during
+development, or copy the versions you want into `C:` / `DEVS:`.
+
+Automated tests are different: they copy a pristine base HDF and inject the
+exact binaries required by each case, so every test starts from a controlled
+image.
 
 ### Automated tests (prove behaviour)
 
@@ -140,6 +174,32 @@ Each profile can specify `harddrive` or `disk`, `kickstart`, and an Amiberry
 `settings` mapping such as `cpu_type`, `chipmem_size`, and `fastmem_size`.
 These map to `-s` key/value pairs (UAE names).
 
+Named **development shares** are defined at the top level and opted into per
+profile. They become Amiberry `filesystem2=` host-directory mounts (same form
+as a GUI-saved UAE file), not injections into the persistent HDF:
+
+```yaml
+shares:
+  NIO:
+    volume: NIO           # Amiga volume label → NIO:
+    path: ${NIO_WORKSPACE}/build/amiga-share
+    writable: false       # default → filesystem2=ro,…
+    sync: true            # refresh host dir with build artifact symlinks at launch
+    # device: DH1         # optional; auto DH1+ so DH0 stays free for the boot HDF
+    # bootpri: 0          # optional Amiga boot priority
+
+# Emitted as e.g.: -s filesystem2=ro,DH1:NIO:/…/build/amiga-share,0
+# (GUI UAE files also write uaehfN=dir,…; the launcher uses filesystem2= only.)
+
+profiles:
+  wb32-a1200:
+    environment: wb32
+    machine: a1200-030
+    harddrive: ${NIO_WORKSPACE}/images/amigaos3.2-run.vhd
+    shares:
+      - NIO
+```
+
 Profiles that declare `environment` + `machine` derive kickstart (and
 optionally base HDF) from a built `scripts/amiga-env` manifest; `harddrive`
 may point at a personal persistent VHD/HDF:
@@ -154,6 +214,7 @@ may point at a personal persistent VHD/HDF:
 Profiles without `environment` (such as `wb1.3`) specify `disk`, `kickstart`,
 and `settings` directly; set the matching variables in `local/amiga.env`. An
 optional `uae_config` loads a UAE config before profile `-s` overrides.
+Profiles that omit `shares` behave exactly as before.
 
 Driver auto-loading uses the redistributable loader from
 `fujinet-nio-driver`. The loader is validated on Workbench 3.1; full `DNx:`

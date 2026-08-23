@@ -509,6 +509,24 @@ class Build:
             f"{k}={v}" for k, v in settings.items()
         )
 
+        from .amiga_config import encode_dir_mounts, sync_development_share
+
+        shares = profile.get("shares") or []
+        for share in shares:
+            share_path = Path(share["path"])
+            if share.get("sync", True):
+                linked = sync_development_share(self.ctx.root, share_path)
+                print(
+                    f"Development share {share['volume']}: "
+                    f"synced {len(linked)} artifact(s) into {share_path}"
+                )
+            elif not share_path.is_dir():
+                share_path.mkdir(parents=True, exist_ok=True)
+        if shares:
+            self.ctx.env["AMIBERRY_DIR_MOUNTS"] = encode_dir_mounts(shares)
+        else:
+            self.ctx.env.pop("AMIBERRY_DIR_MOUNTS", None)
+
         harddrive = profile.get("harddrive")
         disk = Path(harddrive or profile.get("disk", ""))
         if not disk.is_file():

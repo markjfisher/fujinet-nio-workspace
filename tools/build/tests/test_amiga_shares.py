@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from nio_build.amiga_config import (
+    encode_dir_mounts,
+    load_profile,
+    resolve_profile_shares,
+    sync_development_share,
+)
+
+
+class DevelopmentShareTests(unittest.TestCase):
+    def test_profile_without_shares_is_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "workbenches.yaml"
+            config.write_text(
+                "profiles:\n"
+                "  bare:\n"
+                "    disk: ${NIO_WORKSPACE}/boot.adf\n"
+                "    kickstart: ${NIO_WORKSPACE}/kick.rom\n",
+                encoding="utf-8",
+            )
+            (root / "boot.adf").write_bytes(b"adf")
+            (root / "kick.rom").write_bytes(b"rom")
+            profile = load_profile(config, "bare", root, {})
+            self.assertEqual(profile["shares"], [])
+
+    def test_named_share_resolves_read_only_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "workbenches.yaml"
+            config.write_text(
+                "shares:\n"
+                "  NIO:\n"
+                "    volume: NIO\n"
+                "    path: ${NIO_WORKSPACE}/build/amiga-share\n"
+                "profiles:\n"
+                "  with-share:\n"
+                "    disk: ${NIO_WORKSPACE}/boot.adf\n"
+                "    kickstart: ${NIO_WORKSPACE}/kick.rom\n"
+                "    shares:\n"
+                "      - NIO\n",
+                encoding="utf-8",
+            )
+            (root / "boot.adf").write_bytes(b"adf")
+            (root / "kick.rom").write_bytes(b"rom")
+            profile = load_profile(config, "with-share", root, {})
+            self.assertEqual(len(profile["shares"]), 1)
+            share = profile["shares"][0]
+            self.assertEqual(share["volume"], "NIO")
+            self.assertEqual(share["device"], "DH1")
+            self.assertFalse(share["writable"])
+            self.assertTrue(share["sync"])
+            self.assertEqual(share["bootpri"], 0)
+            self.assertEqual(share["path"], str(root / "build" / "amiga-share"))
+            self.assertEqual(
+                encode_dir_mounts(profile["shares"]),
+                f"ro,DH1:NIO:{root / 'build' / 'amiga-share'},0",
+            )
+
+    def test_unknown_share_name_fails(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            resolve_profile_shares(
+                {"shares": {}},
+                {"shares": ["MISSING"]},
+                Path("/tmp"),
+                {},
+                profile_name="demo",
+            )
+        self.assertIn("Unknown development share", str(raised.exception))
+
+    def test_sync_development_share_links_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            driver = root / "repos" / "fujinet-nio-driver" / "build" / "amiga"
+            apps = root / "repos" / "nio-core-apps" / "build" / "amiga" / "bin"
+            driver.mkdir(parents=True)
+            apps.mkdir(parents=True)
+            (driver / "fujinet-nio.device").write_bytes(b"nio")
+            (driver / "fujinet-disk.device").write_bytes(b"disk")
+            (apps / "fls").write_bytes(b"fls")
+            share = root / "build" / "amiga-share"
+            linked = sync_development_share(root, share)
+            self.assertIn("fujinet-nio.device", linked)
+            self.assertIn("fls", linked)
+            self.assertTrue((share / "fujinet-nio.device").is_symlink())
+            self.assertEqual((share / "fls").resolve(), (apps / "fls").resolve())
+
+
+if __name__ == "__main__":
+    unittest.main()

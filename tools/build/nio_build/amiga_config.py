@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import string
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ def _expand(value: Any, root: Path, environment: dict[str, str]) -> Any:
     if not isinstance(value, str):
         return value
     variables = dict(os.environ)
+    variables.setdefault("NIO_WORKSPACE", str(root))
     variables.update(environment)
     expanded = os.path.expanduser(string.Template(value).safe_substitute(variables))
     path = Path(expanded)
@@ -119,6 +121,154 @@ def _load_machine_profile(root: Path, machine_id: str) -> dict[str, Any]:
     return profile
 
 
+def _normalize_volume(name: str) -> str:
+    volume = name.strip().rstrip(":")
+    if not volume or ":" in volume or "/" in volume or "\\" in volume:
+        raise SystemExit(
+            f"Invalid Amiga share volume name {name!r}; use a simple label like NIO"
+        )
+    return volume
+
+
+def resolve_profile_shares(
+    document: dict[str, Any],
+    profile: dict[str, Any],
+    root: Path,
+    environment: dict[str, str],
+    *,
+    profile_name: str,
+) -> list[dict[str, Any]]:
+    """Resolve named development shares selected by a workbench profile."""
+    requested = profile.get("shares")
+    if not requested:
+        return []
+    if isinstance(requested, str):
+        requested = [requested]
+    if not isinstance(requested, list):
+        raise SystemExit(
+            f"Amiga profile '{profile_name}' shares must be a list of share names"
+        )
+
+    catalog = document.get("shares", {})
+    if catalog is None:
+        catalog = {}
+    if not isinstance(catalog, dict):
+        raise SystemExit("Amiga workbench 'shares' must be a mapping of name → definition")
+
+    resolved: list[dict[str, Any]] = []
+    for entry in requested:
+        if not isinstance(entry, str) or not entry.strip():
+            raise SystemExit(
+                f"Amiga profile '{profile_name}' shares entries must be share names"
+            )
+        share_name = entry.strip()
+        definition = catalog.get(share_name)
+        if not isinstance(definition, dict):
+            available = ", ".join(sorted(str(key) for key in catalog)) or "(none)"
+            raise SystemExit(
+                f"Unknown development share '{share_name}' in profile '{profile_name}'. "
+                f"Available: {available}"
+            )
+        path_value = definition.get("path")
+        if not path_value:
+            raise SystemExit(f"Development share '{share_name}' requires a path")
+        volume = _normalize_volume(str(definition.get("volume", share_name)))
+        writable = bool(definition.get("writable", False))
+        sync = bool(definition.get("sync", True))
+        bootpri = int(definition.get("bootpri", 0))
+        device = definition.get("device")
+        if device is not None:
+            device = str(device).strip().rstrip(":")
+            if not device or ":" in device:
+                raise SystemExit(
+                    f"Development share '{share_name}' device must be a simple "
+                    f"unit name like DH1, not {definition.get('device')!r}"
+                )
+        host_path = Path(_expand(str(path_value), root, environment))
+        resolved.append(
+            {
+                "name": share_name,
+                "volume": volume,
+                "path": str(host_path),
+                "writable": writable,
+                "sync": sync,
+                "bootpri": bootpri,
+                "device": device,
+            }
+        )
+    # Assign DH1+ when device is omitted so DH0 stays free for the boot hardfile.
+    next_unit = 1
+    for share in resolved:
+        if not share["device"]:
+            share["device"] = f"DH{next_unit}"
+            next_unit += 1
+        else:
+            if share["device"].upper().startswith("DH"):
+                try:
+                    next_unit = max(next_unit, int(share["device"][2:]) + 1)
+                except ValueError:
+                    pass
+    return resolved
+
+
+def filesystem2_setting(share: dict[str, Any]) -> str:
+    """Return an Amiberry/UAE ``filesystem2=`` value for a resolved share.
+
+    Format matches Amiberry GUI saves, e.g.::
+
+        filesystem2=ro,DH1:NIO:/path/to/share,0
+    """
+    mode = "rw" if share.get("writable") else "ro"
+    device = share["device"]
+    volume = share["volume"]
+    path = share["path"]
+    bootpri = int(share.get("bootpri", 0))
+    return f"{mode},{device}:{volume}:{path},{bootpri}"
+
+
+def encode_dir_mounts(shares: list[dict[str, Any]]) -> str:
+    """Encode resolved shares as semicolon-separated filesystem2 values."""
+    return ";".join(filesystem2_setting(share) for share in shares)
+
+
+def sync_development_share(root: Path, share_path: Path) -> list[str]:
+    """Refresh a host share directory with current Amiga build artifacts.
+
+    Uses symlinks when possible so the guest always sees the latest binaries
+    without copying into the persistent Workbench HDF.
+    """
+    share_path.mkdir(parents=True, exist_ok=True)
+    sources: list[Path] = []
+    driver = root / "repos" / "fujinet-nio-driver" / "build" / "amiga"
+    for name in (
+        "fujinet-nio.device",
+        "fujinet-disk.device",
+        "fujinet-load-resident",
+        "fujinet-mount",
+    ):
+        sources.append(driver / name)
+    for bin_dir in (
+        root / "repos" / "nio-core-apps" / "build" / "amiga" / "bin",
+        root / "repos" / "nio-apps" / "build" / "amiga" / "bin",
+    ):
+        if bin_dir.is_dir():
+            sources.extend(sorted(path for path in bin_dir.iterdir() if path.is_file()))
+
+    linked: list[str] = []
+    for source in sources:
+        if not source.is_file():
+            continue
+        target = share_path / source.name
+        if target.is_symlink() or target.exists():
+            target.unlink()
+        try:
+            target.symlink_to(source.resolve())
+        except OSError:
+            shutil.copy2(source, target)
+        linked.append(source.name)
+    return linked
+
+
 def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] | None = None) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         document = yaml.safe_load(handle) or {}
@@ -138,7 +288,11 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
     # Merge local/amiga.env so workbenches.yaml can reference variables like
     # ${AMIGA_WB32_KICKSTART} even when build.sh does not source env.sh first.
     local_env = _load_local_amiga_env(root)
-    environment = {**local_env, **(environment or {})}
+    environment = {
+        "NIO_WORKSPACE": str(root),
+        **local_env,
+        **(environment or {}),
+    }
 
     # Resolve environment + machine references to a concrete disk and kickstart.
     env_id: str | None = result.pop("environment", None)
@@ -195,5 +349,8 @@ def load_profile(path: Path, name: str, root: Path, environment: dict[str, str] 
         raise SystemExit(f"Amiga profile settings must be a mapping: {selected}")
     result["settings"] = {str(key): str(value).lower() if isinstance(value, bool) else str(value)
                            for key, value in settings.items()}
+    result["shares"] = resolve_profile_shares(
+        document, result, root, environment, profile_name=selected
+    )
     result["name"] = selected
     return result
