@@ -101,6 +101,32 @@ Automated tests are different: they copy a pristine base HDF and inject the
 exact binaries required by each case, so every test starts from a controlled
 image.
 
+A useful script to put in C:copy-fujinet is:
+```text
+Echo "Copying fujinet drivers to harddrive"
+Copy NIO:fujinet-nio.device TO DEVS:
+Copy NIO:fujinet-disk.device TO DEVS:
+Copy NIO:fujinet-load-resident TO C:
+```
+#### Auto loading fujinet drivers on boot
+
+For workbench usage, add the following to the end of the S:Startup-sequence:
+```
+; ... existing script
+
+; ---------------------------------------------------
+; Add this before "LoadWB"
+C:Echo "Loading FujiNet NIO"
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device
+
+C:Echo "Loading FujiNet disk device"
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+; ---------------------------------------------------
+
+LoadWB
+; ... etc.
+```
+
 ### Automated tests (prove behaviour)
 
 Build Amiga artefacts and run the guest suite:
