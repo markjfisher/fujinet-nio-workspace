@@ -20,7 +20,7 @@ paths above unless you are changing the harness itself.
 
 ### Prerequisites
 
-Install `amiberry`, `socat`, `nc`, and the `m68k-amigaos` toolchain.
+Install `amiberry`, `socat`, `nc`, `amitools`, and the `m68k-amigaos` toolchain.
 
 Configure licensed AmigaOS paths in `local/amiga.env` (copy from
 `local/amiga.env.example`). Build an OS environment once:
