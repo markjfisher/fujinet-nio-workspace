@@ -19,85 +19,86 @@ context:
 
 **Problem:** After Stage 3, `fujinet-disk.device` still `fn_transport_close`s its broker client whenever the worker FIFO empties, so idle DiskDevice drops the context and the next TD/`fn_init` must reopen. That idle-close was a serial-ownership workaround; it is now wrong.
 
-**Approach:** Keep one Stage 4 checkpoint. Stop closing on FIFO-empty. Keep the broker client open across idle. Call `fn_transport_close` only from explicit disk teardown (`device_expunge` when the resident is idle). Do not unload the disk resident, change the broker, or start Stage 5.
+**Approach:** Keep one Stage 4 checkpoint. Stop closing on ordinary FIFO-empty. Keep the broker client open across idle. Treat `LIBF_DELEXP` as a pending explicit teardown: `device_expunge` either completes safe teardown immediately or only sets the flag; last `CloseDevice` (OpenCnt → 0) or later worker-idle must complete that pending teardown **exactly once**. Do not unload the disk resident, change the broker, or start Stage 5.
 
 ## Boundaries & Constraints
 
 **Always:**
-- Production inner drain after a `Wait`: dequeue runnable → `device_process_request` (existing `ensure_client` → `nio_init` → `fn_init`) → continue; on empty queue set `io_processing = 0` and return to `Wait`. No `fn_transport_close` and no `client_initialized` wipe on that empty path.
-- `fn_init` / `fn_transport_init` stay no-ops when the disk context is already open (`fn_init.c` already-initialized + `device_open` branch; `ensure_client` skip when `client_initialized`).
-- `fn_transport_close` in `disk.device/` exists only on the expunge teardown path. Safe expunge: `lib_OpenCnt == 0`, IO queue empty, `io_processing == 0` → close transport and clear every unit’s `client_initialized`. Otherwise set `LIBF_DELEXP` and return 0 **without** closing.
-- Disk expunge still does **not** `RemTask`, free the resident, or return a seglist. Unload stays deferred (today’s Stage-7 comment).
-- Native tests must execute the **same** empty-FIFO drain as production (today `FUJINET_DISK_NATIVE_TEST` skips `device_worker_entry` and never hits idle-close). Count `fn_transport_close`.
-- Follow `docs/agent-test-policy.md`. Check Stage 4 backlog boxes only after named Verification commands run.
+- Drain after `Wait`: dequeue → `device_process_request` (existing `ensure_client` → `fn_init`) → continue; empty ⇒ `io_processing = 0`. Ordinary idle (no `LIBF_DELEXP`) must not close or wipe `client_initialized`.
+- `LIBF_DELEXP` = pending explicit teardown. Safe iff OpenCnt == 0, queue empty, `io_processing == 0`. Complete **once** via one helper: `discard_change_requests`, `fn_transport_close`, clear all `client_initialized`, clear `LIBF_DELEXP`. Return 0; no `RemTask`/unload. `fn_transport_close` in `disk.device/` only from that helper.
+- Not-safe `device_expunge`: set `LIBF_DELEXP` only — no close, no discard. Completers: last `device_close` (OpenCnt → 0) and worker transition to idle. `device_open` already clears the flag (cancel); keep that.
+- `fn_init` stays a no-op when the disk broker context is already open.
+- Native tests must run the **same** drain as production, count `fn_transport_close`, and cover I/O-matrix lifecycle rows 1–5 (ordinary idle, safe idle expunge, OpenCnt-deferred last close, in-progress then idle, no double-close).
+- Follow `docs/agent-test-policy.md`. Check Stage 4 boxes only after named Verification runs.
 
 **Ask First:**
-- Closing transport on ordinary last `device_close` (`OpenCnt` → 0 without expunge).
+- Completing teardown on last `CloseDevice` when `LIBF_DELEXP` is **not** set.
 - Implementing real disk `RemTask`/unload.
 - Changing public `fn_*` / Trackdisk / FMOUNT / broker ABI.
 
 **Never:**
 - Edit `nio.device` serial ownership, broker FIFO, or backend lazy-open/OpenCnt policy.
 - Change DiskDevice mount/geometry or public APIs.
-- Close because the FIFO went idle.
+- Close because the FIFO went idle unless `LIBF_DELEXP` is already pending and OpenCnt == 0.
+- Discard live change-int registrations on a deferred/busy expunge.
 - Start Stage 5. Create epics/`stories.yaml`. Default to `scripts/amiga-tests`. Touch `fujinet-nio-lib` unless a compile break appears (then HALT).
 
 ## I/O & Edge-Case Matrix
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| FIFO idle | Last runnable processed; queue empty | `io_processing = 0`; worker `Wait`s; **no** `fn_transport_close`; `client_initialized` unchanged | N/A |
-| Work after idle | Broker context still open | `fn_init`/`ensure_client` no-op; exchange proceeds | Init fail only if broker actually gone |
-| Safe expunge | OpenCnt 0, queue empty, not processing | `fn_transport_close`; clear `client_initialized`; return 0 (still loaded) | N/A |
-| Busy expunge | OpenCnt > 0 or queued or `io_processing` | `LIBF_DELEXP`; **no** close | Worker/I/O continues |
-| Last CloseDevice | OpenCnt → 0, no expunge | **No** transport close (resident still live) | N/A |
+| Ordinary FIFO idle | Queue empty; `LIBF_DELEXP` clear | `io_processing = 0`; **no** close; `client_initialized` unchanged | N/A |
+| Work after ordinary idle | Broker still open | `fn_init`/`ensure_client` no-op; exchange proceeds | Init fail only if broker actually gone |
+| Safe expunge, already idle | OpenCnt 0, queue empty, not processing | Complete teardown once; still loaded | N/A |
+| Expunge while OpenCnt > 0 | Then last CloseDevice, otherwise idle | Expunge sets flag only; last close completes once | Live change-ints kept until complete |
+| Expunge while I/O in progress | OpenCnt 0; `io_processing` or queue busy | Flag only; **no** close; worker idle then completes once | No discard until complete |
+| Last CloseDevice, no DELEXP | OpenCnt → 0 | **No** close | N/A |
+| OpenDevice after deferred expunge | `device_open` | Clears `LIBF_DELEXP`; later ordinary idle does not close | Pending teardown cancelled |
+| Repeated complete attempts | Same pending request; last-close and/or idle | Close **once**; flag cleared | `fn_transport_close` not invoked twice for that request |
 
 </frozen-after-approval>
 
 ## Code Map
 
-- `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c:724–763` — **change.** `device_worker_entry`: `Wait` then drain. **Delete** L742–750 (`fn_transport_close` + `client_initialized` loop) and the post-close second dequeue (L751–757). Empty path: `io_processing = 0`; `Enable`; break/return.
-- Same file `:868–872` — native BeginIO currently dequeues **one** request and never runs idle-close. Point it at the shared drain so tests hit FIFO-empty.
-- Same file `:281–288` — `device_expunge` stub (`LIBF_DELEXP`, return 0, no `RemTask`). **Add** idle transport teardown only; keep non-unload.
-- Same file `:256–278` — `device_close`: OpenCnt--; **do not** add close (Last CloseDevice row).
-- Same file `:948–983` — native hooks; add expunge + `client_initialized` inspect if tests cannot reach the statics.
-- `amiga/common/fujinet_disk_driver.c:31–52` — `ensure_client` skip; **read-only** unless tests need a getter.
-- `amiga/channels/rs232/fujinet_nio_client.c:20–23` — `nio_init` → `fn_init`; **read-only**.
-- `repos/fujinet-nio-lib/src/common/fn_init.c:9–10` + `src/platform/amiga/fn_transport.c:81–86,153–161` — already-open no-op / close implementation; **read-only**.
-- `amiga/nio.device/fujinet_nio_device.c:168–188,251–325` — broker idle does **not** close backend; **read-only** pattern for disk drain vs expunge.
-- `amiga/tests/test_fujinet_disk_resident.c:52–53` — stub `fn_transport_close` is a no-op; **count calls**. Extend for idle vs expunge matrix.
-- `amiga/tests/Makefile` — `make tests` / `RESIDENT_TEST` already builds this TU with `-DFUJINET_DISK_NATIVE_TEST`.
-- `docs/amiga/nio-broker-architecture.md` §4 L365–366 — Stage 4 still “backlog”; update when done.
-- `backlog/nio-broker.md` Stage 4 + `_bmad-output/specs/spec-amiga-nio-broker/stages.md` Stage 4 — checkboxes after Verification.
-- Guest: `integration-tests/amiberry/test_diskdevice_adf.py:103–122` + `startup/diskdevice-inspect-catalog.sequence` — Stage 3 disk→immediate-FLS; `test_hd_adf_mount_geometry_dir_and_type` — disk I/O across command gaps. Do not rewrite assertions.
+- `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c:724–763` — **change.** Shared drain (nio `worker_pump` analog). **Delete** L742–757 idle-close. Empty arm: `io_processing = 0`, then try complete.
+- Same file `:868–872` — native BeginIO dequeues one request today; point at shared drain.
+- Same file `:281–288` — expunge always discards then sets `LIBF_DELEXP`. Try complete if safe; else flag only. Discard only in the helper (`:348–360` is all-units destructive). `:260–263` already drops ints for **that** closer.
+- Same file `:256–278` — after OpenCnt--, try complete if `LIBF_DELEXP` (nio `:278–284`, but no `RemTask`). `:249–252` open clears the flag; **keep**. `:948–983` add native Open/Close/Expunge hooks.
+- `amiga/nio.device/fujinet_nio_device.c:251–285` — **read-only** last-close delayed expunge; nio pump does **not** complete on idle — disk must.
+- `amiga/tests/test_fujinet_disk_resident.c:52–53` — count `fn_transport_close`; matrix cases 1–5.
+- `fujinet_disk_driver.c:31–52`, `fujinet_nio_client.c:20–23`, `fn_init.c:9–10`, `fn_transport.c:81–86,153–161` — **read-only**.
+- Docs after Verification: architecture §4 L365–366, `backlog/nio-broker.md`, `stages.md`. Guest unchanged: inspect-catalog + `test_hd_adf_mount_geometry_dir_and_type`.
 
 **Do not edit:** `fujinet_nio_device.c`, `fn_transport.c`, mount/geometry in `fujinet_disk_driver.c`.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `fujinet_disk_device.c` -- extract shared drain (nio `worker_pump` analog); worker `Wait` + drain; native BeginIO uses drain -- idle-close must be testable
-- [ ] `fujinet_disk_device.c` -- remove FIFO-empty close/reset; empty ⇒ `io_processing = 0` only
-- [ ] `fujinet_disk_device.c` -- `device_expunge` idle teardown (`fn_transport_close` + clear `client_initialized`); busy ⇒ DELEXP, no close; still no unload
-- [ ] `test_fujinet_disk_resident.c` -- count `fn_transport_close`; cover I/O matrix (idle drain, safe expunge, busy expunge)
-- [ ] `nio-broker-architecture.md`, `backlog/nio-broker.md`, `stages.md` -- Stage 4 contract/checkboxes after commands pass
+- [ ] `fujinet_disk_device.c` -- shared drain; worker `Wait` + drain; native BeginIO uses drain
+- [ ] `fujinet_disk_device.c` -- remove ordinary FIFO-empty close/reset
+- [ ] `fujinet_disk_device.c` -- pending-`LIBF_DELEXP` helper; expunge / last-close / worker-idle complete once; discard only on complete; no unload
+- [ ] `test_fujinet_disk_resident.c` -- close counter; five lifecycle cases below
+- [ ] `nio-broker-architecture.md`, `backlog/nio-broker.md`, `stages.md` -- Stage 4 after commands pass
 
 **Acceptance Criteria:**
-- Given the worker just finished the last queued TD request, when the FIFO is empty, then it does not call `fn_transport_close` and leaves `client_initialized` set.
-- Given that idle state, when another TD/NIO path runs, then `fn_init` does not reopen an already-open context and DiskDevice I/O still succeeds.
-- Given OpenCnt 0 and an idle queue, when `device_expunge` runs, then `fn_transport_close` runs once and units are marked uninitialized.
-- Given OpenCnt > 0 or queued/in-progress work, when `device_expunge` runs, then transport stays open.
-- Given Stage 3B inspect-catalog, when it is run after this change, then disk NIO then immediate FLS still passes (no serial-ownership race regression).
+- Given native resident tests, when the I/O-matrix lifecycle rows run, then close counts match (0 on ordinary idle; exactly one per pending expunge).
+- Given Stage 3B inspect-catalog after this change, when disk NIO then immediate FLS runs, then it still passes.
 
 ## Spec Change Log
+
+- 2026-08-23: Human edit — delayed `LIBF_DELEXP` completion on last CloseDevice **and** worker idle; discard change-ints only on safe complete. Avoids a deferred expunge that never runs again.
+
+## Design Notes
+
+One complete helper (name free). Clear `LIBF_DELEXP` in the same call that closes so last-close and idle cannot both fire. Nio last-close re-enters expunge; Exec may never call disk `device_expunge` again, so worker idle must complete a pending flag.
 
 ## Verification
 
 Source workspace env first (`source "$NIO_WORKSPACE/scripts/env.sh"`). Lib `make check` is **not** required unless lib is edited.
 
 **Commands:**
-- `rg -n 'fn_transport_close' repos/fujinet-nio-driver/amiga/disk.device` -- expected: only the expunge teardown path (not `device_worker_entry` / drain empty-arm)
-- `make -C repos/fujinet-nio-driver/amiga tests` -- expected: all native binaries pass, including new resident idle/expunge cases
+- `rg -n 'fn_transport_close' repos/fujinet-nio-driver/amiga/disk.device` -- expected: only the pending-expunge complete helper (not ordinary drain empty-arm)
+- `make -C repos/fujinet-nio-driver/amiga tests` -- expected: all native binaries pass, including the five resident lifecycle cases
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_adf.py::test_hd_adf_mount_geometry_dir_and_type` -- expected: PASS (DiskDevice after inter-command idle)
 - `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_adf.py::test_catalog_inspection_preserves_live_dd_handler` -- expected: PASS (run 1, Stage 3 race)
 - Repeat the previous inspect-catalog pytest -- expected: PASS (run 2)
