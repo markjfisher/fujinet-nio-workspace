@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,10 +49,19 @@ def load_local_env() -> dict[str, str]:
             continue
         key, _, raw_value = line.partition("=")
         key = key.strip()
-        # Strip surrounding quotes and expand $HOME / ~ simply.
-        value = raw_value.strip().strip('"').strip("'")
+        raw_value = raw_value.strip()
+        # Quoted values: take everything between the matching quotes and
+        # discard any trailing inline comment (e.g. `"...adf"   # notes`).
+        if raw_value[:1] in ('"', "'"):
+            quote = raw_value[0]
+            end = raw_value.find(quote, 1)
+            value = raw_value[1:end] if end != -1 else raw_value[1:]
+        else:
+            # Unquoted value: an inline comment starts at whitespace + '#'.
+            value = re.split(r"\s+#", raw_value, maxsplit=1)[0].strip()
+        # Expand $HOME / ~ simply.
         value = value.replace("$HOME", str(Path.home())).replace("~", str(Path.home()))
-        result[key.strip()] = value
+        result[key] = value
     return result
 
 
