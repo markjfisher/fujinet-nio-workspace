@@ -2,7 +2,7 @@
 title: 'Amiga NIO broker Stage 2 — parent completion gate'
 type: 'feature'
 created: '2026-08-22'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 context:
   - docs/amiga/nio-broker-architecture.md

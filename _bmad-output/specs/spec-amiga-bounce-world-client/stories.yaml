@@ -1,0 +1,21 @@
+- id: "1"
+  title: Amiga client skeleton — build, connect, render loop
+  description: >-
+    New src/amiga platform shims (screen lifecycle/double buffer, keyboard,
+    delay, shutdown) plus a make amiga target; registers a pixel resolution
+    via the existing REG_* constants, connects through fujinet-nio-lib, and
+    proves the fetch/render loop end-to-end in the wb32-a1200 Amiberry WB 3.2
+    session with a proportional placeholder renderer. Covers CAP-1 and CAP-3.
+  spec_checkpoint: true
+- id: "2"
+  title: Vector shape fidelity
+  description: >-
+    Convert every embedded shape id (shapes[19]) into ordered polygon geometry
+    scaled proportionally from the 40x24 world grid to registered pixels, drawn
+    as flicker-free filled polygons with legible status/info text. Covers CAP-2.
+  spec_checkpoint: true
+- id: "3"
+  title: Sound effects
+  description: >-
+    Collision/event audio equivalent to other targets using OS audio APIs,
+    demonstrated in-session alongside rendering. Covers CAP-4.
