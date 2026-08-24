@@ -78,17 +78,33 @@ class DevelopmentShareTests(unittest.TestCase):
             root = Path(directory)
             driver = root / "repos" / "fujinet-nio-driver" / "build" / "amiga"
             apps = root / "repos" / "nio-core-apps" / "build" / "amiga" / "bin"
+            bounce = root / "repos" / "bounce-world-client-nio" / "build"
             driver.mkdir(parents=True)
             apps.mkdir(parents=True)
+            bounce.mkdir(parents=True)
             (driver / "fujinet-nio.device").write_bytes(b"nio")
             (driver / "fujinet-disk.device").write_bytes(b"disk")
             (apps / "fls").write_bytes(b"fls")
+            (bounce / "bwcn.amiga").write_bytes(b"bwc")
             share = root / "build" / "amiga-share"
             linked = sync_development_share(root, share)
             self.assertIn("fujinet-nio.device", linked)
             self.assertIn("fls", linked)
+            self.assertIn("bwcn.amiga", linked)
             self.assertTrue((share / "fujinet-nio.device").is_symlink())
             self.assertEqual((share / "fls").resolve(), (apps / "fls").resolve())
+            self.assertEqual((share / "bwcn.amiga").resolve(), (bounce / "bwcn.amiga").resolve())
+
+    def test_sync_development_share_without_bounce_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            driver = root / "repos" / "fujinet-nio-driver" / "build" / "amiga"
+            driver.mkdir(parents=True)
+            (driver / "fujinet-nio.device").write_bytes(b"nio")
+            share = root / "build" / "amiga-share"
+            linked = sync_development_share(root, share)
+            self.assertEqual(linked, ["fujinet-nio.device"])
+            self.assertFalse((share / "bwcn.amiga").exists())
 
 
 if __name__ == "__main__":

@@ -253,6 +253,9 @@ def sync_development_share(root: Path, share_path: Path) -> list[str]:
     ):
         if bin_dir.is_dir():
             sources.extend(sorted(path for path in bin_dir.iterdir() if path.is_file()))
+    bounce_bin = root / "repos" / "bounce-world-client-nio" / "build" / "bwcn.amiga"
+    if bounce_bin.is_file():
+        sources.append(bounce_bin)
 
     linked: list[str] = []
     for source in sources:
