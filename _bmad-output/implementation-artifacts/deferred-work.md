@@ -33,3 +33,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-nio-broker-stage-4.md`
   summary: Pending `LIBF_DELEXP` can stay incomplete if the FIFO still has CMD_STOP-blocked nodes when the worker has no runnable request
   evidence: Drain treats next-runnable-empty as idle, but `complete_pending_expunge` requires `io_queue.head == NULL`; Stage 4 did not change STOP/FLUSH semantics.
+- source_spec: `_bmad-output/specs/spec-amiga-bounce-world-client/stories/1-amiga-client-skeleton.md`
+  summary: The cc65-style itoa helper copied into src/amiga/conio.h (and already present in src/linux/conio.h) has signed-overflow UB for INT_MIN.
+  evidence: Surfaced by edge-case review of story 1; identical pre-existing pattern in the linux shim, unreachable with current dimension values; fix belongs to a shared-conio hardening pass across targets.

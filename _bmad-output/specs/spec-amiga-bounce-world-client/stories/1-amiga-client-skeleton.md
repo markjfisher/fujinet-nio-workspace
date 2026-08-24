@@ -2,8 +2,9 @@
 title: 'Amiga client skeleton — build, connect, render loop'
 type: 'feature'
 created: '2026-08-24'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: '1d36b24c'
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-bounce-world-client/SPEC.md'
   - '{project-root}/docs/agent-test-policy.md'
@@ -69,15 +70,15 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `makefiles/build.mk` + `Makefile` -- add `amiga` target: platform mapping, `m68k-amigaos-gcc` CC/LD, gcc-family compile/link rules (linux-style, no cc65 `-t` flags), `-DBWC_CLIENT_VERSION=3`, lib path `fujinet-nio-amiga.a` -- wires builds without touching cc65 paths.
-- [ ] `src/amiga/screen.h` -- `SCREEN_WIDTH 320`, `SCREEN_HEIGHT 256` (NTSC height handled at screen open), `REG_SCREEN_WIDTH/HEIGHT = SCREEN_*`, `REG_WORLD_WIDTH 40`, `REG_WORLD_HEIGHT 24` -- registers pixel screen dimensions with the logical world grid unchanged.
-- [ ] `src/amiga/conio.{h,c}` -- cc65-style text API over an OS-provided console/raster font on the custom screen; explicit screen open before first conio use plus `atexit` close/restore covering all exit paths (error exits included) -- keeps all prompt/info/status common code working unmodified with a clean lifecycle.
-- [ ] `src/amiga/double_buffer.c` + screen lifecycle in `display.c` shims (`init_screen` support, `full_clr`, `playfield_clr`) -- custom lowres screen, PAL/NTSC-aware 320x256/200, two buffers swapped by `swap_buffer()` -- flicker-free frame presentation on the already-open screen.
-- [ ] `src/amiga/{delay,collision,convert_chars,shapes_preview,shutdown,sound}.c` -- mirror the linux implementations (sound no-op until story 3; `wait_vsync` via `WaitTOF`) -- completes the shim set the wildcard build expects.
-- [ ] `src/common/connection.c` -- replace hardcoded `",2,"` with `BWC_CLIENT_VERSION` macro (default 2, amiga overrides to 3); record the active version in a shared flag -- enables v3 without changing other targets.
-- [ ] `src/common/display.c` -- extract payload shape decoding into a pure helper; when active version >= 3 decode 5 bytes/shape (id + LE int16 x/y) else legacy 3 bytes; pass decoded coords to rendering -- single guarded parse path.
-- [ ] `tests/host/test_coord_decode.c` (+ tiny make rule) -- host-built unit test covering the decode helper's matrix rows -- cheapest test that can fail for the common-code change.
-- [ ] `README.md` -- amiga target section: build command, guest prerequisites (`fujinet-nio.device` loaded, NIO share), run notes -- documents the new target.
+- [x] `makefiles/build.mk` + `Makefile` -- add `amiga` target: platform mapping, `m68k-amigaos-gcc` CC/LD, gcc-family compile/link rules (linux-style, no cc65 `-t` flags), `-DBWC_CLIENT_VERSION=3`, lib path `fujinet-nio-amiga.a` -- wires builds without touching cc65 paths.
+- [x] `src/amiga/screen.h` -- `SCREEN_WIDTH 320`, `SCREEN_HEIGHT 256` (NTSC height handled at screen open), `REG_SCREEN_WIDTH/HEIGHT = SCREEN_*`, `REG_WORLD_WIDTH 40`, `REG_WORLD_HEIGHT 24` -- registers pixel screen dimensions with the logical world grid unchanged.
+- [x] `src/amiga/conio.{h,c}` -- cc65-style text API over an OS-provided console/raster font on the custom screen; explicit screen open before first conio use plus `atexit` close/restore covering all exit paths (error exits included) -- keeps all prompt/info/status common code working unmodified with a clean lifecycle.
+- [x] `src/amiga/double_buffer.c` + screen lifecycle in `display.c` shims (`init_screen` support, `full_clr`, `playfield_clr`) -- custom lowres screen, PAL/NTSC-aware 320x256/200, two buffers swapped by `swap_buffer()` -- flicker-free frame presentation on the already-open screen.
+- [x] `src/amiga/{delay,collision,convert_chars,shapes_preview,shutdown,sound}.c` -- mirror the linux implementations (sound no-op until story 3; `wait_vsync` via `WaitTOF`) -- completes the shim set the wildcard build expects.
+- [x] `src/common/connection.c` -- replace hardcoded `",2,"` with `BWC_CLIENT_VERSION` macro (default 2, amiga overrides to 3); record the active version in a shared flag -- enables v3 without changing other targets.
+- [x] `src/common/display.c` -- extract payload shape decoding into a pure helper; when active version >= 3 decode 5 bytes/shape (id + LE int16 x/y) else legacy 3 bytes; pass decoded coords to rendering -- single guarded parse path.
+- [x] `tests/host/test_coord_decode.c` (+ tiny make rule) -- host-built unit test covering the decode helper's matrix rows -- cheapest test that can fail for the common-code change.
+- [x] `README.md` -- amiga target section: build command, guest prerequisites (`fujinet-nio.device` loaded, NIO share), run notes -- documents the new target.
 
 **Acceptance Criteria:**
 - Given a clean env (`source scripts/env.sh`), when `make amiga`, then `build/bwcn.amiga` links against `fujinet-nio-amiga.a` with no warnings from new sources.
@@ -104,3 +105,46 @@ context:
 
 **Manual checks (if no CLI):**
 - In the wb32-a1200 Amiberry session (procedure: `docs/amiga/amiberry-testing.md`): load `fujinet-nio.device`, run `bwcn.amiga` from NIO:, enter endpoint/name, observe prompt flow → registration → moving placeholder shapes; quit restores the CLI cleanly.
+
+## Suggested Review Order
+
+**Protocol version + wire contract**
+
+- Registration now emits the build-time version between name and screen fields; width field restored after review caught its loss
+  [`connection.c:428`](../../../repos/bounce-world-client-nio/src/common/connection.c#L428)
+
+- Pure v2/v3 decoder: length-bounded, clamped to output capacity; the one piece of new logic with a host test
+  [`shape_decode.c:8`](../../../repos/bounce-world-client-nio/src/common/shape_decode.c#L8)
+
+- Compile-time-only version selection: `BWC_CLIENT_VERSION` guards both decode path and gfx_render.h include so v2 targets compile unchanged
+  [`display.c:192`](../../../repos/bounce-world-client-nio/src/common/display.c#L192)
+
+**Amiga platform shims**
+
+- Explicit screen lifecycle: constructor opens custom lores screen before any conio use; atexit closes it on every exit path
+  [`conio.c:311`](../../../repos/bounce-world-client-nio/src/amiga/conio.c#L311)
+
+- Text-cell conio over topaz font on double-buffer rastports; grid wrap/clamp guards added during review
+  [`conio.c:69`](../../../repos/bounce-world-client-nio/src/amiga/conio.c#L69)
+
+- Rawkey input map with key-release filter; endpoint punctuation and quit key covered
+  [`conio.c:182`](../../../repos/bounce-world-client-nio/src/amiga/conio.c#L182)
+
+- Placeholder renderer: proportional rectangles scaled from 40x24 world units into registered pixels, clipped to screen
+  [`gfx.c:8`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L8)
+
+- Registration dimensions: pixel screen extents, logical 40x24 world region per the corrected contract
+  [`screen.h:18`](../../../repos/bounce-world-client-nio/src/amiga/screen.h#L18)
+
+**Build wiring**
+
+- Target mapping, m68k compiler flags, lib artifact, `-DBWC_CLIENT_VERSION=3`; duplicates from a botched edit removed
+  [`build.mk:17`](../../../repos/bounce-world-client-nio/makefiles/build.mk#L17)
+
+**Peripherals**
+
+- Host unit tests incl. payload-length truncation case added in review
+  [`test_coord_decode.c:81`](../../../repos/bounce-world-client-nio/tests/host/test_coord_decode.c#L81)
+
+- `make test-host-coords` rule (host gcc, independent of cross targets)
+  [`Makefile:41`](../../../repos/bounce-world-client-nio/Makefile#L41)
