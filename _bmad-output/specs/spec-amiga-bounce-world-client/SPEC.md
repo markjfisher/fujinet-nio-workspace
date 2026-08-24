@@ -22,8 +22,8 @@ sources:
   - **intent:** The client renders live world state as filled vector polygons instead of characters, converting each embedded shape id into ordered polygon geometry scaled proportionally from the 40x24 world grid to the registered pixel resolution.
   - **success:** Every shape id the server can send draws as the correct solid shape at correct position/size on a double-buffered fullscreen lowres screen, with no flicker or tearing during play.
 - **CAP-3**
-  - **intent:** The shared gameplay/network code in `src/common` runs unmodified behind new Amiga platform shims (screen lifecycle/double buffer, keyboard control, timing/delay, shutdown).
-  - **success:** No `src/common` or other-target source changes are needed beyond build wiring; keyboard commands work in-game and quit/cleanup returns cleanly to Workbench/CLI.
+  - **intent:** Amiga-specific display/input/timing/shutdown lives behind platform shims while the gameplay/network architecture stays in shared `src/common`; `src/common` changes are permitted only for platform-neutral protocol-version selection and version-guarded v3 coordinate decoding.
+  - **success:** Existing targets keep v2 registration, legacy 3-byte shape decoding, and their current rendering behavior; keyboard commands work in-game on Amiga and every quit/failure path after screen creation restores the console and returns cleanly to Workbench/CLI.
 - **CAP-4**
   - **intent:** Collision/event sound effects equivalent to other targets play during gameplay.
   - **success:** Audible event sounds using OS audio APIs are demonstrated in an emulated WB 3.x session alongside rendering.
@@ -31,13 +31,14 @@ sources:
 ## Constraints
 
 - Verification environment is Workbench 3.2 via the `wb32-a1200` Amiberry profile (`configs/amiga/workbenches.yaml`); Kickstart/Workbench 1.3 support is deferred, not designed against now — but only standard OS libraries (`intuition.library`, `graphics.library`, `dos.library`) are used, keeping later 1.3 porting plausible. No third-party graphics libraries.
-- No server or wire-protocol change: registration dimensions are per-platform constants already; the server maps its 40.0x24.0 float space into any declared client resolution as integers. Shape geometry scales proportionally (a size-5 shape spans 5.0 world units).
+- Registration model: `REG_SCREEN_WIDTH/HEIGHT` are pixel dimensions (320x256 PAL / 320x200 NTSC); `REG_WORLD_WIDTH/HEIGHT` remain logical Bouncy World units (40x24). Rendering maps logical world coordinates into screen pixels. v3 shape x/y are signed int16 little-endian expressed in the registered screen-pixel frame; the human's server v3 implementation is final authority — divergence means stop and report, never guess.
+- Wire protocol: registration version >=3 makes the server respond with 2 bytes per shape x/y coordinate (human is adding this server-side). Amiga registers version 3; all other clients stay on their current version. Common-code response parsing gains a version-guarded 16-bit coordinate path. Shape geometry scales proportionally (a size-5 shape spans 5.0 world units).
 - Shape table is embedded client-side (`shapes[19]`, same ids as other targets); rendering per id is hard-coded like the BBC teletext renderer.
 - Network handling reuses `fujinet-nio-lib` unchanged.
 
 ## Non-goals
 
-- No changes to the Bouncy World server, protocol, or other client targets' behavior.
+- No changes to the Bouncy World server beyond the human-owned version-3 wire addition; no changes to other client targets' behavior or registered versions.
 - No Kickstart/Workbench 1.3 certification in this delivery — later goal.
 - No Workbench-window mode, high-res or interlace screens, or AGA-specific enhancements in this first item.
 - No new shape definitions or server-driven shape variants.
