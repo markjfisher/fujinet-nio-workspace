@@ -8,11 +8,13 @@
     session with a proportional placeholder renderer. Covers CAP-1 and CAP-3.
   spec_checkpoint: true
 - id: "2"
-  title: Vector shape fidelity
+  title: Vector shape fidelity with selectable block mode
   description: >-
     Convert every embedded shape id (shapes[19]) into ordered polygon geometry
     scaled proportionally from the 40x24 world grid to registered pixels, drawn
-    as flicker-free filled polygons with legible status/info text. Covers CAP-2.
+    as flicker-free filled polygons with legible status/info text, while the
+    block renderer is retained and a key press toggles between vector and block
+    modes during live rendering. Covers CAP-2 and CAP-5.
   spec_checkpoint: true
 - id: "3"
   title: Sound effects

@@ -27,6 +27,9 @@ sources:
 - **CAP-4**
   - **intent:** Collision/event sound effects equivalent to other targets play during gameplay.
   - **success:** Audible event sounds using OS audio APIs are demonstrated in an emulated WB 3.x session alongside rendering.
+- **CAP-5**
+  - **intent:** During live rendering the user can switch between vector polygon rendering and block (proportional rectangle) rendering with a key press; both modes stay available for the whole session and the switch takes effect immediately without reconnecting or restarting.
+  - **success:** In a `wb32-a1200` Amiberry WB 3.x session with live world state on screen, pressing the toggle key flips every rendered shape between filled vectors and proportional blocks on the next frame; toggling back restores vector mode, and no other behavior (connection, sound, quit) is disturbed.
 
 ## Constraints
 
@@ -34,6 +37,7 @@ sources:
 - Registration model: `REG_SCREEN_WIDTH/HEIGHT` are pixel dimensions (320x256 PAL / 320x200 NTSC); `REG_WORLD_WIDTH/HEIGHT` remain logical Bouncy World units (40x24). Rendering maps logical world coordinates into screen pixels. v3 shape x/y are signed int16 little-endian expressed in the registered screen-pixel frame; the human's server v3 implementation is final authority — divergence means stop and report, never guess.
 - Wire protocol: registration version >=3 makes the server respond with 2 bytes per shape x/y coordinate (human is adding this server-side). Amiga registers version 3; all other clients stay on their current version. Common-code response parsing gains a version-guarded 16-bit coordinate path. Shape geometry scales proportionally (a size-5 shape spans 5.0 world units).
 - Shape table is embedded client-side (`shapes[19]`, same ids as other targets); rendering per id is hard-coded like the BBC teletext renderer.
+- The block renderer from story 1 is retained, not replaced: vector and block modes coexist as selectable renderers behind the same render entry point, and the toggle key must not conflict with existing in-game keys (quit and other controls). The exact key is an implementation choice.
 - Network handling reuses `fujinet-nio-lib` unchanged.
 
 ## Non-goals
@@ -42,11 +46,13 @@ sources:
 - No Kickstart/Workbench 1.3 certification in this delivery — later goal.
 - No Workbench-window mode, high-res or interlace screens, or AGA-specific enhancements in this first item.
 - No new shape definitions or server-driven shape variants.
+- No persistent renderer preference (choice resets each run) and no on-screen renderer-selection UI beyond the toggle key.
 
 ## Success signal
 
-An Amiga binary connects through `fujinet-nio-lib`, registers a pixel resolution, and renders the live world as scaled filled vectors with sound and keyboard control in a `wb32-a1200` Amiberry WB 3.2 session, while every existing target still builds and passes its tests.
+An Amiga binary connects through `fujinet-nio-lib`, registers a pixel resolution, and renders the live world as scaled filled vectors with sound and keyboard control in a `wb32-a1200` Amiberry WB 3.2 session, switching to block rendering and back on a key press, while every existing target still builds and passes its tests.
 
 ## Assumptions
 
 - NTSC machines use 320x200, PAL uses 320x256; exact presentation of status/info text within the playfield is left to implementation, provided it stays legible.
+- The specific toggle key is left to implementation (must not collide with existing in-game keys); no on-screen menu is required — a single key press suffices.
