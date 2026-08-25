@@ -36,3 +36,10 @@
 - source_spec: `_bmad-output/specs/spec-amiga-bounce-world-client/stories/1-amiga-client-skeleton.md`
   summary: The cc65-style itoa helper copied into src/amiga/conio.h (and already present in src/linux/conio.h) has signed-overflow UB for INT_MIN.
   evidence: Surfaced by edge-case review of story 1; identical pre-existing pattern in the linux shim, unreachable with current dimension values; fix belongs to a shared-conio hardening pass across targets.
+
+- source_spec: `_bmad-output/specs/spec-amiga-bounce-world-client/stories/2-vector-shape-fidelity-block-toggle.md`
+  summary: Host-boundary tests for the Amiga renderer dispatch (mode switch, fill policy pen order, off-screen culling) need a rastport stub seam in src/amiga/gfx.c.
+  evidence: Review found that vo_trace is host-tested but gfx.c fill/dispatch decisions have no automated coverage; only the guest demo exercises them.
+- source_spec: `_bmad-output/specs/spec-amiga-bounce-world-client/stories/2-vector-shape-fidelity-block-toggle.md`
+  summary: No automated Amiberry pytest node exists for the Bouncy World client guest session (connect, render, toggle, quit).
+  evidence: integration-tests/amiberry has no BWC test module; guest verification remains a manual wb32-a1200 session with a live server.
