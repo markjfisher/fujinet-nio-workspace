@@ -2,7 +2,7 @@
 title: 'Amiga vector shape rendering with selectable block mode'
 type: 'feature'
 created: '2026-08-25'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: 'ea98ecb7e29e7e63722e528db88c75a3954434d8'
 context:
@@ -73,13 +73,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/amiga/vector_outline.{c,h}` (new, freestanding C99) -- pure helper: given `ShapeRecord.shape_data`/`shape_width`, produce zero or more closed rectilinear contours (ordered vertices, world-unit coordinates) covering all filled regions, disconnected components, and holes; expose each contour's outer/hole classification -- keeps geometry logic host-testable, mirrors `shape_decode.c` discipline.
-- [ ] `tests/host/test_vector_outline.c` + `Makefile` rule `test-host-vectors` -- include a host-side even-odd rasterizer and assert the **filled silhouette equals the source cell bitmap** for every case: single cell, plus/star silhouettes, disconnected components, hollow ring (hole preserved), empty bitmap, width 1 -- not merely that vertex lists were produced.
-- [ ] `src/amiga/gfx.c` -- vector renderer: derive the storage bound from max embedded `width²`, allocate AreaInfo/vector storage once at init; scale outline vertices world→pixels (runtime height); fill outers with pen 2 then holes with background pen per the deterministic policy via `AreaDraw`/`AreaEnd`; enforce the bound safely on oversized geometry; retain block renderer intact; dispatch inside `gfx_show_shape_px()` on the render-mode enum -- one entry point, two modes.
-- [ ] `src/include/data.h` + `src/common/data.c` -- add `enum render_mode { RENDER_VECTOR, RENDER_BLOCK }` with a current-mode global defaulting to `RENDER_VECTOR`, beside the other gameplay flags -- common code carries selection, not rendering.
-- [ ] `src/common/keyboard.c` -- `v`/`V` case flipping the render-mode between `RENDER_VECTOR`/`RENDER_BLOCK`, guarded `#ifdef __AMIGA__` (or renderer-capability macro) so it compiles out of every other target regardless of protocol version -- live toggle without touching existing keymaps.
-- [ ] `src/common/show_info.c` -- Amiga legend line for the toggle key -- discoverable UI.
-- [ ] `README.md` -- note the Amiga renderer toggle key -- documents user-visible behavior.
+- [x] `src/amiga/vector_outline.{c,h}` (new, freestanding C99) -- pure helper: given `ShapeRecord.shape_data`/`shape_width`, produce zero or more closed rectilinear contours (ordered vertices, world-unit coordinates) covering all filled regions, disconnected components, and holes; expose each contour's outer/hole classification -- keeps geometry logic host-testable, mirrors `shape_decode.c` discipline.
+- [x] `tests/host/test_vector_outline.c` + `Makefile` rule `test-host-vectors` -- include a host-side even-odd rasterizer and assert the **filled silhouette equals the source cell bitmap** for every case: single cell, plus/star silhouettes, disconnected components, hollow ring (hole preserved), empty bitmap, width 1 -- not merely that vertex lists were produced.
+- [x] `src/amiga/gfx.c` -- vector renderer: derive the storage bound from max embedded `width²`, allocate AreaInfo/vector storage once at init; scale outline vertices world→pixels (runtime height); fill outers with pen 2 then holes with background pen per the deterministic policy via `AreaDraw`/`AreaEnd`; enforce the bound safely on oversized geometry; retain block renderer intact; dispatch inside `gfx_show_shape_px()` on the render-mode enum -- one entry point, two modes.
+- [x] `src/include/data.h` + `src/common/data.c` -- add `enum render_mode { RENDER_VECTOR, RENDER_BLOCK }` with a current-mode global defaulting to `RENDER_VECTOR`, beside the other gameplay flags -- common code carries selection, not rendering.
+- [x] `src/common/keyboard.c` -- `v`/`V` case flipping the render-mode between `RENDER_VECTOR`/`RENDER_BLOCK`, guarded `#ifdef __AMIGA__` (or renderer-capability macro) so it compiles out of every other target regardless of protocol version -- live toggle without touching existing keymaps.
+- [x] `src/common/show_info.c` -- Amiga legend line for the toggle key -- discoverable UI.
+- [x] `README.md` -- note the Amiga renderer toggle key -- documents user-visible behavior.
 
 **Acceptance Criteria:**
 - Given a clean env (`source scripts/env.sh`), when `make amiga`, then `build/bwcn.amiga` links warning-free from new/changed sources.
@@ -106,3 +106,52 @@ context:
 
 **Manual checks (if no CLI):**
 - In the wb32-a1200 Amiberry WB 3.2 session (procedure: `docs/amiga/amiberry-testing.md`): run `bwcn.amiga` against a live server, confirm vector silhouettes move with world steps, press `v` mid-play to see block rectangles next frame and again for vectors, verify the legend shows the key, and confirm quit restores the CLI cleanly.
+
+## Suggested Review Order
+
+**Geometry core — silhouette tracing**
+
+- Contour tracer: directed boundary edges, deterministic saddle choice, even-odd hole classification
+  [`vector_outline.c:74`](../../../repos/bounce-world-client-nio/src/amiga/vector_outline.c#L74)
+
+- Outer/hole classification by shoelace sign; truncation reported, never silent
+  [`vector_outline.c:166`](../../../repos/bounce-world-client-nio/src/amiga/vector_outline.c#L166)
+
+**Renderer — dispatch and fill policy**
+
+- Single entry point: block vs vector selected by the render-mode enum; trace failure falls back to blocks
+  [`gfx.c:189`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L189)
+
+- Deterministic two-pass policy: outers in shape pen, holes in background pen
+  [`gfx.c:65`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L65)
+
+- Vertices clamped in int32 before narrowing — no wrap for off-screen bodies
+  [`gfx.c:100`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L100)
+
+- AreaInfo storage: static, bounded from VO_MAX_PTS, init-once per rastport with eviction fallback
+  [`gfx.c:20`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L20)
+
+- Block path retained, now on runtime height and reserved shape pen
+  [`gfx.c:135`](../../../repos/bounce-world-client-nio/src/amiga/gfx.c#L135)
+
+**Selection plumbing**
+
+- Render-mode enum beside other gameplay flags; default vector
+  [`data.h:66`](../../../repos/bounce-world-client-nio/src/include/data.h#L66)
+
+- v/V toggle guarded __AMIGA__ only — protocol version implies nothing here
+  [`keyboard.c:100`](../../../repos/bounce-world-client-nio/src/common/keyboard.c#L100)
+
+- Legend hint for the toggle key
+  [`show_info.c:75`](../../../repos/bounce-world-client-nio/src/common/show_info.c#L75)
+
+**Tests and build wiring**
+
+- Even-odd rasterizer asserts filled silhouette equals source bitmap, all embedded shapes included
+  [`test_vector_outline.c:27`](../../../repos/bounce-world-client-nio/tests/host/test_vector_outline.c#L27)
+
+- Truncation-path coverage (8x8 checkerboard exceeds storage bound)
+  [`test_vector_outline.c:180`](../../../repos/bounce-world-client-nio/tests/host/test_vector_outline.c#L180)
+
+- Aggregate host-test target running both suites
+  [`Makefile:55`](../../../repos/bounce-world-client-nio/Makefile#L55)
