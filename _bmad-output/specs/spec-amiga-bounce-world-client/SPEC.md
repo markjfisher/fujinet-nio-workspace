@@ -1,6 +1,7 @@
 ---
 id: SPEC-amiga-bounce-world-client
-companions: []
+companions:
+  - ../../specs/spec-bwc-client-capabilities/SPEC.md
 sources:
   - backlog/amiga-bounce-world-client.md
 ---
@@ -35,7 +36,7 @@ sources:
 
 - Verification environment is Workbench 3.2 via the `wb32-a1200` Amiberry profile (`configs/amiga/workbenches.yaml`); Kickstart/Workbench 1.3 support is deferred, not designed against now — but only standard OS libraries (`intuition.library`, `graphics.library`, `dos.library`) are used, keeping later 1.3 porting plausible. No third-party graphics libraries.
 - Registration model: `REG_SCREEN_WIDTH/HEIGHT` are pixel dimensions (320x256 PAL / 320x200 NTSC); `REG_WORLD_WIDTH/HEIGHT` remain logical Bouncy World units (40x24). Rendering maps logical world coordinates into screen pixels. v3 shape x/y are signed int16 little-endian expressed in the registered screen-pixel frame; the human's server v3 implementation is final authority — divergence means stop and report, never guess.
-- Wire protocol: registration version >=3 makes the server respond with 2 bytes per shape x/y coordinate (human is adding this server-side). Amiga registers version 3; all other clients stay on their current version. Common-code response parsing gains a version-guarded 16-bit coordinate path. Shape geometry scales proportionally (a size-5 shape spans 5.0 world units).
+- Wire protocol: registration version >=3 makes the server respond with 2 bytes per shape x/y coordinate (human is adding this server-side). Amiga registers version 3; all other clients stay on their current version. Common-code response parsing gains a version-guarded 16-bit coordinate path. Shape geometry scales proportionally (a size-5 shape spans 5.0 world units). **Superseded:** feature selection now happens via per-client capability negotiation — see `../spec-bwc-client-capabilities/SPEC.md`; all V3 guards are removed and the capabilities bitmask is the only mechanism from now on.
 - Shape table is embedded client-side (`shapes[19]`, same ids as other targets); rendering per id is hard-coded like the BBC teletext renderer.
 - The block renderer from story 1 is retained, not replaced: vector and block modes coexist as selectable renderers behind the same render entry point, and the toggle key must not conflict with existing in-game keys (quit and other controls). The exact key is an implementation choice.
 - Network handling reuses `fujinet-nio-lib` unchanged.

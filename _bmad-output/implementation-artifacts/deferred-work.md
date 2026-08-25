@@ -43,3 +43,12 @@
 - source_spec: `_bmad-output/specs/spec-amiga-bounce-world-client/stories/2-vector-shape-fidelity-block-toggle.md`
   summary: No automated Amiberry pytest node exists for the Bouncy World client guest session (connect, render, toggle, quit).
   evidence: integration-tests/amiberry has no BWC test module; guest verification remains a manual wb32-a1200 session with a live server.
+- source_spec: `_bmad-output/implementation-artifacts/spec-bwc-client-capabilities.md`
+  summary: Add the ROTATION capability to the Bouncy World client — request bit 0x02 alongside WIDE_COORDS and render per-shape angle/omega as rotated, clipped shapes.
+  evidence: Split from an over-size (~2.2k token) build spec to meet the 1600-token scope standard; the decoder lands 9-byte-record support in the main spec, so this follow-up is render-only plus flipping the requested mask from 0x01 to 0x03.
+- source_spec: `_bmad-output/implementation-artifacts/spec-bwc-client-capabilities.md`
+  summary: Bound-validate the add-client CSV construction chain (player name length and each strcat append) against APP_DATA_SIZE in repos/bounce-world-client-nio connection.c.
+  evidence: Pre-existing unbounded strcat pattern surfaced by the capability-negotiation diff, which added a 7th field; not introduced by this story (name handling was unvalidated at baseline f5a80d88).
+- source_spec: `_bmad-output/implementation-artifacts/spec-bwc-client-capabilities.md`
+  summary: Add host coverage for the show_screen runtime caps gate (caps != 0 selects the wide decoder + gfx path) in display.c.
+  evidence: Verification-gap review showed no test executes show_screen; the branch is platform-coupled to conio/gfx and needs an extraction or harness to test — real gap one hop past the covered decoder boundary, mitigated only by the human-owned live-server check.
