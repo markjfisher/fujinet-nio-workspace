@@ -89,6 +89,8 @@ context:
 
 ## Spec Change Log
 
+- **2026-08-25 — wrapping-world render contract.** Server change: in wrapping mode the server sends one wire copy per visible wrap, with shape centres that may sit outside the client screen (e.g. −2 or 322). Client consequence: the seam-duplication draw was removed (the server owns wrap copies), the stroke path clips each contour segment against the screen via `vo_clip_segment` (Cohen–Sutherland, host-tested) preserving true slopes, and per-vertex clamping was removed — vertex clamping drew false diagonals for off-screen centres. Verified live: shapes straddle wrap seams correctly in all four directions.
+
 - **2026-08-25 — requirement pivot: filled polygons → line-art outlines.** After live review the filled-polygon aesthetic was rejected in favour of stroked outlines (Asteroids/Tempest/Elite style): every traced contour — outers *and* holes — is drawn as a closed pixel-line path; nothing is filled. Consequences: the deterministic hole-fill policy and the even-odd rasterizer equivalence test no longer apply (holes render naturally as inner outlines); palette changed to black background / white lines / white text; `AreaEnd`+`TmpRas` machinery removed from the render path (its absence had also been the root cause of the garbage fills, freeze and Guru — fills rasterize through `rp->TmpRas`). New follow-on requirement captured as SPEC CAP-5: hand-craftable per-shape vector override tables (`s_hand_shapes[]` in `gfx.c`) with lattice-coordinate vertex loops, so shapes can be designed by hand instead of traced.
 
 ## Design Notes
