@@ -87,6 +87,20 @@ class RawKeyTableTests(unittest.TestCase):
         )
         self.assertEqual(planned[1][2], [BY_NAME["semicolon"]])
 
+    def test_plan_text_chord_tokens(self) -> None:
+        planned = plan_text("{ramiga+e}")
+        self.assertEqual(planned, [("keys", frozenset([RAMIGA]), [0x12])])
+        # multi-modifier, char key part, and no merge into letter runs
+        planned = plan_text("a{shift+;}b")
+        self.assertEqual(len(planned), 3)
+        self.assertEqual(planned[1], ("keys", frozenset([LSHIFT]), [0x29]))
+        with self.assertRaises(UnknownKeyError):
+            plan_text("{bogus+e}")     # not a modifier
+        with self.assertRaises(UnknownKeyError):
+            plan_text("{ramiga+nosuchkey}")
+        with self.assertRaises(UnknownKeyError):
+            plan_text("{+e}")
+
     def test_plan_text_supports_named_tokens(self) -> None:
         planned = plan_text("dir{return}")
         self.assertEqual(planned[-1], ("keys", frozenset(), [BY_NAME["return"]]))
@@ -117,6 +131,11 @@ class KeyboardEventTests(unittest.TestCase):
         ramiga_down, e_down, e_up, ramiga_up = events
         self.assertEqual((ramiga_down, e_down, e_up, ramiga_up),
                          (f"{RAMIGA}:1", "18:1", "18:0", f"{RAMIGA}:0"))
+
+    def test_type_text_chord_token_holds_and_releases(self) -> None:
+        kb, events = make_recording_keyboard()
+        kb.type_text("{ramiga+e}")
+        self.assertEqual(events, ["103:1", "18:1", "18:0", "103:0"])
 
     def test_type_text_releases_before_unshifted_run(self) -> None:
         kb, events = make_recording_keyboard()

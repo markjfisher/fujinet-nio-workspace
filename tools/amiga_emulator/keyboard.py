@@ -142,7 +142,7 @@ for _key in RAWKEYS.values():
     if _key.shifted is not None and _key.shifted not in CHAR_KEYS:
         CHAR_KEYS[_key.shifted] = (_key.code, frozenset([LSHIFT]))
 
-_TOKEN_RE = re.compile(r"\{([a-z0-9]+)(?::([^}]*))?\}")
+_TOKEN_RE = re.compile(r"\{([^{}:]+)(?::([^}]*))?\}")
 
 
 def resolve(key: str | int) -> int:
@@ -162,6 +162,28 @@ def resolve(key: str | int) -> int:
     raise UnknownKeyError(f"no such key name: {key!r}")
 
 
+_MODIFIER_NAMES = frozenset(
+    name for name, code in BY_NAME.items()
+    if name in ("lshift", "rshift", "capslock", "ctrl",
+                "lalt", "ralt", "lamiga", "ramiga"))
+
+# Friendly aliases for chord tokens: {shift+a}, {alt+g}, {amiga+e}.
+_MODIFIER_ALIASES = {
+    "shift": "lshift",
+    "alt": "lalt",
+    "amiga": "lamiga",
+}
+
+
+def _resolve_modifier(name: str) -> int:
+    name = _MODIFIER_ALIASES.get(name, name)
+    if name not in _MODIFIER_NAMES:
+        raise UnknownKeyError(
+            f"{name!r} is not a modifier; use one of "
+            f"{sorted(_MODIFIER_NAMES | set(_MODIFIER_ALIASES))}")
+    return BY_NAME[name]
+
+
 def char_sequence(char: str) -> tuple[int, frozenset[int]]:
     """Map one character to (raw key code, required modifier codes)."""
     try:
@@ -178,6 +200,9 @@ def plan_text(text: str) -> list[tuple]:
     Consecutive taps sharing one modifier set merge into one hold. Named
     keys are tokens: ``"{esc}dir {return}"``. ``{delay:seconds}`` is a
     pause before the next keystroke (guests drop keys while busy).
+    ``{mod+key}`` tokens are modifier chords held across the tap:
+    ``"{ramiga+e}"`` opens the Workbench Execute dialog, ``"{shift+a}"``
+    types a capital A.
     """
     planned: list[tuple] = []
     position = 0
@@ -199,6 +224,11 @@ def plan_text(text: str) -> list[tuple]:
                         f"{{delay}} out of range (0,60]: {argument}")
                 planned.append(("delay", seconds))
                 continue
+            if "+" in name:
+                *modifier_names, key_part = name.split("+")
+                codes_mods = frozenset(_resolve_modifier(m) for m in modifier_names)
+                planned.append(("keys", codes_mods, [resolve(key_part)]))
+                continue  # chords never merge into letter runs
             if argument is not None:
                 raise UnknownKeyError(
                     f"{{{name}}} takes no argument; did you mean {{delay:{argument}}}?")
@@ -278,7 +308,8 @@ class Keyboard:
 
         Consecutive characters needing the same modifiers share one hold.
         Special keys use ``{name}`` tokens: ``"dir{return}"``,
-        ``"{esc}q"``, ``"save {f1}"``. ``{delay:seconds}`` pauses before
+        ``"{esc}q"``, ``"save {f1}"``. Modifier chords use ``{mod+key}``:
+        ``"{ramiga+e}"``, ``"{ctrl+c}"``. ``{delay:seconds}`` pauses before
         the next keystroke — use it after ``{return}`` while the guest is
         busy: ``"dir{return}{delay:2.5}echo done{return}"``.
         """

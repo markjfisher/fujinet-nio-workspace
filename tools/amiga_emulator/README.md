@@ -31,6 +31,11 @@ kb.screenshot("/tmp/kilo/shot.png")
   `{f1}`... Names: see `BY_NAME` (`lshift`, `rshift`, `capslock`, `ctrl`,
   `lalt`, `ralt`, `lamiga`, `ramiga`, arrows, `help`, `backspace`,
   `delete`, ...).
+- Modifier chords use `{mod+key}` tokens — modifiers held across the tap:
+  `./scripts/amiberry-type '{ramiga+e}'` opens the Workbench Execute
+  dialog. Modifier aliases: `shift`→lshift, `alt`→lalt, `amiga`→lamiga;
+  the key part is any key name or single character (`{shift+;}`).
+  Verified live: `{ramiga+e}` opens Execute, `{escape}` closes it.
 - `{delay:seconds}` pauses before the next keystroke — use it after
   `{return}` while the guest is busy, or its early keystrokes are
   swallowed: `kb.type_text('dir NIO:{return}{delay:2.5}echo "done"{return}')`.
