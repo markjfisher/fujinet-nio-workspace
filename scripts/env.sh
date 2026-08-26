@@ -101,6 +101,12 @@ setup_nio_environment() {
   export NIO_CONFIG_ATARI_BIN="${NIO_CONFIG_ATARI_BIN:-$NIO_CONFIG/build/atari/bin}"
   export PDCURSES_MSDOS_LIB="${PDCURSES_MSDOS_LIB:-$NIO_BUILD_DIR/pdcurses/msdos-small/pdcurses.lib}"
 
+  export WATCOM=/opt/watcom
+  pathadd_end "$WATCOM/binl64"
+  pathadd_end "$WATCOM/binl"
+  export EDPATH=$WATCOM/eddat
+  export INCLUDE=$WATCOM/h
+
   mkdir -p "$NIO_LOG_DIR" "$NIO_IMAGE_DIR" || return 1
 }
 
