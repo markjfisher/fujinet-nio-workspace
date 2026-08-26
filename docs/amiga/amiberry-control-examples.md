@@ -176,9 +176,24 @@ With a shell/console window focused it does nothing — this caused
 If a stale shell exists, close it or click Workbench first before
 sending the combo.
 - Always send **down then up** as separate `SEND_KEY`s; a stuck modifier
-(e.g. Amiga held) changes what every later keystroke does.
+  (e.g. Amiga held) changes what every later keystroke does.
 - Type slowly into freshly opened windows; give each Return a beat before
-typing the next command.
+  typing the next command.
+- **Workbench requesters close via their underscored button key.**
+  `{escape}` only defocusses an input box. To open and cleanly close the
+  Execute dialog: `{amiga+e}{delay:1.5}{escape}c` — the final `c`
+  invokes the underscored **C**ancel button.
+- **Per-event delay ≠ focus delay.** `--delay` paces keystrokes but does
+  not wait for a new window; at `--delay 0.01` the first character after
+  `{ramiga+e}` is swallowed. Keep the global delay small and insert
+  `{delay:0.3}` after focus-changing chords:
+  `'{ramiga+e}{delay:0.3}Hello{escape}{delay:1.0}c'`.
+- If letters start vanishing (invisible input, dead shortcuts), a
+  modifier is stuck from a dropped release — `Keyboard.release_all()`
+  in the library sends key-up for every modifier as recovery.
+- The library module `tools/amiga_emulator/keyboard.py` accepts explicit
+  multi-modifier chords (`{ctrl+shift+a}`, `{lshift+alt+amiga+x}`) even
+  where a shortcut exists.
 
 
 

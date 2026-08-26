@@ -87,6 +87,19 @@ class RawKeyTableTests(unittest.TestCase):
         )
         self.assertEqual(planned[1][2], [BY_NAME["semicolon"]])
 
+    def test_plan_text_multi_modifier_chords(self) -> None:
+        # explicit multi-modifier form, even where a shortcut exists
+        planned = plan_text("{ctrl+shift+a}")
+        self.assertEqual(
+            planned,
+            [("keys", frozenset([BY_NAME["ctrl"], LSHIFT]), [0x20])])
+        planned = plan_text("{lshift+alt+amiga+x}")
+        self.assertEqual(
+            planned,
+            [("keys",
+              frozenset([LSHIFT, BY_NAME["lalt"], BY_NAME["lamiga"]]),
+              [BY_NAME["x"]])])
+
     def test_plan_text_chord_tokens(self) -> None:
         planned = plan_text("{ramiga+e}")
         self.assertEqual(planned, [("keys", frozenset([RAMIGA]), [0x12])])
@@ -137,6 +150,12 @@ class KeyboardEventTests(unittest.TestCase):
         kb.type_text("{ramiga+e}")
         self.assertEqual(events, ["103:1", "18:1", "18:0", "103:0"])
 
+    def test_type_text_multi_modifier_chord_order(self) -> None:
+        kb, events = make_recording_keyboard()
+        kb.type_text("{ctrl+shift+a}")
+        # holds ascend, taps, releases descend; nothing after the chord
+        self.assertEqual(events, ["96:1", "99:1", "32:1", "32:0", "99:0", "96:0"])
+
     def test_type_text_releases_before_unshifted_run(self) -> None:
         kb, events = make_recording_keyboard()
         kb.type_text(":a")
@@ -173,6 +192,14 @@ class KeyboardEventTests(unittest.TestCase):
         self.assertIn(1.5, sleeps)
         # exactly one down+up pair per character, none during the delay
         self.assertEqual(events, ["32:1", "32:0", "53:1", "53:0"])
+
+
+    def test_release_all_sends_up_for_every_modifier(self) -> None:
+        kb, events = make_recording_keyboard()
+        kb.release_all()
+        self.assertEqual(
+            events,
+            ["96:0", "97:0", "99:0", "100:0", "101:0", "102:0", "103:0"])
 
 
 if __name__ == "__main__":

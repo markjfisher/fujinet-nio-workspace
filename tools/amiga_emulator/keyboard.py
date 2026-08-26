@@ -325,6 +325,19 @@ class Keyboard:
             for mod in sorted(mods, reverse=True):
                 self.release(mod, delay)
 
+    def release_all(self, delay: float | None = None) -> None:
+        """Send key-up for every modifier — recovery for stuck chords.
+
+        If a chord's release events are ever dropped (guest busy, IPC
+        hiccup), every later keystroke is qualified by the stuck
+        modifier: letters become invisible control chars (Ctrl) or
+        capitals (Shift), and Amiga-shortcuts stop firing. This forces
+        all modifiers up.
+        """
+        for name in ("lshift", "rshift", "ctrl", "lalt",
+                     "ralt", "lamiga", "ramiga"):
+            self.release(BY_NAME[name], delay)
+
     def screenshot(self, path: str | Path, settle: float = 1.0) -> None:
         time.sleep(settle)
         self._send_request("SCREENSHOT", str(path))
@@ -354,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:
                     "{delay:seconds} pauses between keystrokes.")
     parser.add_argument("--socket", dest="socket_path",
                         help="Amiberry IPC socket (default: autodetect)")
-    parser.add_argument("--delay", type=float, default=0.01,
-                        help="per-event hold delay in seconds (default 0.01)")
+    parser.add_argument("--delay", type=float, default=0.03,
+                        help="per-event hold delay in seconds (default 0.03)")
     parser.add_argument("--screenshot", metavar="PATH",
                         help="capture a screenshot after typing")
     parser.add_argument("--settle", type=float, default=1.0,

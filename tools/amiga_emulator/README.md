@@ -31,16 +31,39 @@ kb.screenshot("/tmp/kilo/shot.png")
   `{f1}`... Names: see `BY_NAME` (`lshift`, `rshift`, `capslock`, `ctrl`,
   `lalt`, `ralt`, `lamiga`, `ramiga`, arrows, `help`, `backspace`,
   `delete`, ...).
-- Modifier chords use `{mod+key}` tokens — modifiers held across the tap:
-  `./scripts/amiberry-type '{ramiga+e}'` opens the Workbench Execute
-  dialog. Modifier aliases: `shift`→lshift, `alt`→lalt, `amiga`→lamiga;
-  the key part is any key name or single character (`{shift+;}`).
+- Modifier chords use `{mod+key}` tokens — modifiers held across the tap,
+  any number of them, explicit even where a shortcut exists
+  (`{ctrl+shift+a}`): `./scripts/amiberry-type '{ramiga+e}'` opens the
+  Workbench Execute dialog. Modifier aliases: `shift`→lshift,
+  `alt`→lalt, `amiga`→lamiga; the key part is any key name or single
+  character (`{shift+;}`).
   Verified live: `{ramiga+e}` opens Execute, `{escape}` closes it.
+- Workbench requesters close via their underscored button key, not
+  Escape alone: `{escape}` only defocusses the input box. To open and
+  cleanly close the Execute dialog:
+  `./scripts/amiberry-type '{amiga+e}{delay:1.5}{escape}c'`
+  (`c` invokes the underscored **C**ancel button).
 - `{delay:seconds}` pauses before the next keystroke — use it after
   `{return}` while the guest is busy, or its early keystrokes are
   swallowed: `kb.type_text('dir NIO:{return}{delay:2.5}echo "done"{return}')`.
   Range (0, 60] seconds; verified live against a Workbench shell.
 - `\` and `|` have no US-keyboard mapping and raise `UnknownKeyError`.
+- **Two different delays matter.** The per-event `--delay`/`delay` paces
+  individual keystrokes; it does not wait for window focus. Opening a
+  requester (e.g. `{ramiga+e}`) is a focus change, and at low per-event
+  delays its first keystroke gets swallowed. Keep `--delay` small for
+  fast typing and pay only where focus changes (verified live:
+  `--delay 0.01` loses the `H` below, `0.03` does not):
+
+  ```sh
+  # fast: small per-event delay, targeted pause after the chord
+  ./scripts/amiberry-type --delay 0.01 '{ramiga+e}{delay:0.3}Hello{escape}{delay:1.0}c'
+  # simple: one delay covers everything, but slower overall
+  ./scripts/amiberry-type --delay 0.03 '{ramiga+e}Hello{escape}{delay:1.0}c'
+  ```
+- If keystrokes mysteriously vanish (letters invisible, shortcuts dead),
+  a modifier is probably stuck from a dropped chord release:
+  `kb.release_all()` sends key-up for every modifier as recovery.
 
 Shell users can invoke the same typing through the wrapper script:
 
