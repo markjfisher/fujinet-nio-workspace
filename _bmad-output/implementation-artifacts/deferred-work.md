@@ -52,3 +52,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-bwc-client-capabilities.md`
   summary: Add host coverage for the show_screen runtime caps gate (caps != 0 selects the wide decoder + gfx path) in display.c.
   evidence: Verification-gap review showed no test executes show_screen; the branch is platform-coupled to conio/gfx and needs an extraction or harness to test — real gap one hop past the covered decoder boundary, mitigated only by the human-owned live-server check.
+- source_spec: `_bmad-output/implementation-artifacts/spec-bwc-fetch-latency-interpolation.md`
+  summary: Amiga-only snapshot interpolation — split the Amiga loop for WaitTOF-paced rendering (~50 fps) blending the two most recent snapshots via wrap-aware matcher, ω-based angle advance, and stall freeze.
+  evidence: Split from an over-size (~2.2k token) build spec to meet the 1600-token scope standard; sequenced after the fetch-latency instrumentation/reduction goal, whose measured packet interval feeds interp_delay. Includes draw_shapes_at extraction from show_screen, prev/curr ShapePos buffers, ROTATION caps request on Amiga, loop split in run_simulation.c, and host tests for the pure matcher/blender parts.
