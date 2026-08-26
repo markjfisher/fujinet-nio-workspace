@@ -37,6 +37,13 @@ kb.screenshot("/tmp/kilo/shot.png")
   Range (0, 60] seconds; verified live against a Workbench shell.
 - `\` and `|` have no US-keyboard mapping and raise `UnknownKeyError`.
 
+Shell users can invoke the same typing through the wrapper script:
+
+```sh
+./scripts/amiberry-type 'dir NIO:{return}{delay:2.5}echo "Dir Completed!"{return}'
+./scripts/amiberry-type --socket /run/user/1000/amiberry.sock --screenshot /tmp/shot.png 'hello'
+```
+
 ## Prerequisites
 
 Source the workspace environment before building Amiga code or invoking the

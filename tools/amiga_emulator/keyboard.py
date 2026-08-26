@@ -306,3 +306,38 @@ __all__ = [
     "resolve", "char_sequence", "plan_text",
     "LSHIFT", "RSHIFT", "LAMIGA", "RAMIGA", "RETURN", "SPACE",
 ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: type ``text`` into the live Amiberry instance.
+
+    >>> scripts/amiberry-type 'dir NIO:{return}{delay:2.5}echo done{return}'
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="amiberry-type",
+        description="Type text into the live Amiberry instance over IPC. "
+                    "Characters resolve their own Shift chords; special keys "
+                    "use {name} tokens ({return}, {esc}, {space}, {f1}...); "
+                    "{delay:seconds} pauses between keystrokes.")
+    parser.add_argument("--socket", dest="socket_path",
+                        help="Amiberry IPC socket (default: autodetect)")
+    parser.add_argument("--delay", type=float, default=0.01,
+                        help="per-event hold delay in seconds (default 0.01)")
+    parser.add_argument("--screenshot", metavar="PATH",
+                        help="capture a screenshot after typing")
+    parser.add_argument("--settle", type=float, default=1.0,
+                        help="seconds to wait before --screenshot (default 1.0)")
+    parser.add_argument("text", help="text to type, with {token} specials")
+    args = parser.parse_args(argv)
+
+    keyboard = Keyboard(socket=args.socket_path, delay=args.delay)
+    keyboard.type_text(args.text)
+    if args.screenshot:
+        keyboard.screenshot(args.screenshot, settle=args.settle)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
