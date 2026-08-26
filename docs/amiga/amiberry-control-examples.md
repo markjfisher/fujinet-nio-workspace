@@ -12,6 +12,13 @@ Related reading:
 (`amiga-workbench`, `amiga-tests`) and environment setup
 - `[tools/amiga_emulator/README.md](../../tools/amiga_emulator/README.md)` — harness internals
 
+> **Superseded by the library:** the ad-hoc key tables and chord helpers
+> below are now captured as real code in
+> `tools/amiga_emulator/keyboard.py` (full USA0 raw-key map, per-character
+> modifier resolution, `{name}` tokens, `prekey_amiga()`, `type_text()`).
+> Prefer that module for anything new; this document remains as background,
+> launch recipes, and the historical record of the tap-vs-hold experiment.
+
 
 
 ## 1. Launching an interactive session with IPC

@@ -9,6 +9,34 @@ The normal test path does not use a debugger controller. Controllers are
 opt-in diagnostics: they can pause or slow the emulator and must not be used
 as routine regression evidence.
 
+## Keyboard control (`amiga_emulator.keyboard`)
+
+Full raw-key model (AmigaOS Keymap Library USA0 mapping) plus typing helpers
+over the IPC `SEND_KEY` command. Every character knows its own key and
+modifier chord, so callers never hand-roll shift handling:
+
+```python
+from amiga_emulator.keyboard import Keyboard
+
+kb = Keyboard()                        # finds the live IPC socket
+kb.prekey_amiga("e")                   # Amiga+E -> Workbench Execute dialog
+kb.type_text("newshell{return}")
+kb.type_text("nio:bwcn.amiga{return}") # ':' gets its Shift automatically
+kb.screenshot("/tmp/kilo/shot.png")
+```
+
+- Modifiers are held as chords (down, tap, up); releasing first yields the
+  unmodified key — verified live: tap-method `;`, hold-method `:`.
+- Special keys in text use `{name}` tokens: `{return}`, `{esc}`, `{space}`,
+  `{f1}`... Names: see `BY_NAME` (`lshift`, `rshift`, `capslock`, `ctrl`,
+  `lalt`, `ralt`, `lamiga`, `ramiga`, arrows, `help`, `backspace`,
+  `delete`, ...).
+- `{delay:seconds}` pauses before the next keystroke — use it after
+  `{return}` while the guest is busy, or its early keystrokes are
+  swallowed: `kb.type_text('dir NIO:{return}{delay:2.5}echo "done"{return}')`.
+  Range (0, 60] seconds; verified live against a Workbench shell.
+- `\` and `|` have no US-keyboard mapping and raise `UnknownKeyError`.
+
 ## Prerequisites
 
 Source the workspace environment before building Amiga code or invoking the
