@@ -31,7 +31,9 @@ companions:
 
 ## Constraints
 
-- No server changes; the wire contract is fixed as today.
+- Server wire changes must be opt-in capability extensions that preserve the
+  legacy record layout. The implemented `BODY_ID` capability provides stable
+  body identity and deterministic record ordering for Amiga interpolation.
 - All instrumentation and interpolation changes are Amiga-only; atari/bbc/linux/msdos loop, fetch path, and rendering stay byte-identical.
 - Render clock draws only blends of *past* snapshots; never extrapolate. If packets stall, u clamps at 1.0 and freezes on the newest snapshot.
 - Must not regress the 9-byte ROTATION decode path (`shape_decode.h`); angle/omega are consumed by blending but not rendered.

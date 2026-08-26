@@ -1,6 +1,7 @@
 # Bouncy World Amiga client: fetch-latency instrumentation and snapshot interpolation
 
-Status: `TODO`
+Status: `PARTIALLY COMPLETE` — interpolation is live-validated; the separate
+fetch-latency reduction remains open.
 
 ## Goal
 
@@ -22,8 +23,9 @@ actionable scope.
 
 ## Non-goals
 
-- No server changes; the server keeps broadcasting authoritative
-  snapshots exactly as today.
+- Legacy server framing remains unchanged. The implemented opt-in `BODY_ID`
+  capability appends stable body identity only for capable clients, allowing
+  reliable matching of wrap copies.
 - No behaviour change for atari/bbc/linux/msdos targets: their loop,
   fetch path, and rendering stay byte-identical.
 - No extrapolation/dead reckoning: the render clock only ever draws
@@ -89,13 +91,13 @@ Repo: `repos/bounce-world-client-nio` (branch master).
 
 ### Goal 1: instrument and reduce fetch latency
 
-- [ ] Add Amiga-only timing instrumentation: per-fetch counters for
+- [x] Add Amiga-only timing instrumentation: per-fetch counters for
       `network_retry_pause()` hits, `fn_read` calls, bytes read, and
       cycle wall time, plus render time per frame. Display as an
       unobtrusive on-screen overlay (screenshot-readable via the
       Amiberry drive tooling); must not perturb measurements beyond the
       display cost itself.
-- [ ] Run the instrumented client under Amiberry against the live
+- [x] Run the instrumented client under Amiberry against the live
       server (`repos/bounce-world-client-nio/scripts/drive_bwcn.py`)
       and record where the ~200 ms goes.
 - [ ] Reduce the dominant cost based on findings. Candidate levers, in
@@ -108,24 +110,24 @@ Repo: `repos/bounce-world-client-nio` (branch master).
 
 ### Goal 2: Amiga-only snapshot interpolation
 
-- [ ] Factor a shapes-at-positions render entry out of `show_screen()`
+- [x] Factor a shapes-at-positions render entry out of `show_screen()`
       so the interpolated loop can draw decoded shapes without touching
       `app_payload` (other targets keep the existing path).
-- [ ] Add a two-snapshot buffer (prev/curr `ShapePos` arrays + arrival
+- [x] Add a two-snapshot buffer (prev/curr `ShapePos` arrays + arrival
       timestamps; ~1.5 KB worst case at 84 shapes × 9 bytes) filled from
       `bwc_decode_shapes()` on each fetch.
-- [ ] Restructure the Amiga main loop per the design doc's sketch:
+- [x] Restructure the Amiga main loop per the design doc's sketch:
       pump fetch (non-blocking-ish), WaitTOF-paced render of blended
       frames at ~50 fps, `handle_kb()` each frame; other targets keep
       the current loop unchanged.
-- [ ] Implement the wrap-aware matcher (equal `shapeId`, nearest to
-      previous position advanced by one packet, copy-to-copy across
-      seams; implausible moves draw snapshot N directly).
-- [ ] Angle handling: advance by ω between packet angles with per-packet
+- [x] Implement an identity-aware wrap matcher. The server supplies a
+      capability-gated body id, so each visible copy matches the nearest
+      image of the same body rather than an ambiguous shape id.
+- [x] Angle handling: advance by ω between packet angles with per-packet
       re-sync (blend-unwrap alternative documented in the design doc).
-- [ ] Stall behaviour: `u` clamps at 1.0 — freeze on the newest
+- [x] Stall behaviour: `u` clamps at 1.0 — freeze on the newest
       snapshot; never extrapolate.
-- [ ] Host-unit-test the pure parts (matcher, blender, angle advance)
+- [x] Host-unit-test the pure parts (matcher, blender, angle advance)
       in the existing `tests/host` pattern; live-verify smoothness via
       the Amiberry drive tooling with before/after captures.
 
