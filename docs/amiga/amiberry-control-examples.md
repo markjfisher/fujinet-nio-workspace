@@ -64,8 +64,8 @@ sleep briefly before a screenshot (~1 s) so the guest catches up.
 
 ## 3. Rawkey codes used repeatedly
 
-From the proven drive scripts (`/tmp/kilo/drive_bwcn.py`,
-`drive_full.py`):
+From the raw-key model in `tools/amiga_emulator/keyboard.py` (the
+authoritative source; `RAWKEYS`/`BY_NAME`):
 
 
 | Key        | Code |     | Key         | Code |
@@ -112,11 +112,11 @@ def upper(ch): chord([96], RAWKEY[ch])                 # capital letters
 def amiga_e(): chord([103], 18)    # Amiga+E -> Workbench Execute dialog
 ```
 
-`drive_full.py` uses this correct pattern (its `down`/`up`/`colon`
-helpers) — this is what drove the successful client sessions, colons
-included. `drive_bwcn.py` once shipped a sloppy variant —
-`key(96); key(41); key(96)` tapping shift *released* before `;` — which
-has since been fixed to the chord pattern.
+The library's `Keyboard.chord()` implements this pattern; the historical
+drive scripts used hand-rolled `down`/`up`/`colon` helpers to the same
+effect. One earlier ad-hoc variant tapped shift *released* before `;` —
+`key(96); key(41); key(96)` — which is exactly the bug the chord API
+makes impossible.
 
 > **Verified live (Amiberry IPC, 2026-08-26):** in a focused shell,
 > tap-method produced `;`, hold-method produced `:`. Amiberry has no
@@ -129,8 +129,11 @@ trusting it.
 
 ## 4. The canonical client-launch sequence
 
-This is the exact flow used to get from bare Workbench to the Bouncy
-World loop:
+**The checked-in, runnable version of this flow is
+`repos/bounce-world-client-nio/scripts/drive_bwcn.py`** — it uses the
+`amiga_emulator.keyboard` library end to end and is the exemplar to copy
+for driving any guest application. The walkthrough below explains what it
+does step by step.
 
 ```python
 # wait for Workbench to settle after boot
@@ -164,9 +167,10 @@ key(64)   # main loop begins
 (`text()` here uses `chord([96], 41)` for `:` and plain taps for
 unshifted characters — see the chord helper above.)
 
-Full runnable versions are preserved in `docs/amiga/amiberry-control-examples.d/` (`drive_bwcn.py`, `drive_full.py`, `pty_drive.py`; stage flags:
-`all | menu | url | name | run`). Both drive scripts now use the chord
-pattern; copy whichever fits.
+The runnable version lives in
+`repos/bounce-world-client-nio/scripts/drive_bwcn.py` (stages:
+`all | connect | run`); the host-side linux reference soak is
+`repos/bounce-world-client-nio/scripts/pty_drive.py`.
 
 ### Gotchas learned the hard way
 
@@ -199,14 +203,15 @@ sending the combo.
 
 ## 5. Soak / evidence pattern
 
-Soaks ran as tracked background sessions that boot, drive, screenshot
+Soaks run as tracked background sessions that boot, drive, screenshot
 periodically, then tear down:
 
 ```
 background_process start:
-  bash -c '... launch amiberry ... python drive_bwcn.py --socket ... ;
-           sleep 240 ; SCREENSHOT final.png'
-then read /tmp/kilo/*.png at intervals to inspect frames
+  bash -c '... launch amiberry ...
+           python repos/bounce-world-client-nio/scripts/drive_bwcn.py --socket ... ;
+           sleep 240'
+then read the screenshots at intervals to inspect frames
 ```
 
 Conventions used throughout the debugging sessions: screenshots named
@@ -217,25 +222,9 @@ Conventions used throughout the debugging sessions: screenshots named
 
 For diffing Amiga behaviour against a controllable target, the linux
 client runs under a Python pty with scripted keystrokes and full output
-capture (`FN_PORT=/tmp/fujinet-nio-pty ./build/bwcn.linux`; server URL
-and name prefilled via appstore settings, space/space into the loop,
-`q` to quit). Script pattern: `/tmp/kilo/pty_drive.py` —
-
-```python
-master, slave = pty.openpty()
-env = dict(os.environ, FN_PORT="/tmp/fujinet-nio-pty", TERM="vt100")
-pid = os.fork()
-if pid == 0:
-    os.setsid(); os.dup2(slave, 0); os.dup2(slave, 1); os.dup2(slave, 2)
-    os.execve(CLIENT, [CLIENT], env)
-# parent: select() on master, os.write(master, b" ") to send keys,
-# capture everything to a log for analysis
-```
-
-The FujiNet instance itself runs at
-`repos/fujinet-nio/build/fujibus-pty-debug/run-fujinet-nio`
-(config: `fujinet-data/fujinet.yaml`, PTY path `/tmp/fujinet-nio-pty`).
-Script preserved at `docs/amiberry-control-examples.d/pty_drive.py`.
+capture. Checked-in script:
+`repos/bounce-world-client-nio/scripts/pty_drive.py`
+(`FN_PORT=/tmp/fujinet-nio-pty`, space/space into the loop, `q` to quit).
 
 ## 7. Quick checklist: fresh demo/debug run end-to-end
 
