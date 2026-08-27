@@ -121,6 +121,8 @@ The test harness imports `run.py`, which:
 | --- | --- |
 | `run.py` | Amiberry/NIO/serial bridge runner used by integration tests. |
 | `disk.py` | Reusable HDF assembly, archive extraction, and Amiga tree installation helpers. |
+| `rdb.py` | rdbtool wrappers for RDB create/inspect/partition/fsadd on block devices or images. |
+| `cli.py` | `amiga-rdb` CLI (subcommands: info, show, create, add-partition, change-partition, delete-partition, fsadd, fsremove). |
 | `ipc.py` | Small client for the Amiberry Unix IPC text protocol. |
 | `device_debug.py` | Resolves a loaded Exec device and its live vectors. |
 | `debug_snapshot.py` | Decodes registers, IORequests, timeout snapshots, Exec/DOS objects. |
@@ -319,9 +321,194 @@ Use `disk_write_compare` similarly for write payloads. Historical normal NIO
 logs retain only a sector prefix for writes; do not claim full 512-byte equality
 from a truncated log.
 
+## RDB (Rigid Disk Block) Management
+
+`rdb.py` wraps `amitools rdbtool` for inspecting and building Amiga RDB
+partition tables on real block devices (SD cards, loop devices) or HDF images.
+The `cli.py` module exposes this as the `amiga-rdb` command via the
+`scripts/amiga-rdb` invoker.
+
+`scripts/amiga-rdb` uses a project-managed venv (`tools/amiga_emulator/.venv`)
+pinned to a specific amitools git commit (see `pyproject.toml`). Always use
+`scripts/amiga-rdb` rather than invoking `rdbtool` directly via `uvx`, which
+uses the unpinned 0.8.1 PyPI release and has a `delete_partition` bug for
+non-first partitions (fixed in commit `3893dda`, not yet released).
+
+### Connecting a partition as a loop device
+
+If your Amiga RDB data lives inside a host partition (e.g. `/dev/sdc2` typed
+`0x76`), connect it as a loop device first:
+
+```sh
+sudo losetup -fP /dev/sdc2
+losetup -a                  # confirm the assigned device, e.g. /dev/loop0
+```
+
+All `amiga-rdb` commands then target `/dev/loop0`.
+
+### Inspecting an existing RDB
+
+```sh
+# Full RDB info: geometry, partition table, embedded filesystem headers
+sudo scripts/amiga-rdb /dev/loop0 info
+
+# Compact partition/filesystem table only
+sudo scripts/amiga-rdb /dev/loop0 show
+```
+
+### Creating a new RDB (destructive)
+
+For a new HDF image file, pass `--size` to create and allocate the file.
+For an existing file or block device, geometry is derived automatically and
+`-f` is passed to rdbtool automatically to allow overwriting.
+
+```sh
+# New HDF image
+scripts/amiga-rdb /tmp/disk.hdf create --size 2g
+
+# Existing block device (geometry derived from device size)
+sudo scripts/amiga-rdb /dev/loop0 create
+
+# Explicit geometry override
+sudo scripts/amiga-rdb /dev/loop0 create --cylinders 3876 --heads 16 --sectors 63
+```
+
+### Adding partitions
+
+Partitions can be sized in MiB (`--size`) or explicit cylinder ranges
+(`--lo-cyl`/`--hi-cyl`). DOS type accepts built-in names (`FFS`, `PFS3`, etc.)
+or raw hex (`0x50465303`):
+
+```sh
+# 4 GiB boot partition, PFS3 filesystem, bootable, highest boot priority
+sudo scripts/amiga-rdb /dev/loop0 add-partition SDH0 \
+    --size 4096 --dos-type PFS3 --bootable --boot-pri 0
+
+# 8 GiB dev partition, PFS3
+sudo scripts/amiga-rdb /dev/loop0 add-partition SDH1 \
+    --size 8192 --dos-type PFS3
+
+# Remaining space — use cylinder range from 'info' output
+sudo scripts/amiga-rdb /dev/loop0 add-partition SDH2 \
+    --lo-cyl 24966 --hi-cyl 61414 --dos-type PFS3
+```
+
+Built-in DOS type names: `OFS`, `FFS`, `OFS-INT`, `FFS-INT`, `OFS-DC`,
+`FFS-DC`, `PFS3`, `SFS`.
+
+### Changing an existing partition
+
+`change-partition` updates metadata — DOS type, name, boot flags, and DosEnv
+fields — **without touching data or cylinder range**. It is also the correct
+tool when you want to repurpose a partition that cannot be cleanly deleted and
+re-added (e.g. fixing a partition left with wrong settings by a previous tool).
+
+```sh
+# Flip SDH2 from a legacy DOS3 type to PFS3 in-place
+sudo scripts/amiga-rdb /dev/loop0 change-partition SDH2 --dos-type 0x50465303
+
+# Fix Emu68 DosEnv settings: unrestricted mask, adequate buffer count
+sudo scripts/amiga-rdb /dev/loop0 change-partition SDH2 \
+    --dos-type 0x50465303 \
+    --mask 0x7ffffffe \
+    --num-buffer 300 \
+    --max-transfer 0xffffff
+
+# Rename and set bootable
+sudo scripts/amiga-rdb /dev/loop0 change-partition SDH0 \
+    --new-name Work --bootable --boot-pri 0
+
+# Clear bootable flag
+sudo scripts/amiga-rdb /dev/loop0 change-partition SDH0 --no-bootable
+
+# Hide a partition from AmigaOS without removing it from the chain
+sudo scripts/amiga-rdb /dev/loop0 change-partition SDH2 --no-automount
+```
+
+DosEnv flags accepted by `change-partition`: `--mask`, `--num-buffer`,
+`--max-transfer`. The mask is significant on Emu68/PiStorm: `0x7ffffffe`
+allows PFS3 to allocate buffers from Fast RAM above the 16 MB boundary.
+`0x00fffffe` (the FFS default) restricts allocation to the first 16 MB and
+will cause PFS3 to fail to obtain suitable buffers on most Emu68 setups.
+
+### Deleting a partition
+
+```sh
+sudo scripts/amiga-rdb /dev/loop0 delete-partition SDH2
+
+# Always verify afterwards
+sudo scripts/amiga-rdb /dev/loop0 show
+```
+
+### Testing with a scratch image
+
+Never prototype destructive operations on the real SD card. Create a
+throw-away HDF image instead — no `sudo` needed for plain files:
+
+```sh
+scripts/amiga-rdb /tmp/test.hdf create --size 2g
+scripts/amiga-rdb /tmp/test.hdf add-partition DH0 --size 512 --dos-type PFS3 --bootable
+scripts/amiga-rdb /tmp/test.hdf add-partition DH1 --size 512 --dos-type PFS3
+scripts/amiga-rdb /tmp/test.hdf show
+
+scripts/amiga-rdb /tmp/test.hdf delete-partition DH1
+scripts/amiga-rdb /tmp/test.hdf show                          # DH1 must be absent
+
+scripts/amiga-rdb /tmp/test.hdf change-partition DH0 \
+    --dos-type PFS3 --mask 0x7ffffffe --num-buffer 300
+scripts/amiga-rdb /tmp/test.hdf info
+```
+
+### Embedding a filesystem binary (PFS3aio)
+
+For PiStorm/Emu68, PFS3 All-In-One should be embedded directly in the RDB.
+Obtain `PFS3aio` from Aminet or the PFS3 GitHub release, then:
+
+```sh
+# Default --dos-type is 0x50465303 (PFS3aio)
+sudo scripts/amiga-rdb /dev/loop0 fsadd /path/to/PFS3aio
+
+# Or specify explicitly
+sudo scripts/amiga-rdb /dev/loop0 fsadd /path/to/PFS3aio --dos-type 0x50465303
+```
+
+### Removing an embedded filesystem
+
+```sh
+sudo scripts/amiga-rdb /dev/loop0 fsremove --dos-type PFS3
+```
+
+### Python API
+
+```python
+from tools.amiga_emulator.rdb import (
+    info, create, add_partition, change_partition, fsadd, PFS3AIO_DOS_TYPE
+)
+from pathlib import Path
+
+# Inspect
+print(info("/dev/loop0"))
+
+# Build: create RDB, add a bootable PFS3 partition, embed the filesystem
+create("/dev/loop0")
+add_partition("/dev/loop0", "SDH0", size_mb=4096, dos_type=PFS3AIO_DOS_TYPE,
+              bootable=True, boot_pri=0)
+fsadd("/dev/loop0", Path("/path/to/PFS3aio"), PFS3AIO_DOS_TYPE)
+
+# Fix DosEnv settings on an existing partition
+change_partition("/dev/loop0", "SDH2",
+                 dos_type=PFS3AIO_DOS_TYPE,
+                 mask=0x7ffffffe,
+                 num_buffer=300,
+                 max_transfer=0xffffff)
+```
+
+---
+
 ## Inspect and Modify ADF/HDF Images
 
-The harness uses `xdftool` from `amitools` through `uvx`:
+The harness uses `xdftool` from `amitools`. Use `scripts/amiga-rdb`'s managed
+venv or `uvx` for one-off use:
 
 ```sh
 # List an ADF/HDF filesystem

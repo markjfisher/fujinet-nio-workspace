@@ -1,0 +1,12 @@
+[project]
+name = "amiga-emulator-tools"
+version = "0.1.0"
+description = "Amiga emulator helpers and RDB disk management tools"
+requires-python = ">=3.11"
+dependencies = [
+  # 0.8.1 (latest PyPI release) has a delete_partition bug where non-first
+  # partitions are not properly unlinked. Fixed in:
+  # https://github.com/cnvogelg/amitools/commit/3893dda17740752703da8da51bda489bb5730724
+  "amitools @ git+https://github.com/cnvogelg/amitools.git@3893dda17740752703da8da51bda489bb5730724",
+  "Pillow>=10.0",
+]
