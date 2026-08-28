@@ -1,4 +1,14 @@
-"""CLI for Amiga RDB (Rigid Disk Block) operations via amitools rdbtool."""
+"""Single entry point for Amiga tooling.
+
+Top-level subcommand groups:
+
+  amiga rdb   <device> <subcommand>  -- RDB partition management (rdbtool)
+  amiga adf   <subcommand>           -- ADF floppy image operations (xdftool)
+  amiga ipc   [options] <command>    -- Amiberry Unix IPC socket client
+  amiga type  [options] <text>       -- Send keystrokes to Amiberry guest
+
+Invoke via scripts/amiga, which activates the project-managed venv.
+"""
 
 from __future__ import annotations
 
@@ -6,158 +16,242 @@ import argparse
 import sys
 from pathlib import Path
 
-from .rdb import (
-    DOS_TYPES,
-    PFS3AIO_DOS_TYPE,
-    add_partition,
-    change_partition,
-    create,
-    delete_partition,
-    fsadd,
-    fsremove,
-    info,
-    show,
-)
 
+# ---------------------------------------------------------------------------
+# RDB subcommands
+# ---------------------------------------------------------------------------
+
+def _build_rdb_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
+    from .rdb import DOS_TYPES, PFS3AIO_DOS_TYPE
+
+    rdb = sub.add_parser("rdb", help="RDB partition management (rdbtool)")
+    rdb.add_argument("device", help="block device or disk image (e.g. /dev/loop0, disk.hdf)")
+    rsub = rdb.add_subparsers(dest="rdb_command", metavar="SUBCOMMAND")
+    rsub.required = True
+
+    rsub.add_parser("info", help="show full RDB information")
+    rsub.add_parser("show", help="show partition and filesystem table")
+
+    cp = rsub.add_parser("create", help="create a new RDB (destructive)")
+    cp.add_argument("--size", metavar="SIZE", help="image size for new files, e.g. 2g, 512m")
+    cp.add_argument("--cylinders", type=int)
+    cp.add_argument("--heads", type=int)
+    cp.add_argument("--sectors", type=int)
+
+    ap = rsub.add_parser("add-partition", help="add a partition to an existing RDB")
+    ap.add_argument("name", help="Amiga partition name (e.g. SDH0)")
+    sg = ap.add_mutually_exclusive_group(required=True)
+    sg.add_argument("--size", type=int, metavar="MB", help="partition size in MiB")
+    sg.add_argument("--lo-cyl", type=int, help="first cylinder (use with --hi-cyl)")
+    ap.add_argument("--hi-cyl", type=int)
+    ap.add_argument("--dos-type", default="FFS", metavar="TYPE",
+                    help=f"DOS type name or hex. Built-ins: {', '.join(sorted(DOS_TYPES))}")
+    ap.add_argument("--bootable", action="store_true")
+    ap.add_argument("--boot-pri", type=int, default=0)
+    ap.add_argument("--flags", type=lambda x: int(x, 0), default=0)
+
+    chg = rsub.add_parser("change-partition",
+                           help="change partition metadata without touching data")
+    chg.add_argument("name", help="partition name (e.g. SDH2)")
+    chg.add_argument("--new-name")
+    chg.add_argument("--dos-type", metavar="TYPE")
+    chg.add_argument("--bootable", action="store_true", default=None)
+    chg.add_argument("--no-bootable", dest="bootable", action="store_false")
+    chg.add_argument("--no-automount", dest="automount", action="store_false", default=None)
+    chg.add_argument("--automount", dest="automount", action="store_true")
+    chg.add_argument("--boot-pri", type=int)
+    chg.add_argument("--num-buffer", type=int, help="DosEnv buffer count (e.g. 300)")
+    chg.add_argument("--mask", type=lambda x: int(x, 0),
+                     help="DMA address mask (e.g. 0x7ffffffe)")
+    chg.add_argument("--max-transfer", type=lambda x: int(x, 0),
+                     help="max transfer size (e.g. 0xffffff)")
+
+    dp = rsub.add_parser("delete-partition", help="delete a named partition")
+    dp.add_argument("name")
+
+    fa = rsub.add_parser("fsadd", help="embed a filesystem binary into the RDB")
+    fa.add_argument("binary", type=Path)
+    fa.add_argument("--dos-type", default=PFS3AIO_DOS_TYPE, metavar="TYPE",
+                    help=f"default: {PFS3AIO_DOS_TYPE} (PFS3aio)")
+
+    fr = rsub.add_parser("fsremove", help="remove an embedded filesystem by DOS type")
+    fr.add_argument("--dos-type", required=True, metavar="TYPE")
+
+
+def _run_rdb(args: argparse.Namespace) -> int:
+    from .rdb import (
+        DOS_TYPES, add_partition, change_partition, create,
+        delete_partition, fsadd, fsremove, info, show,
+    )
+
+    def resolve(raw: str) -> str:
+        upper = raw.upper()
+        if upper in DOS_TYPES:
+            return DOS_TYPES[upper]
+        try:
+            int(raw, 16)
+        except ValueError:
+            raise SystemExit(
+                f"Unknown DOS type '{raw}'. Built-ins: {', '.join(sorted(DOS_TYPES))}"
+            )
+        return raw
+
+    dev = args.device
+    cmd = args.rdb_command
+
+    if cmd == "info":
+        print(info(dev), end="")
+    elif cmd == "show":
+        print(show(dev), end="")
+    elif cmd == "create":
+        create(dev, size=args.size, cylinders=args.cylinders,
+               heads=args.heads, sectors=args.sectors)
+        print(f"RDB created on {dev}")
+    elif cmd == "add-partition":
+        dos_type = resolve(args.dos_type)
+        add_partition(dev, args.name, lo_cyl=args.lo_cyl, hi_cyl=args.hi_cyl,
+                      dos_type=dos_type, flags=args.flags, boot_pri=args.boot_pri,
+                      bootable=args.bootable, size_mb=args.size)
+        print(f"Partition {args.name!r} added to {dev}")
+    elif cmd == "change-partition":
+        dos_type = resolve(args.dos_type) if args.dos_type else None
+        dosenv = {}
+        if args.num_buffer is not None:
+            dosenv["num_buffer"] = args.num_buffer
+        if args.mask is not None:
+            dosenv["mask"] = args.mask
+        if args.max_transfer is not None:
+            dosenv["max_transfer"] = args.max_transfer
+        change_partition(dev, args.name, new_name=args.new_name, dos_type=dos_type,
+                         bootable=args.bootable, automount=args.automount,
+                         boot_pri=args.boot_pri, **dosenv)
+        print(f"Partition {args.name!r} updated on {dev}")
+    elif cmd == "delete-partition":
+        delete_partition(dev, args.name)
+        print(f"Partition {args.name!r} deleted from {dev}")
+    elif cmd == "fsadd":
+        if not args.binary.exists():
+            print(f"error: filesystem binary not found: {args.binary}", file=sys.stderr)
+            return 1
+        dos_type = resolve(args.dos_type)
+        fsadd(dev, args.binary, dos_type)
+        print(f"Filesystem {dos_type} embedded into {dev}")
+    elif cmd == "fsremove":
+        dos_type = resolve(args.dos_type)
+        fsremove(dev, dos_type)
+        print(f"Filesystem {dos_type} removed from {dev}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# ADF subcommands
+# ---------------------------------------------------------------------------
+
+def _build_adf_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
+    from .adf import ADF_DD_SIZE, ADF_HD_SIZE, FS_TYPES
+
+    adf = sub.add_parser("adf", help="ADF floppy image operations (xdftool)")
+    asub = adf.add_subparsers(dest="adf_command", metavar="SUBCOMMAND")
+    asub.required = True
+
+    cr = asub.add_parser("create", help="create an ADF from a directory or blank")
+    cr.add_argument("output", type=Path, help="output .adf file")
+    cr.add_argument("--from-dir", type=Path, metavar="DIR",
+                    help="pack this host directory into the ADF")
+    cr.add_argument("--label", default="Workbench",
+                    help="Amiga volume label (default: Workbench)")
+    cr.add_argument("--fs", default="ffs", choices=FS_TYPES,
+                    help="filesystem type (default: ffs)")
+    cr.add_argument("--size", default=ADF_DD_SIZE,
+                    help=f"image size (default: {ADF_DD_SIZE} = standard DD floppy; "
+                         f"HD floppy = {ADF_HD_SIZE})")
+
+    ls = asub.add_parser("list", help="list files in an ADF")
+    ls.add_argument("adf", type=Path)
+
+    rd = asub.add_parser("read", help="extract a file from an ADF")
+    rd.add_argument("adf", type=Path)
+    rd.add_argument("src", help="Amiga path inside the ADF (e.g. C/Dir)")
+    rd.add_argument("dest", type=Path, help="host destination path")
+
+    wr = asub.add_parser("write", help="write a host file into an ADF")
+    wr.add_argument("adf", type=Path)
+    wr.add_argument("src", type=Path, help="host source file")
+    wr.add_argument("dest", help="Amiga destination path (e.g. C/MyProg)")
+
+
+def _run_adf(args: argparse.Namespace) -> int:
+    from .adf import create_blank, create_from_dir, list_files, read_file, write_file
+
+    cmd = args.adf_command
+
+    if cmd == "create":
+        if args.from_dir:
+            if not args.from_dir.is_dir():
+                print(f"error: not a directory: {args.from_dir}", file=sys.stderr)
+                return 1
+            create_from_dir(args.output, args.from_dir,
+                            label=args.label, fs=args.fs, size=args.size)
+            print(f"ADF created from {args.from_dir}: {args.output}")
+        else:
+            create_blank(args.output, label=args.label, fs=args.fs, size=args.size)
+            print(f"Blank ADF created: {args.output}")
+    elif cmd == "list":
+        print(list_files(args.adf), end="")
+    elif cmd == "read":
+        read_file(args.adf, args.src, args.dest)
+        print(f"Extracted {args.src} -> {args.dest}")
+    elif cmd == "write":
+        if not args.src.is_file():
+            print(f"error: source not found: {args.src}", file=sys.stderr)
+            return 1
+        write_file(args.adf, args.src, args.dest)
+        print(f"Wrote {args.src} -> {args.dest} in {args.adf}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# IPC / type passthrough subcommands
+# ---------------------------------------------------------------------------
+
+def _build_ipc_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
+    ipc = sub.add_parser("ipc", help="Amiberry Unix IPC socket client")
+    ipc.add_argument("--socket", dest="socket_path",
+                     help="Amiberry IPC socket path")
+    ipc.add_argument("--timeout", type=float, default=2.0)
+    ipc.add_argument("command", help="IPC command, e.g. GET_STATUS")
+    ipc.add_argument("argument", nargs="*")
+
+
+def _build_type_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
+    typ = sub.add_parser("type", help="send keystrokes to the Amiberry guest")
+    typ.add_argument("--socket", dest="socket_path",
+                     help="Amiberry IPC socket path")
+    typ.add_argument("--delay", type=float, default=0.03,
+                     help="per-keystroke delay in seconds (default: 0.03)")
+    typ.add_argument("--screenshot", metavar="PATH",
+                     help="save a screenshot after typing")
+    typ.add_argument("--settle", type=float, default=1.0,
+                     help="wait this many seconds before the screenshot")
+    typ.add_argument("text", help="text to type, with {token} specials")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="amiga-rdb",
-        description="Inspect and manage Amiga Rigid Disk Block (RDB) structures on block devices or images.",
+        prog="amiga",
+        description="Amiga tooling: RDB management, ADF images, Amiberry IPC and keyboard.",
     )
-    parser.add_argument(
-        "device",
-        type=str,
-        help="block device or disk image (e.g. /dev/loop0, /dev/sdc2, disk.hdf)",
-    )
-
-    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    sub = parser.add_subparsers(dest="group", metavar="GROUP")
     sub.required = True
-
-    # -- info
-    sub.add_parser(
-        "info",
-        help="show full RDB information (geometry, partitions, filesystems)",
-    )
-
-    # -- show
-    sub.add_parser(
-        "show",
-        help="show partition and filesystem table",
-    )
-
-    # -- create
-    create_p = sub.add_parser(
-        "create",
-        help="create a new RDB on the device (destructive)",
-    )
-    create_p.add_argument(
-        "--size",
-        metavar="SIZE",
-        help="image size for new files, e.g. 2g, 512m (rdbtool size= syntax)",
-    )
-    create_p.add_argument("--cylinders", type=int, help="number of cylinders")
-    create_p.add_argument("--heads", type=int, help="number of heads")
-    create_p.add_argument("--sectors", type=int, help="sectors per track")
-
-    # -- add-partition
-    add_p = sub.add_parser(
-        "add-partition",
-        help="add a partition to an existing RDB",
-    )
-    add_p.add_argument("name", help="Amiga partition name (e.g. SDH0)")
-    size_group = add_p.add_mutually_exclusive_group(required=True)
-    size_group.add_argument("--size", type=int, metavar="MB", help="partition size in MiB")
-    size_group.add_argument("--lo-cyl", type=int, help="first cylinder (use with --hi-cyl)")
-    add_p.add_argument("--hi-cyl", type=int, help="last cylinder (use with --lo-cyl)")
-    add_p.add_argument(
-        "--dos-type",
-        default="FFS",
-        metavar="TYPE",
-        help=(
-            "DOS type as a built-in name or hex (e.g. PFS3, 0x50465303). "
-            f"Built-ins: {', '.join(sorted(DOS_TYPES))}"
-        ),
-    )
-    add_p.add_argument("--bootable", action="store_true", help="set bootable flag")
-    add_p.add_argument("--boot-pri", type=int, default=0, help="boot priority (default: 0)")
-    add_p.add_argument("--flags", type=lambda x: int(x, 0), default=0, help="raw partition flags")
-
-    # -- delete-partition
-    del_p = sub.add_parser(
-        "delete-partition",
-        help="delete a named partition from the RDB",
-    )
-    del_p.add_argument("name", help="partition name to delete")
-
-    # -- change-partition
-    chg_p = sub.add_parser(
-        "change-partition",
-        help="change attributes of an existing partition (dos type, name, boot flags) without touching data",
-    )
-    chg_p.add_argument("name", help="partition name to change (e.g. SDH2)")
-    chg_p.add_argument("--new-name", help="rename the partition")
-    chg_p.add_argument(
-        "--dos-type",
-        metavar="TYPE",
-        help=(
-            "new DOS type as a built-in name or hex. "
-            f"Built-ins: {', '.join(sorted(DOS_TYPES))}"
-        ),
-    )
-    chg_p.add_argument("--bootable", action="store_true", default=None, help="set bootable flag")
-    chg_p.add_argument("--no-bootable", dest="bootable", action="store_false", help="clear bootable flag")
-    chg_p.add_argument("--no-automount", dest="automount", action="store_false", default=None,
-                       help="disable automount (hides partition from AmigaOS — workaround for broken delete)")
-    chg_p.add_argument("--automount", dest="automount", action="store_true",
-                       help="enable automount")
-    chg_p.add_argument("--boot-pri", type=int, help="boot priority")
-    chg_p.add_argument("--num-buffer", type=int, help="number of DosEnv buffers (e.g. 300)")
-    chg_p.add_argument("--mask", type=lambda x: int(x, 0), help="DMA address mask (e.g. 0x7ffffffe)")
-    chg_p.add_argument("--max-transfer", type=lambda x: int(x, 0), help="max transfer size (e.g. 0xffffff)")
-
-    # -- fsadd
-    fsadd_p = sub.add_parser(
-        "fsadd",
-        help="embed a filesystem binary into the RDB (e.g. PFS3aio)",
-    )
-    fsadd_p.add_argument("binary", type=Path, help="filesystem binary file")
-    fsadd_p.add_argument(
-        "--dos-type",
-        default=PFS3AIO_DOS_TYPE,
-        metavar="TYPE",
-        help=f"DOS type for this filesystem (default: {PFS3AIO_DOS_TYPE} = PFS3aio)",
-    )
-
-    # -- fsremove
-    fsrem_p = sub.add_parser(
-        "fsremove",
-        help="remove an embedded filesystem from the RDB by DOS type",
-    )
-    fsrem_p.add_argument(
-        "--dos-type",
-        required=True,
-        metavar="TYPE",
-        help="DOS type to remove (hex or built-in name)",
-    )
-
+    _build_rdb_parser(sub)
+    _build_adf_parser(sub)
+    _build_ipc_parser(sub)
+    _build_type_parser(sub)
     return parser
-
-
-def resolve_dos_type(raw: str) -> str:
-    """Accept a built-in name (e.g. PFS3) or a raw hex string (e.g. 0x50465303)."""
-    upper = raw.upper()
-    if upper in DOS_TYPES:
-        return DOS_TYPES[upper]
-    # validate it looks like a hex value
-    try:
-        int(raw, 16) if raw.startswith("0x") or raw.startswith("0X") else int(raw, 16)
-    except ValueError:
-        raise SystemExit(
-            f"Unknown DOS type '{raw}'. Use a built-in name or a 0xRRGGBBAA hex value.\n"
-            f"Built-ins: {', '.join(sorted(DOS_TYPES))}"
-        )
-    return raw
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,75 +259,30 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.command == "info":
-            print(info(args.device), end="")
-
-        elif args.command == "show":
-            print(show(args.device), end="")
-
-        elif args.command == "create":
-            create(
-                args.device,
-                size=args.size,
-                cylinders=args.cylinders,
-                heads=args.heads,
-                sectors=args.sectors,
-            )
-            print(f"RDB created on {args.device}")
-
-        elif args.command == "add-partition":
-            dos_type = resolve_dos_type(args.dos_type)
-            add_partition(
-                args.device,
-                args.name,
-                lo_cyl=args.lo_cyl,
-                hi_cyl=args.hi_cyl,
-                dos_type=dos_type,
-                flags=args.flags,
-                boot_pri=args.boot_pri,
-                bootable=args.bootable,
-                size_mb=args.size,
-            )
-            print(f"Partition {args.name!r} added to {args.device}")
-
-        elif args.command == "delete-partition":
-            delete_partition(args.device, args.name)
-            print(f"Partition {args.name!r} deleted from {args.device}")
-
-        elif args.command == "change-partition":
-            dos_type = resolve_dos_type(args.dos_type) if args.dos_type else None
-            dosenv = {}
-            if args.num_buffer is not None:
-                dosenv["num_buffer"] = args.num_buffer
-            if args.mask is not None:
-                dosenv["mask"] = args.mask
-            if args.max_transfer is not None:
-                dosenv["max_transfer"] = args.max_transfer
-            change_partition(
-                args.device,
-                args.name,
-                new_name=args.new_name,
-                dos_type=dos_type,
-                bootable=args.bootable,
-                automount=args.automount,
-                boot_pri=args.boot_pri,
-                **dosenv,
-            )
-            print(f"Partition {args.name!r} updated on {args.device}")
-
-        elif args.command == "fsadd":
-            if not args.binary.exists():
-                print(f"error: filesystem binary not found: {args.binary}", file=sys.stderr)
-                return 1
-            dos_type = resolve_dos_type(args.dos_type)
-            fsadd(args.device, args.binary, dos_type)
-            print(f"Filesystem {dos_type} embedded into {args.device} from {args.binary}")
-
-        elif args.command == "fsremove":
-            dos_type = resolve_dos_type(args.dos_type)
-            fsremove(args.device, dos_type)
-            print(f"Filesystem {dos_type} removed from {args.device}")
-
+        if args.group == "rdb":
+            return _run_rdb(args)
+        elif args.group == "adf":
+            return _run_adf(args)
+        elif args.group == "ipc":
+            from .ipc import main as ipc_main
+            # Reconstruct argv for the ipc module's own parser
+            ipc_argv = []
+            if args.socket_path:
+                ipc_argv += ["--socket", args.socket_path]
+            ipc_argv += ["--timeout", str(args.timeout)]
+            ipc_argv += [args.command] + list(args.argument)
+            return ipc_main(ipc_argv)
+        elif args.group == "type":
+            from .keyboard import main as keyboard_main
+            type_argv = []
+            if args.socket_path:
+                type_argv += ["--socket", args.socket_path]
+            type_argv += ["--delay", str(args.delay)]
+            if args.screenshot:
+                type_argv += ["--screenshot", args.screenshot]
+            type_argv += ["--settle", str(args.settle)]
+            type_argv += [args.text]
+            return keyboard_main(type_argv)
     except SystemExit:
         raise
     except Exception as exc:

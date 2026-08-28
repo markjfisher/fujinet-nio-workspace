@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Single entry point for all Amiga tooling.
+# Uses the project-managed venv (tools/amiga_emulator/.venv) which pins
+# amitools to a specific commit to avoid the delete_partition bug in 0.8.1.
+#
+# Usage:
+#   scripts/amiga rdb <device> <subcommand> [options]
+#   scripts/amiga adf <subcommand> [options]
+#   scripts/amiga ipc [--socket PATH] <command> [args]
+#   scripts/amiga type [--socket PATH] [--delay N] <text>
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+export PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE="${PYTHONDONTWRITEBYTECODE:-1}"
+exec uv run --project "$ROOT/tools/amiga_emulator" python3 -m tools.amiga_emulator.cli "$@"

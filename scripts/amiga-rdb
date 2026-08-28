@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
+# Compatibility shim — delegates to: scripts/amiga rdb <device> <subcommand>
 set -euo pipefail
-
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-
-export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-export PYTHONDONTWRITEBYTECODE="${PYTHONDONTWRITEBYTECODE:-1}"
-exec uv run --project "$ROOT/tools/amiga_emulator" python3 -m tools.amiga_emulator.cli "$@"
+exec "$SCRIPT_DIR/amiga" rdb "$@"

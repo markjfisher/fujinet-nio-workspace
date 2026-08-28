@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
+# Compatibility shim — delegates to: scripts/amiga ipc [options] <command>
 set -euo pipefail
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
-export PYTHONPATH="$ROOT/tools${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m amiga_emulator.ipc "$@"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/amiga" ipc "$@"
