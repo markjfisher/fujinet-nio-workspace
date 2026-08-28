@@ -17,6 +17,7 @@ files:
   - repos/fujinet-nio-driver/build/amiga/fujinet-load-resident
   - repos/fujinet-nio-driver/build/amiga/fujinet-mount
   - repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud
+  - repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange
 
   # Core FujiNet apps (nio-core-apps)
   - repos/nio-core-apps/build/amiga/bin/fapp
