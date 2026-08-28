@@ -108,6 +108,49 @@ Potential areas to validate, not yet fixes: explicit high-speed serial flags,
 serial receive buffer semantics/placement, querying/draining timing around the
 initial response, physical cable/electrical quality, and UART clock accuracy.
 
+## Stage completed after the initial handoff: receive-buffer contract
+
+The installed NDK `serial.device/SDCMD_SETPARAMS` autodoc supplies a concrete
+constraint: `io_RBufLen` must be at least 64 bytes **and a multiple of 64**.
+The prior backend incorrectly used the SLIP wire-buffer size directly:
+
+```c
+FN_SERIAL_BACKEND_WIRE_BUF_SIZE = (FN_MAX_PACKET_SIZE * 2) + 2
+```
+
+For the active 1024-byte packet configuration that is 2050 bytes, not a
+multiple of 64. The backend now keeps its 2050-byte SLIP codec buffer but
+rounds the serial.device receive allocation upward to 2112 bytes before
+`SDCMD_SETPARAMS`.
+
+This is a documented serial.device contract correction, not a timing or
+protocol change. It is the first production change justified by the receive
+overrun evidence. Do not enable `SERF_RAD_BOOGIE` yet: the NDK says it skips
+break/parity and other checks, so test the valid buffer configuration first.
+
+### Real-hardware result: buffer correction did not resolve the overrun
+
+The user rebuilt, copied the updated `fujinet-nio.device`, restarted the
+Amiga, and confirmed the User-Startup baud setup. At 57,600 the first
+exchange remains:
+
+```text
+0 16 0 2 16 7 6 1
+```
+
+That is unchanged: `FN_ERR_TRANSPORT`, `CMD_READ`, `SerErr_LineErr`, receive
+overrun. Normal FLS still fails. Therefore the invalid 2050-byte allocation
+was a real documented configuration defect worth retaining, but it was not
+the cause of this short-first-response overrun.
+
+The next session should not repeat the buffer-size experiment. Its narrow
+question is whether the current 1 ms poll/reply timing or missing explicit
+high-speed serial-device mode makes the first response burst vulnerable. Read
+the `RAD_BOOGIE` and receive-path portions of the serial.device autodoc, then
+compare a minimal pending `CMD_READ` strategy against the existing
+`SDCMD_QUERY`/timer loop. Preserve the successful 19,200/38,400 behaviour and
+do not hide the error merely by disabling line-status checks.
+
 ## Verification completed
 
 After each diagnostic change:

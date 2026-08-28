@@ -68,6 +68,11 @@ context:
   57,600 baud. The diagnostic implementation was extended, without changing
   exchange behaviour, to identify the failed serial operation, its native
   error, and the meaningful high byte of `io_Status`.
+- 2026-08-28 — Corrected the backend's non-compliant serial.device receive
+  buffer allocation: the 2050-byte SLIP wire buffer is not a 64-byte multiple,
+  so `io_RBufLen` is now rounded upward to 2112 as required by the NDK.
+  Real-hardware retest retained the same `CMD_READ` receive overrun at 57,600,
+  so this correction is preserved but is not the root-cause fix.
 
 ## Design Notes
 
