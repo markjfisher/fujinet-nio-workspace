@@ -148,7 +148,7 @@ def _run_rdb(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def _build_adf_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
-    from .adf import ADF_DD_SIZE, ADF_HD_SIZE, FS_TYPES
+    from .adf import ADF_DD_SIZE, ADF_HD_SIZE, ADF_VALID_SIZES, FS_TYPES
 
     adf = sub.add_parser("adf", help="ADF floppy image operations (xdftool)")
     asub = adf.add_subparsers(dest="adf_command", metavar="SUBCOMMAND")
@@ -162,9 +162,10 @@ def _build_adf_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
                     help="Amiga volume label (default: Workbench)")
     cr.add_argument("--fs", default="ffs", choices=FS_TYPES,
                     help="filesystem type (default: ffs)")
-    cr.add_argument("--size", default=ADF_DD_SIZE,
-                    help=f"image size (default: {ADF_DD_SIZE} = standard DD floppy; "
-                         f"HD floppy = {ADF_HD_SIZE})")
+    cr.add_argument("--size", default=ADF_DD_SIZE, choices=ADF_VALID_SIZES,
+                    help=f"floppy size: {ADF_DD_SIZE} = DD (default, auto-promotes to HD "
+                         f"if needed), {ADF_HD_SIZE} = HD. ADF is a physical floppy "
+                         f"format — for larger content use HDF.")
 
     ls = asub.add_parser("list", help="list files in an ADF")
     ls.add_argument("adf", type=Path)

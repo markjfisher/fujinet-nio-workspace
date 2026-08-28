@@ -5,11 +5,17 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from .disk import run_xdf, run_xdf_optional
+import subprocess
 
-# Standard Amiga DD floppy: 80 tracks × 2 sides × 11 sectors × 512 B
+from .disk import run_xdf, run_xdf_optional, xdf_tool
+
+# ADF images are physical floppy emulations — only two valid sizes exist.
+# DD: 80 tracks × 2 sides × 11 sectors × 512 B = 880 KB
+# HD: 80 tracks × 2 sides × 22 sectors × 512 B = 1760 KB
+# For larger content use HDF (hard disk image) via scripts/amiga adf create-hdf.
 ADF_DD_SIZE = "880k"
 ADF_HD_SIZE = "1760k"
+ADF_VALID_SIZES = (ADF_DD_SIZE, ADF_HD_SIZE)
 
 FS_TYPES = ("ofs", "ffs", "ofs-intl", "ffs-intl", "ofs-dc", "ffs-dc")
 
@@ -27,11 +33,15 @@ def create_from_dir(
     xdftool's `pack` command creates the image, formats it, and copies the
     tree in one shot.  The volume label comes from --label; the host directory
     name is not used.
+
+    If size is the default (880k = DD floppy) but the content doesn't fit,
+    the size is automatically promoted to HD (1760k) before trying.  If HD
+    still doesn't fit, a clear error is raised suggesting HDF instead.  Pass
+    an explicit --size to skip auto-promotion.
     """
     import tempfile, shutil as _shutil
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.unlink(missing_ok=True)
 
     # xdftool pack derives the volume label from the *directory name* it is
     # given, not from a flag.  Stage to a temp dir named after the label so the
@@ -39,7 +49,48 @@ def create_from_dir(
     with tempfile.TemporaryDirectory(prefix="amiga-adf-") as tmp:
         staged = Path(tmp) / label
         _shutil.copytree(source_dir, staged)
-        run_xdf(output, "pack", str(staged), fs, f"size={size}")
+
+        # ADF is a physical floppy format: only DD (880k) and HD (1760k) are valid.
+        # Auto-promote from DD to HD if the default was requested; if the caller
+        # pinned a specific size, honour it and report a clear error on failure.
+        if size == ADF_DD_SIZE:
+            sizes_to_try = [ADF_DD_SIZE, ADF_HD_SIZE]
+        else:
+            sizes_to_try = [size]
+
+        # xdftool pack uses type=adf_hd (not size=) to select HD format.
+        # DD is the default when no type option is given.
+        _SIZE_TO_TYPE = {ADF_DD_SIZE: None, ADF_HD_SIZE: "adf_hd"}
+
+        last_combined = ""
+        for attempt_size in sizes_to_try:
+            output.unlink(missing_ok=True)
+            cmd = [*xdf_tool(), str(output), "pack", str(staged), fs]
+            adf_type = _SIZE_TO_TYPE[attempt_size]
+            if adf_type:
+                cmd.append(f"type={adf_type}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                if attempt_size != size:
+                    print(f"  Note: content too large for DD floppy ({size}), "
+                          f"using HD floppy ({attempt_size})")
+                return
+            last_combined = result.stdout + result.stderr
+            if "No Free Blocks" not in last_combined:
+                import sys as _sys
+                print(last_combined, end="", file=_sys.stderr)
+                raise subprocess.CalledProcessError(result.returncode, result.args)
+
+        content_kb = sum(
+            f.stat().st_size for f in source_dir.rglob("*") if f.is_file()
+        ) // 1024
+        raise ValueError(
+            f"Directory content (~{content_kb} KB) is too large for any ADF floppy "
+            f"(HD floppy max is {ADF_HD_SIZE} = 1760 KB). "
+            f"ADF images are physical floppy emulations with fixed sizes. "
+            f"Use HDF format for larger content: "
+            f"'scripts/build-amiga-hdf' or 'uvx --from amitools xdftool disk.hdf pack <dir> ffs size=<n>m'."
+        )
 
 
 def create_blank(
@@ -52,7 +103,8 @@ def create_blank(
     """Create an empty formatted ADF image with no files."""
     output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
-    run_xdf(output, "create", f"size={size}")
+    create_arg = "type=adf_hd" if size == ADF_HD_SIZE else "type=adf"
+    run_xdf(output, "create", create_arg)
     run_xdf(output, "format", label, fs)
 
 
