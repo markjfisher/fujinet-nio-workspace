@@ -9,4 +9,5 @@ dependencies = [
   # https://github.com/cnvogelg/amitools/commit/3893dda17740752703da8da51bda489bb5730724
   "amitools @ git+https://github.com/cnvogelg/amitools.git@3893dda17740752703da8da51bda489bb5730724",
   "Pillow>=10.0",
+  "PyYAML>=6.0",
 ]

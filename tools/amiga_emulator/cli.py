@@ -167,6 +167,15 @@ def _build_adf_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
                          f"if needed), {ADF_HD_SIZE} = HD. ADF is a physical floppy "
                          f"format — for larger content use HDF.")
 
+    rel = asub.add_parser("release",
+                          help="build the release ADF from configs/amiga/release-adf.yaml")
+    rel.add_argument("--manifest", type=Path,
+                     help="override manifest path (default: configs/amiga/release-adf.yaml)")
+    rel.add_argument("--output", type=Path,
+                     help="override output path from the manifest")
+    rel.add_argument("--dry-run", action="store_true",
+                     help="print resolved file list without building")
+
     ls = asub.add_parser("list", help="list files in an ADF")
     ls.add_argument("adf", type=Path)
 
@@ -181,11 +190,75 @@ def _build_adf_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
     wr.add_argument("dest", help="Amiga destination path (e.g. C/MyProg)")
 
 
+def _workspace_root() -> Path:
+    """Return the workspace root (two levels above this package's scripts/)."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _run_adf_release(args: argparse.Namespace) -> int:
+    import yaml  # bundled with amitools's deps; fall back to tomllib if absent
+
+    root = _workspace_root()
+    default_manifest = root / "configs" / "amiga" / "release-adf.yaml"
+    manifest_path = Path(args.manifest) if args.manifest else default_manifest
+
+    if not manifest_path.exists():
+        print(f"error: manifest not found: {manifest_path}", file=sys.stderr)
+        return 1
+
+    with manifest_path.open() as fh:
+        manifest = yaml.safe_load(fh)
+
+    label = manifest.get("label", "NIORelease")
+    output = Path(args.output) if args.output else root / manifest["output"]
+    raw_files: list[str] = manifest.get("files", [])
+
+    resolved: list[Path] = []
+    missing: list[Path] = []
+    for entry in raw_files:
+        p = root / entry
+        if p.is_file():
+            resolved.append(p)
+        else:
+            missing.append(p)
+
+    if args.dry_run:
+        print(f"Manifest: {manifest_path}")
+        print(f"Label:    {label}")
+        print(f"Output:   {output}")
+        print(f"\nFiles ({len(resolved)} found, {len(missing)} missing):")
+        for p in resolved:
+            size_kb = p.stat().st_size // 1024
+            print(f"  {size_kb:4d} KB  {p.relative_to(root)}")
+        if missing:
+            print("\nMissing (build these first):")
+            for p in missing:
+                print(f"  MISSING  {p.relative_to(root)}")
+        total_kb = sum(p.stat().st_size for p in resolved) // 1024
+        print(f"\nTotal: {total_kb} KB  (DD floppy capacity: 880 KB)")
+        return 0
+
+    if missing:
+        print("error: missing files (build them first):", file=sys.stderr)
+        for p in missing:
+            print(f"  {p.relative_to(root)}", file=sys.stderr)
+        return 1
+
+    from .adf import create_from_files
+    output.parent.mkdir(parents=True, exist_ok=True)
+    create_from_files(output, resolved, label=label)
+    total_kb = sum(p.stat().st_size for p in resolved) // 1024
+    print(f"NIORelease ADF: {output}  ({total_kb} KB in {len(resolved)} files)")
+    return 0
+
+
 def _run_adf(args: argparse.Namespace) -> int:
     from .adf import create_blank, create_from_dir, list_files, read_file, write_file
 
     cmd = args.adf_command
 
+    if cmd == "release":
+        return _run_adf_release(args)
     if cmd == "create":
         if args.from_dir:
             if not args.from_dir.is_dir():

@@ -1,0 +1,36 @@
+# NIORelease ADF manifest
+# Defines the files packed into NIORelease.adf by `scripts/amiga adf release`.
+#
+# Each entry is a path relative to the workspace root.  All files land flat in
+# the ADF root (no subdirectories).  The ADF label is set by `label` below.
+#
+# To rebuild the ADF after editing this file:
+#   scripts/amiga adf release
+
+label: NIORelease
+output: build/NIORelease.adf
+
+files:
+  # Driver
+  - repos/fujinet-nio-driver/build/amiga/fujinet-nio.device
+  - repos/fujinet-nio-driver/build/amiga/fujinet-disk.device
+  - repos/fujinet-nio-driver/build/amiga/fujinet-load-resident
+  - repos/fujinet-nio-driver/build/amiga/fujinet-mount
+  - repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud
+
+  # Core FujiNet apps (nio-core-apps)
+  - repos/nio-core-apps/build/amiga/bin/fapp
+  - repos/nio-core-apps/build/amiga/bin/fboot
+  - repos/nio-core-apps/build/amiga/bin/fdrive
+  - repos/nio-core-apps/build/amiga/bin/fhost
+  - repos/nio-core-apps/build/amiga/bin/fin
+  - repos/nio-core-apps/build/amiga/bin/fls
+  - repos/nio-core-apps/build/amiga/bin/fmount
+  - repos/nio-core-apps/build/amiga/bin/fmountrestore
+  - repos/nio-core-apps/build/amiga/bin/fout
+
+  # Apps (nio-apps)
+  - repos/nio-apps/build/amiga/bin/clock
+
+  # Bounce World client
+  - repos/bounce-world-client-nio/build/bwcn.amiga

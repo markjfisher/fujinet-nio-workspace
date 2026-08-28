@@ -93,6 +93,31 @@ def create_from_dir(
         )
 
 
+def create_from_files(
+    output: Path,
+    files: list[Path],
+    *,
+    label: str = "Workbench",
+    fs: str = "ffs",
+    size: str = ADF_DD_SIZE,
+) -> None:
+    """Create an ADF image from a flat list of host files.
+
+    Files are staged into a temporary directory (flat — no subdirectory
+    structure) and packed with xdftool.  The volume label is set by *label*.
+    Auto-promotes from DD to HD if content does not fit; raises ValueError
+    if it exceeds HD capacity.
+    """
+    import tempfile, shutil as _shutil
+
+    with tempfile.TemporaryDirectory(prefix="amiga-adf-") as tmp:
+        staged = Path(tmp) / label
+        staged.mkdir()
+        for src in files:
+            _shutil.copy2(src, staged / src.name)
+        create_from_dir(output, staged, label=label, fs=fs, size=size)
+
+
 def create_blank(
     output: Path,
     *,
