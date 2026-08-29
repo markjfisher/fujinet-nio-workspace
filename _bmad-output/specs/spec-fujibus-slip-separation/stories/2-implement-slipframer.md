@@ -2,7 +2,7 @@
 title: 'Implement SlipFramer'
 type: 'refactor'
 created: '2026-08-29'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '51a1f76f631468999b07b9611dc678314620b7c5'
 context: []
@@ -59,10 +59,10 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio/include/fujinet/io/transport/slip_framer.h` -- declare `SlipFramer : public IFramer` with `_rxBuffer` member and override declarations
-- [ ] `repos/fujinet-nio/src/lib/slip_framer.cpp` -- implement `poll` (drain channel bytes into `_rxBuffer`), `nextPacket` (move `extractSlipFrame` logic here operating on `_rxBuffer`), `sendPacket` (write SLIP-framed bytes to channel via `ch.write`)
-- [ ] `repos/fujinet-nio/tests/test_slip_framer.cpp` -- new test file: retarget all 7 existing cases from `test_fujibus_transport_framing.cpp` to use `SlipFramer` directly; add `feed()` helper that calls `framer.poll(ch)`; add new cases per I/O matrix (incomplete-frame recovery, only-C0-bytes-kept)
-- [ ] `repos/fujinet-nio/scripts/update_cmake_sources.py` -- run after adding `slip_framer.cpp` to regenerate CMake source lists
+- [x] `repos/fujinet-nio/include/fujinet/io/transport/slip_framer.h` -- declare `SlipFramer : public IFramer` with `_rxBuffer` member and override declarations
+- [x] `repos/fujinet-nio/src/lib/slip_framer.cpp` -- implement `poll` (drain channel bytes into `_rxBuffer`), `nextPacket` (move `extractSlipFrame` logic here operating on `_rxBuffer`), `sendPacket` (write SLIP-framed bytes to channel via `ch.write`)
+- [x] `repos/fujinet-nio/tests/test_slip_framer.cpp` -- new test file: retarget all 7 existing cases from `test_fujibus_transport_framing.cpp` to use `SlipFramer` directly; add `feed()` helper that calls `framer.poll(ch)`; add new cases per I/O matrix (incomplete-frame recovery, only-C0-bytes-kept)
+- [x] `repos/fujinet-nio/scripts/update_cmake_sources.py` -- run after adding `slip_framer.cpp` to regenerate CMake source lists
 
 **Acceptance Criteria:**
 - Given `SlipFramer` with a normal SLIP frame pushed, when `poll` then `nextPacket` called, then returns `true` with the correct raw SLIP bytes
@@ -89,3 +89,34 @@ The `IFramer::nextPacket` contract delivers the raw SLIP frame (including delimi
 - `cd repos/fujinet-nio && ctest -V --test-dir build/fujibus-pty-debug --tests-regex fujinet-nio-tests` -- expected: all tests pass including new `SlipFramer` suite and unchanged `FujiBusTransport SLIP framing` suite
 - `grep -r "0xC0\|SlipByte\|extractSlip\|_rxBuffer" repos/fujinet-nio/include/fujinet/io/transport/slip_framer.h repos/fujinet-nio/src/lib/slip_framer.cpp` -- expected: matches in SlipFramer files only (correct)
 - `grep -r "FujiBusPacket\|IORequest\|IOResponse" repos/fujinet-nio/src/lib/slip_framer.cpp` -- expected: no matches (SlipFramer has zero FujiBus knowledge)
+
+## Suggested Review Order
+
+**Interface contract**
+
+- IFramer pure-virtual contract — the shape SlipFramer must satisfy
+  [`iframer.h:1`](../../../../repos/fujinet-nio/include/fujinet/io/transport/iframer.h#L1)
+
+**SlipFramer implementation**
+
+- SlipFramer declaration: `ByteBuffer _rxBuffer`, three override signatures
+  [`slip_framer.h:1`](../../../../repos/fujinet-nio/include/fujinet/io/transport/slip_framer.h#L1)
+
+- `nextPacket`: consecutive-END skip and stale-delimiter logic (the critical bug fix)
+  [`slip_framer.cpp:27`](../../../../repos/fujinet-nio/src/lib/slip_framer.cpp#L27)
+
+- `poll`: channel drain into `_rxBuffer`
+  [`slip_framer.cpp:13`](../../../../repos/fujinet-nio/src/lib/slip_framer.cpp#L13)
+
+- `sendPacket`: verbatim pass-through; packet is pre-SLIP-encoded
+  [`slip_framer.cpp:70`](../../../../repos/fujinet-nio/src/lib/slip_framer.cpp#L70)
+
+**Tests**
+
+- SlipFramer test suite: 8 cases covering normal, stale-END, only-ENDs, back-to-back, incomplete
+  [`test_slip_framer.cpp:1`](../../../../repos/fujinet-nio/tests/test_slip_framer.cpp#L1)
+
+**Build wiring**
+
+- POSIX CMake: `slip_framer.cpp` added to source list
+  [`CMakeLists_posix.cmake:178`](../../../../repos/fujinet-nio/CMakeLists_posix.cmake#L178)

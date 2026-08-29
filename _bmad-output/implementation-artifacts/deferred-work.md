@@ -55,3 +55,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-bwc-fetch-latency-interpolation.md`
   summary: Amiga-only snapshot interpolation — split the Amiga loop for WaitTOF-paced rendering (~50 fps) blending the two most recent snapshots via wrap-aware matcher, ω-based angle advance, and stall freeze.
   evidence: Split from an over-size (~2.2k token) build spec to meet the 1600-token scope standard; sequenced after the fetch-latency instrumentation/reduction goal, whose measured packet interval feeds interp_delay. Includes draw_shapes_at extraction from show_screen, prev/curr ShapePos buffers, ROTATION caps request on Amiga, loop split in run_simulation.c, and host tests for the pure matcher/blender parts.
+
+- source_spec: `_bmad-output/specs/spec-fujibus-slip-separation/stories/2-implement-slipframer.md`
+  summary: SlipFramer has no reset()/flush() method; callers cannot force re-synchronisation after a link reset or framing error.
+  evidence: On channel reconnect, stale _rxBuffer state persists with no public API to discard it.
+
+- source_spec: `_bmad-output/specs/spec-fujibus-slip-separation/stories/2-implement-slipframer.md`
+  summary: When no END marker is found in _rxBuffer, the entire buffer is cleared, silently discarding any partial frame data.
+  evidence: Pre-existing behavior from extractSlipFrame; valid mid-stream reconnect data is lost without notification.
+
+- source_spec: `_bmad-output/specs/spec-fujibus-slip-separation/stories/2-implement-slipframer.md`
+  summary: No test for END+END empty-frame input (common SLIP idle sequence); framer behavior is unspecified for this input.
+  evidence: Edge case hunter identified gap; current code retains last END byte but this is not explicitly tested.
+
+- source_spec: `_bmad-output/specs/spec-fujibus-slip-separation/stories/2-implement-slipframer.md`
+  summary: SlipFramer test frames always have identical small payload; frames with longer payloads or sentinel-adjacent byte values are never exercised.
+  evidence: make_valid_frame always produces the same device/cmd/param combination.
