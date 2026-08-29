@@ -2,7 +2,7 @@
 title: 'Make Amiga FIN a Slot Catalog client'
 type: 'bugfix'
 created: '2026-08-29'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '30bb7f42fe72b682b0b7b342a926c64a7be7431a'
 context:
