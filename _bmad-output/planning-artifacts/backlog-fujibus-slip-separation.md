@@ -184,3 +184,19 @@ by this refactor; it is on the Amiga side of the broker, not the ESP side.
 - `tests/test_fujibus_transport_framing.cpp` — SLIP framing tests written in
   this session; adapt these to target `SlipFramer` directly
 - `tests/test_embed_core.cpp` — `InMemoryChannel` pattern for integration tests
+
+---
+
+## Follow-on: Replace #ifdef build-profile chain with per-platform profile files
+
+**Context:** `build_profile.cpp` currently selects the active `BuildProfile` via a long `#elif defined(FN_BUILD_*)` preprocessor chain. After the IFramer separation (Stories 1–4), framer selection is by construction in `bootstrap.cpp` — the `TransportKind` switch drives it. A cleaner pattern (already used for POSIX channel creation in `channel_factory.cpp`) is CMake-selected per-platform source files: each build target gets its own `build_profile_<target>.cpp` that returns a hardcoded `BuildProfile` with no preprocessor. `TransportKind` then becomes pure metadata/introspection, and `bootstrap.cpp`'s switch can be replaced by a platform-specific bootstrap or factory.
+
+**Why now is a good time:** The IFramer work is done; framer and transport concerns are cleanly separated. The `build_profile.cpp` file is the last remaining concentration of `#ifdef`-based platform selection in the transport/framing layer.
+
+**Rough scope:**
+- Add `build_profile_<target>.cpp` per build variant (amiga_rs232, fujibus_pty, esp32_usb_cdc, zorro, …)
+- CMake selects the right file per preset/env
+- Delete `build_profile.cpp`'s `#elif` chain
+- Optionally flatten `bootstrap.cpp`'s `TransportKind` switch into per-platform bootstrap files
+
+**Non-goals:** Any new hardware or protocol support.
