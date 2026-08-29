@@ -306,6 +306,31 @@ results = [
 ]
 
 [[test]]
+name = "amiga-fin-slot-catalog"
+project = "core-apps"
+app = "fmount"
+driver = true
+no_static_mountlists = true
+timeout = 60
+activity_timeout = 45
+no_activity_timeout = 30
+startup = "startup/amiga-fin-slot-catalog.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/amiga-fin-slot-catalog"
+results = [
+  "fin-load.result",
+  "fin-host.result",
+  "fin-relative.result",
+  "fin-relative-mount.result",
+  "fin-relative-dir.result",
+  "fin-full.result",
+  "fin-full-mount.result",
+  "fin-full-dir.result",
+  "fin-clear.result",
+  "fin-clear-mount.result",
+]
+
+[[test]]
 name = "diskdevice-dynamic-fmount-dd"
 project = "apps"
 app = "wifitest"

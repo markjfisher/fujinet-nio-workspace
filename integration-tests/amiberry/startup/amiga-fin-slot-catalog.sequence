@@ -1,0 +1,36 @@
+C:Assign T: RAM:
+C:FailAt 30
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:Echo "LOAD RC=$RC" >DH0:fin-load.result
+C:FHOST host:/ >DH0:fin-host.result
+C:Echo "FHOST RC=$RC" >>DH0:fin-host.result
+C:FIN 0 standard.adf >DH0:fin-relative.result
+C:Echo "FIN RELATIVE RC=$RC" >>DH0:fin-relative.result
+C:FMOUNT 0 DN0: RO >DH0:fin-relative-mount.result
+C:Echo "FMOUNT RELATIVE RC=$RC" >>DH0:fin-relative-mount.result
+C:Dir DN0: >DH0:fin-relative-dir.result
+C:Echo "DIR RELATIVE RC=$RC" >>DH0:fin-relative-dir.result
+C:FIN 1 host:/second.adf >DH0:fin-full.result
+C:Echo "FIN FULL RC=$RC" >>DH0:fin-full.result
+C:FMOUNT 1 DN1: RO >DH0:fin-full-mount.result
+C:Echo "FMOUNT FULL RC=$RC" >>DH0:fin-full-mount.result
+C:Dir DN1: >DH0:fin-full-dir.result
+C:Echo "DIR FULL RC=$RC" >>DH0:fin-full-dir.result
+C:FOUT 0 >DH0:fin-clear.result
+C:Echo "FOUT RC=$RC" >>DH0:fin-clear.result
+C:FMOUNT 0 DN2: RO >DH0:fin-clear-mount.result
+C:Echo "FMOUNT CLEAR RC=$RC" >>DH0:fin-clear-mount.result
+C:FLS host:/amiga-e2e-complete/amiga-fin-slot-catalog >NIL:
+C:Echo "RESULTS-BEGIN"
+C:Type DH0:fin-load.result
+C:Type DH0:fin-host.result
+C:Type DH0:fin-relative.result
+C:Type DH0:fin-relative-mount.result
+C:Type DH0:fin-relative-dir.result
+C:Type DH0:fin-full.result
+C:Type DH0:fin-full-mount.result
+C:Type DH0:fin-full-dir.result
+C:Type DH0:fin-clear.result
+C:Type DH0:fin-clear-mount.result
+C:Echo "RESULTS-END"
+C:Echo "E2E COMPLETE"
