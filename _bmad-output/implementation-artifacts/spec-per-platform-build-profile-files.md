@@ -2,7 +2,7 @@
 title: 'Replace build_profile.cpp #ifdef chain with per-platform source files'
 type: 'refactor'
 created: '2026-08-29'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '1d483364b0cf7c89bf50dbd2fbf70a2ee9cf3ce7'
 review_loop_iteration: 0
 context: []
