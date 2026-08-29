@@ -1,0 +1,64 @@
+- id: "1"
+  title: Define IFramer interface
+  description: >-
+    Add `include/fujinet/io/transport/iframer.h` with the pure virtual `IFramer`
+    contract (`poll`, `nextPacket`, `sendPacket`). No implementation — this is the
+    interface that Stories 2, 3, and 4 build against.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    See brownfield.md for the exact interface contract (poll, nextPacket, sendPacket
+    signatures). No other files change in this story. Add a compile-only test or
+    static_assert to confirm the header is self-contained.
+
+- id: "2"
+  title: Implement SlipFramer
+  description: >-
+    Create `SlipFramer : IFramer` in `slip_framer.h` / `slip_framer.cpp`, moving
+    all SLIP logic (extractSlipFrame, _rxBuffer, C0-delimiter handling) out of
+    `FujiBusTransport`. Retarget existing SLIP framing tests to `SlipFramer` directly.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    All existing SLIP framing tests in `tests/test_fujibus_transport_framing.cpp`
+    must be moved/adapted to target `SlipFramer::nextPacket` directly — do not delete
+    them or leave them testing via FujiBusTransport. The C0-consecutive-delimiter and
+    stale-delimiter cases must be preserved and pass. FujiBusTransport is not changed
+    in this story — SlipFramer is new code alongside the existing class. Add any new
+    SlipFramer unit tests required by the test strategy in brownfield.md
+    (pass-through, boundary conditions, reset after broken frame).
+
+- id: "3"
+  title: Refactor FujiBusTransport to accept IFramer
+  description: >-
+    Remove all SLIP logic from `FujiBusTransport` (`_rxBuffer`, `extractSlipFrame`,
+    `0xC0`/`SlipByte::End` references); inject `IFramer&` via constructor. Wire
+    `SlipFramer` into all existing POSIX/RS-232/PTY/USB-CDC build-profile factories.
+    Full ctest suite must be green.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    After this story, `grep -r "0xC0\|SlipByte::End\|extractSlipFrame\|_rxBuffer"
+    src/lib/fujibus_transport.cpp include/fujinet/io/transport/fujibus_transport.h`
+    must return empty. Framer is injected — `FujiBusTransport(Channel& channel,
+    IFramer& framer)`. Existing POSIX builds construct `SlipFramer slipFramer;
+    FujiBusTransport transport(channel, slipFramer);` at the factory/profile level.
+    The `test_embed_core.cpp` InMemoryChannel integration tests must remain unchanged
+    and pass. Run the full `fujibus-pty-debug` ctest suite and confirm zero regressions.
+
+- id: "4"
+  title: Add NativeFramer and Zorro build-profile wiring
+  description: >-
+    Implement `NativeFramer : IFramer` as a pass-through or length-prefix framer with
+    no SLIP logic. Wire it into a notional Zorro build profile by construction — no
+    `#ifdef` for framer selection anywhere. Add NativeFramer unit tests.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    NativeFramer must compile and be reachable from a build-profile selection point
+    even though no physical Zorro hardware exists yet. Framer selection must be by
+    construction only — `grep -r "#ifdef" src/lib/native_framer.cpp
+    src/lib/slip_framer.cpp src/lib/fujibus_transport.cpp` must return empty for any
+    framer-selection guard. Add unit tests for NativeFramer covering pass-through
+    correctness and length-prefix behaviour (per brownfield.md test strategy). Confirm
+    the full ctest suite remains green.
