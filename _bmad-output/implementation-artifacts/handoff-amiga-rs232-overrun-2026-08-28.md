@@ -165,6 +165,33 @@ Viable directions not yet attempted:
 3. **Reduce to 38,400 baud**: Declare 57,600 unsolvable without changing
    the serial I/O architecture. 38,400 works reliably.
 
+## C0 C0 empty-frame issue — root cause and fix
+
+After the SLIP_END warm-up experiment (attempt #11) was reverted, the user
+continued seeing persistent `C0 C0` (empty SLIP frames) in ESP logs on every
+FLS/exchange call. The Amiga driver source was clean. The cause was a stale
+corrupted state in the ESP's `FujiBusTransport::_rxBuffer`.
+
+**What happened:**
+
+During the warm-up experiment, the Amiga sent a bare `0xC0` byte before the
+full SLIP frame. The ESP received `[C0_warmup][C0_start][data][C0_end]`.
+`extractSlipFrame` extracted `[C0_warmup, C0_start]` as a valid-but-empty
+frame ("invalid FujiBus frame, dropped") and left `[data][C0_end]` in
+`_rxBuffer`. Every subsequent Amiga request starts with a leading `0xC0`
+(normal SLIP frame start), which combines with the stale trailing `C0` in
+`_rxBuffer` to produce another empty frame. The buffer never self-heals.
+`_rxBuffer` is never cleared between client connections (it is a persistent
+`std::vector` in `FujiBusTransport`).
+
+**Immediate fix for user:** power-cycle the ESP to clear `_rxBuffer`.
+
+**Code fix:** `fujibus_transport.cpp` `receive()` and `receiveResponse()` now
+loop and silently discard empty SLIP frames (`C0 C0`, frame.size() == 2)
+instead of returning false after the first empty frame. Consecutive SLIP_END
+bytes are valid inter-packet separators per RFC 1055 and must not corrupt
+subsequent framing. Fix committed in `repos/fujinet-nio`.
+
 ## Relevant files
 
 - `repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_serial_backend.c`
