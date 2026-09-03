@@ -52,5 +52,5 @@ Driver host: `make tests` / native disk tests from `amiga/README.md`. Broker Exp
 - `ACTION_DIE` may fail if the **filesystem handler** still has locks/handles/notifications; then do not eject. That refusal is the handler’s job, not a DOS-library guarantee.
 - `ACTION_FLUSH` failure stops `FUMOUNT` (no DIE, no eject).
 - `ACTION_DIE` is the classic/OS 1.3 terminate packet; use it on purpose, not OS 3.2 `Dismount`.
-- `ACTION_DIE` may leave the DOS node; `RemDosEntry` is **not** part of `FUMOUNT` in this epic (separate admin tool later if needed). Proving the handler is gone must use DOS-list `dol_Task`, not `DeviceProc`/`Dir` on `DNx:` (that can restart the handler).
+- After successful handler retirement and TD_EJECT, FUMOUNT removes the DNx DosList device entry with RemDosEntry while holding LDF_WRITE | LDF_DEVICES. FUMOUNT does not call FreeDosEntry on MountList-created entries. If LockDosList fails, FindDosEntry misses, or the entry is not successfully removed, FUMOUNT returns failure because the DNx DOS registration has not been fully retired. Proving the handler is gone must use DOS-list `dol_Task`, not `DeviceProc`/`Dir` on `DNx:` (that can restart the handler).
 - Do not use `Assign DISMOUNT` (name only, no resource free).
