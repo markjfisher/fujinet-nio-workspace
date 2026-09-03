@@ -34,7 +34,9 @@ target and toolchain in the task review.
 
 Use `backlog/` for active workspace-level goals and move completed goal files
 to `completed/`. Keep repository-specific implementation details in the
-owning repository's documentation.
+owning repository's documentation. Active BMad spec folders live in
+`_bmad-output/specs/`; accepted specs move to `_bmad-output/completed-specs/`
+and are not living requirements.
 
 ## Amiga DiskDevice status and future media work
 

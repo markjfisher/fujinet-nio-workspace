@@ -9,7 +9,7 @@ companions:
   - ../../../docs/amiga/amiberry-testing.md
   - ../../../repos/fujinet-nio-driver/amiga/README.md
 sources:
-  - ../../../backlog/amiga-fumount-clean-driver-removal.md
+  - ../../../completed/amiga-fumount-clean-driver-removal.md
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate. Source documents listed in frontmatter are for traceability — consult them only if you need narrative rationale or prose color this contract intentionally omits.

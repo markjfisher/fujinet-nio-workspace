@@ -96,7 +96,7 @@ Amiberry suite.
   preserving the CLI surface and propagating typed failures.
 - [x] Focused tests — make the new guest case pass and run the minimum build
   checks for the application and service owners touched.
-- [x] `backlog/amiga-fin-slot-catalog.md` — maintain the user-facing backlog
+- [x] `completed/amiga-fin-slot-catalog.md` — maintain the user-facing backlog
   record; do not mix in the independent writable-media regression.
 
 **Acceptance Criteria:**

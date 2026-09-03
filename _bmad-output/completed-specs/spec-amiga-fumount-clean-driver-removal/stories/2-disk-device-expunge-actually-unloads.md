@@ -6,7 +6,7 @@ status: 'done'
 baseline_commit: '0b30f64ec86a46a30ba7f560aa7cf76b65eec88f'
 review_loop_iteration: 0
 context:
-  - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
+  - '{project-root}/_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
   - '{project-root}/docs/agent-test-policy.md'
 ---
 

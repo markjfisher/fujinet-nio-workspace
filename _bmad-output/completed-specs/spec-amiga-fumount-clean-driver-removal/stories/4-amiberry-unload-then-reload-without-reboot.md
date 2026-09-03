@@ -6,11 +6,11 @@ status: 'done'
 baseline_commit: '6761b2e58ea6e8fd0854cf00e9f8c5a8f4be55d2'
 review_loop_iteration: 0
 context:
-  - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
+  - '{project-root}/_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
   - '{project-root}/docs/agent-test-policy.md'
-  - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/stories/1-fumount-retires-the-dos-handler-then-ejects.md'
-  - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/stories/2-disk-device-expunge-actually-unloads.md'
-  - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/stories/3-add-fujinet-unload-resident.md'
+  - '{project-root}/_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/stories/1-fumount-retires-the-dos-handler-then-ejects.md'
+  - '{project-root}/_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/stories/2-disk-device-expunge-actually-unloads.md'
+  - '{project-root}/_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/stories/3-add-fujinet-unload-resident.md'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">

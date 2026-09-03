@@ -1,6 +1,10 @@
 # Amiga FIN must populate the Slot Catalog
 
-Status: `TODO`
+Status: `DONE`
+
+Accepted 2026-08-29 (`_bmad-output/implementation-artifacts/spec-amiga-fin-slot-catalog.md`).
+The parked `diskdevice-adf` `CMD_UPDATE`/`Assign DISMOUNT` requester was
+fixed separately in the Amiberry sequence (FUMOUNT then remount).
 
 ## Problem
 

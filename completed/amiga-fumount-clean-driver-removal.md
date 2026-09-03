@@ -1,3 +1,13 @@
+# Amiga FUMOUNT and clean resident-driver unload
+
+Status: `DONE`
+
+Accepted 2026-09-03. Stories 1–4 of
+`_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/`
+are `done`. Durable behaviour is in `docs/amiga/disk-media-architecture.md`.
+
+The original Q&A source follows.
+
 ## Extensions to support unloading device drivers and dismounting network drives cleanly
 
 ## Question 1
