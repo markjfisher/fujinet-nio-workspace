@@ -2,7 +2,8 @@
 title: 'Amiberry unload then reload without reboot'
 type: 'feature'
 created: '2026-09-03'
-status: 'draft'
+status: 'done'
+baseline_commit: '6761b2e58ea6e8fd0854cf00e9f8c5a8f4be55d2'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
@@ -73,9 +74,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `integration-tests/amiberry/startup/diskdevice-unload-reload.sequence` -- full unload/reload/remount CLI script; captures RC for every lifecycle step -- CAP-9.
-- [ ] `integration-tests/amiberry/test_diskdevice_unload_reload.py` -- pytest node asserts RC=0 for all lifecycle steps + expected stdout strings + post-reload I/O content.
-- [ ] `integration-tests/amiberry/tests.toml` -- register [[test]] for diskdevice-unload-reload.
+- [x] `integration-tests/amiberry/startup/diskdevice-unload-reload.sequence` -- full unload/reload/remount CLI script; captures RC for every lifecycle step -- CAP-9.
+- [x] `integration-tests/amiberry/test_diskdevice_unload_reload.py` -- pytest node asserts RC=0 for all lifecycle steps + expected stdout strings + post-reload I/O content.
+- [x] `integration-tests/amiberry/tests.toml` -- register [[test]] for diskdevice-unload-reload.
 
 **Acceptance Criteria:**
 - Given a mounted DN0: with known ADF content, when the sequence FUMOUNTs, unloads disk, unloads nio, reloads nio, reloads disk, and remounts, then Dir/Type show the original known file content and all lifecycle-critical steps return RC=0.
@@ -125,3 +126,47 @@ Because `FailAt 21` allows commands to fail without terminating the sequence, th
 - `source "$NIO_WORKSPACE/scripts/env.sh" && uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_unload_reload.py::test_unload_reload_without_reboot` -- one pytest node, not full suite.
 
 Do not run `scripts/amiga-tests` (full suite) as the gate. The gate is the single pytest node above.
+
+## Suggested Review Order
+
+**Amiberry sequence: unload/reload lifecycle**
+
+- Full unload→reload→remount CLI script with RC capture for every step
+  [`diskdevice-unload-reload.sequence:3`](../../../../integration-tests/amiberry/startup/diskdevice-unload-reload.sequence#L3)
+
+- FUMOUNT DN0: after proving initial I/O works
+  [`diskdevice-unload-reload.sequence:12`](../../../../integration-tests/amiberry/startup/diskdevice-unload-reload.sequence#L12)
+
+- Unload disk then nio (disk is broker client, must unload first)
+  [`diskdevice-unload-reload.sequence:15`](../../../../integration-tests/amiberry/startup/diskdevice-unload-reload.sequence#L15)
+
+- Reload nio then disk (broker must exist before disk)
+  [`diskdevice-unload-reload.sequence:20`](../../../../integration-tests/amiberry/startup/diskdevice-unload-reload.sequence#L20)
+
+- Post-reload FMOUNT and I/O to prove same-session success
+  [`diskdevice-unload-reload.sequence:25`](../../../../integration-tests/amiberry/startup/diskdevice-unload-reload.sequence#L25)
+
+**Pytest node: comprehensive RC and content assertions**
+
+- Test function with run_amiga_case fixture
+  [`test_diskdevice_unload_reload.py:1`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L1)
+
+- Initial mount/Dir/Type assertions: RC=0 + known content
+  [`test_diskdevice_unload_reload.py:4`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L4)
+
+- FUMOUNT assertion: RC=0 + Ejected message
+  [`test_diskdevice_unload_reload.py:12`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L12)
+
+- Unload assertions: RC=0 + Unloaded strings for both devices
+  [`test_diskdevice_unload_reload.py:16`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L16)
+
+- Reload assertions: RC=0 + Resident loaded strings for both devices
+  [`test_diskdevice_unload_reload.py:24`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L24)
+
+- Post-reload I/O assertions: RC=0 + content matches original
+  [`test_diskdevice_unload_reload.py:32`](../../../../integration-tests/amiberry/test_diskdevice_unload_reload.py#L32)
+
+**Test registration**
+
+- tests.toml [[test]] entry with timeout, results list
+  [`tests.toml:342`](../../../../integration-tests/amiberry/tests.toml#L342)

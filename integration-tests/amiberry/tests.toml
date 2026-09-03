@@ -340,6 +340,33 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-unload-reload"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 90
+activity_timeout = 75
+screenshot_quiet = 15
+screenshot_interval = 1.0
+no_activity_timeout = 30
+startup = "startup/diskdevice-unload-reload.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-unload-reload"
+results = [
+  "initial-fmount.result",
+  "initial-dir.result",
+  "initial-type.result",
+  "fumount.result",
+  "unload-disk.result",
+  "unload-nio.result",
+  "reload-nio.result",
+  "reload-disk.result",
+  "post-fmount.result",
+  "post-dir.result",
+  "post-type.result",
+]
+
+[[test]]
 name = "amiga-fin-slot-catalog"
 project = "core-apps"
 app = "fmount"

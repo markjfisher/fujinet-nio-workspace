@@ -1,0 +1,43 @@
+C:Assign T: RAM:
+C:FailAt 21
+
+C:FMOUNT 11 DN0: RO >DH0:initial-fmount.result
+C:Echo "FMOUNT RC=$RC" >>DH0:initial-fmount.result
+C:Dir DN0: >DH0:initial-dir.result
+C:Echo "DIR RC=$RC" >>DH0:initial-dir.result
+C:Type DN0:KNOWN.TXT >DH0:initial-type.result
+C:Echo "TYPE RC=$RC" >>DH0:initial-type.result
+
+C:FUMOUNT DN0: >DH0:fumount.result
+C:Echo "FUMOUNT RC=$RC" >>DH0:fumount.result
+
+C:fujinet-unload-resident fujinet-disk.device >DH0:unload-disk.result
+C:Echo "UNLOAD DISK RC=$RC" >>DH0:unload-disk.result
+C:fujinet-unload-resident fujinet-nio.device >DH0:unload-nio.result
+C:Echo "UNLOAD NIO RC=$RC" >>DH0:unload-nio.result
+
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device >DH0:reload-nio.result
+C:Echo "LOAD NIO RC=$RC" >>DH0:reload-nio.result
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device >DH0:reload-disk.result
+C:Echo "LOAD DISK RC=$RC" >>DH0:reload-disk.result
+
+C:FMOUNT 11 DN0: RO >DH0:post-fmount.result
+C:Echo "FMOUNT RC=$RC" >>DH0:post-fmount.result
+C:Dir DN0: >DH0:post-dir.result
+C:Echo "DIR RC=$RC" >>DH0:post-dir.result
+C:Type DN0:KNOWN.TXT >DH0:post-type.result
+C:Echo "TYPE RC=$RC" >>DH0:post-type.result
+
+C:FLS host:/amiga-e2e-complete/diskdevice-unload-reload >NIL:
+C:Type DH0:initial-fmount.result
+C:Type DH0:initial-dir.result
+C:Type DH0:initial-type.result
+C:Type DH0:fumount.result
+C:Type DH0:unload-disk.result
+C:Type DH0:unload-nio.result
+C:Type DH0:reload-nio.result
+C:Type DH0:reload-disk.result
+C:Type DH0:post-fmount.result
+C:Type DH0:post-dir.result
+C:Type DH0:post-type.result
+C:Echo "E2E COMPLETE"
