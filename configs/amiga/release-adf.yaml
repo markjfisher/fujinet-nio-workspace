@@ -21,6 +21,7 @@ files:
   - repos/fujinet-nio-driver/build/amiga/fujinet-mount
   - repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud
   - repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange
+  - repos/fujinet-nio-driver/build/amiga/fujinet-unload-resident
 
   # Core FujiNet apps (nio-core-apps)
   - repos/nio-core-apps/build/amiga/bin/fapp
@@ -32,9 +33,10 @@ files:
   - repos/nio-core-apps/build/amiga/bin/fmount
   - repos/nio-core-apps/build/amiga/bin/fmountrestore
   - repos/nio-core-apps/build/amiga/bin/fout
+  - repos/nio-core-apps/build/amiga/bin/fumount
 
   # Apps (nio-apps)
   - repos/nio-apps/build/amiga/bin/clock
-
+  - repos/nio-apps/build/amiga/bin/devopencnt
   # Bounce World client
   - repos/bounce-world-client-nio/build/bwcn.amiga
