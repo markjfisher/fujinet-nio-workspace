@@ -1,0 +1,33 @@
+# NIO release push — lftp instructions.
+# Invoked by: scripts/amiga ftp --script configs/amiga/ftp/release.txt
+# Local paths are relative to the workspace root (lftp cwd).
+# Device binaries go to /dev/NIO/Devs/; applications and helpers go to /dev/NIO/C/.
+
+# Device drivers
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio.device -o /dev/NIO/Devs/fujinet-nio.device
+put repos/fujinet-nio-driver/build/amiga/fujinet-disk.device -o /dev/NIO/Devs/fujinet-disk.device
+
+# Driver helpers (C:)
+put repos/fujinet-nio-driver/build/amiga/fujinet-load-resident -o /dev/NIO/C/fujinet-load-resident
+put repos/fujinet-nio-driver/build/amiga/fujinet-mount -o /dev/NIO/C/fujinet-mount
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud -o /dev/NIO/C/fujinet-nio-baud
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange -o /dev/NIO/C/fujinet-nio-exchange
+
+# Core FujiNet apps (nio-core-apps)
+put repos/nio-core-apps/build/amiga/bin/fapp -o /dev/NIO/C/fapp
+put repos/nio-core-apps/build/amiga/bin/fboot -o /dev/NIO/C/fboot
+put repos/nio-core-apps/build/amiga/bin/fdrive -o /dev/NIO/C/fdrive
+put repos/nio-core-apps/build/amiga/bin/fhost -o /dev/NIO/C/fhost
+put repos/nio-core-apps/build/amiga/bin/fin -o /dev/NIO/C/fin
+put repos/nio-core-apps/build/amiga/bin/fls -o /dev/NIO/C/fls
+put repos/nio-core-apps/build/amiga/bin/fmount -o /dev/NIO/C/fmount
+put repos/nio-core-apps/build/amiga/bin/fmountrestore -o /dev/NIO/C/fmountrestore
+put repos/nio-core-apps/build/amiga/bin/fout -o /dev/NIO/C/fout
+
+# Apps (nio-apps)
+put repos/nio-apps/build/amiga/bin/clock -o /dev/NIO/C/clock
+
+# Bounce World client
+put repos/bounce-world-client-nio/build/bwcn.amiga -o /dev/NIO/C/bwcn.amiga
+
+bye

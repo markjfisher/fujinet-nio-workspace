@@ -331,6 +331,27 @@ results = [
 ]
 
 [[test]]
+name = "amiga-fin-ffs-adf"
+project = "core-apps"
+app = "fmount"
+driver = true
+ffs_adf = true
+no_static_mountlists = true
+timeout = 60
+activity_timeout = 45
+no_activity_timeout = 30
+startup = "startup/amiga-fin-ffs-adf.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/amiga-fin-ffs-adf"
+results = [
+  "ffs-load.result",
+  "ffs-host.result",
+  "ffs-fin.result",
+  "ffs-mount.result",
+  "ffs-dir.result",
+]
+
+[[test]]
 name = "diskdevice-dynamic-fmount-dd"
 project = "apps"
 app = "wifitest"

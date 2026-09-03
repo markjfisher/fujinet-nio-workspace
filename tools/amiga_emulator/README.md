@@ -122,7 +122,8 @@ The test harness imports `run.py`, which:
 | `run.py` | Amiberry/NIO/serial bridge runner used by integration tests. |
 | `disk.py` | Reusable HDF assembly, archive extraction, and Amiga tree installation helpers. |
 | `rdb.py` | rdbtool wrappers for RDB create/inspect/partition/fsadd on block devices or images. |
-| `cli.py` | `amiga-rdb` CLI (subcommands: info, show, create, add-partition, change-partition, delete-partition, fsadd, fsremove). |
+| `cli.py` | `scripts/amiga` CLI (rdb, adf, ftp, ipc, type). |
+| `ftp.py` | Generic lftp client (`--script` or `--files`/`--target-dir`); credentials from `local/amiga.env`. |
 | `ipc.py` | Small client for the Amiberry Unix IPC text protocol. |
 | `device_debug.py` | Resolves a loaded Exec device and its live vectors. |
 | `debug_snapshot.py` | Decodes registers, IORequests, timeout snapshots, Exec/DOS objects. |
@@ -504,6 +505,35 @@ change_partition("/dev/loop0", "SDH2",
 ```
 
 ---
+
+## FTP push to a real Amiga
+
+`scripts/amiga ftp` runs `lftp -f <script>`. Host, user, and password are
+written into that script as `open -u $FTP_USER,$FTP_PASS $FTP_HOST` because
+`lftp -u` cannot be combined with `-f`. The client binary is `FTP_APP`.
+Copy `local/amiga.env.example` to `local/amiga.env` if that file is missing.
+
+NIO release layout (apps → `/dev/NIO/C/`, devices → `/dev/NIO/Devs/`):
+
+```sh
+./scripts/build.sh amiga
+./scripts/amiga ftp --script configs/amiga/ftp/release.txt
+```
+
+Ad-hoc upload or a custom instruction file:
+
+```sh
+./scripts/amiga ftp --files /path/to/file1,/path/to/file2 --target-dir /dev/NIO/C/
+./scripts/amiga ftp --script /tmp/custom.lftp
+```
+
+A custom script is ordinary lftp commands (`put`, `get`, `bye`). The tool
+prepends `open -u … host` unless the file already contains `open`.
+
+```sh
+./scripts/amiga ftp --script configs/amiga/ftp/release.txt --verbose
+./scripts/amiga ftp --script configs/amiga/ftp/release.txt --dry-run --verbose
+```
 
 ## Inspect and Modify ADF/HDF Images
 

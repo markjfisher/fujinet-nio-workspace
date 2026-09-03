@@ -6,6 +6,9 @@
 #
 # To rebuild the ADF after editing this file:
 #   scripts/amiga adf release
+#
+# Preferred on a networked Amiga: push the same files over FTP instead of ADF:
+#   scripts/amiga ftp --script configs/amiga/ftp/release.txt
 
 label: NIORelease
 output: build/NIORelease.adf

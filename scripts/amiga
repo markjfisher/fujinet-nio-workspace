@@ -6,6 +6,8 @@
 # Usage:
 #   scripts/amiga rdb <device> <subcommand> [options]
 #   scripts/amiga adf <subcommand> [options]
+#   scripts/amiga ftp --script configs/amiga/ftp/release.txt
+#   scripts/amiga ftp --files file1,file2 --target-dir /dev/NIO/C/
 #   scripts/amiga ipc [--socket PATH] <command> [args]
 #   scripts/amiga type [--socket PATH] [--delay N] <text>
 set -euo pipefail

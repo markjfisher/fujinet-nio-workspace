@@ -20,7 +20,6 @@ C:FOUT 0 >DH0:fin-clear.result
 C:Echo "FOUT RC=$RC" >>DH0:fin-clear.result
 C:FMOUNT 0 DN2: RO >DH0:fin-clear-mount.result
 C:Echo "FMOUNT CLEAR RC=$RC" >>DH0:fin-clear-mount.result
-C:FLS host:/amiga-e2e-complete/amiga-fin-slot-catalog >NIL:
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:fin-load.result
 C:Type DH0:fin-host.result
@@ -33,4 +32,6 @@ C:Type DH0:fin-full-dir.result
 C:Type DH0:fin-clear.result
 C:Type DH0:fin-clear-mount.result
 C:Echo "RESULTS-END"
+C:Wait 3
+C:FLS host:/amiga-e2e-complete/amiga-fin-slot-catalog >NIL:
 C:Echo "E2E COMPLETE"

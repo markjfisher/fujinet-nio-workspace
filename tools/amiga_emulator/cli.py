@@ -4,6 +4,8 @@ Top-level subcommand groups:
 
   amiga rdb   <device> <subcommand>  -- RDB partition management (rdbtool)
   amiga adf   <subcommand>           -- ADF floppy image operations (xdftool)
+  amiga ftp   [--script FILE | --files ... --target-dir DIR]
+                                     -- transfer files via lftp
   amiga ipc   [options] <command>    -- Amiberry Unix IPC socket client
   amiga type  [options] <text>       -- Send keystrokes to Amiberry guest
 
@@ -297,6 +299,23 @@ def _build_ipc_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
     ipc.add_argument("argument", nargs="*")
 
 
+def _build_ftp_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
+    from .ftp import add_ftp_arguments
+
+    ftp = sub.add_parser(
+        "ftp",
+        help="transfer files to an Amiga FTP server via lftp",
+    )
+    add_ftp_arguments(ftp)
+
+
+def _run_ftp(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    from .ftp import run_from_args, validate_ftp_args
+
+    validate_ftp_args(parser, args)
+    return run_from_args(args)
+
+
 def _build_type_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
     typ = sub.add_parser("type", help="send keystrokes to the Amiberry guest")
     typ.add_argument("--socket", dest="socket_path",
@@ -317,12 +336,13 @@ def _build_type_parser(sub: argparse._SubParsersAction) -> None:  # noqa: SLF001
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="amiga",
-        description="Amiga tooling: RDB management, ADF images, Amiberry IPC and keyboard.",
+        description="Amiga tooling: RDB management, ADF images, FTP, Amiberry IPC and keyboard.",
     )
     sub = parser.add_subparsers(dest="group", metavar="GROUP")
     sub.required = True
     _build_rdb_parser(sub)
     _build_adf_parser(sub)
+    _build_ftp_parser(sub)
     _build_ipc_parser(sub)
     _build_type_parser(sub)
     return parser
@@ -337,6 +357,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_rdb(args)
         elif args.group == "adf":
             return _run_adf(args)
+        elif args.group == "ftp":
+            return _run_ftp(parser, args)
         elif args.group == "ipc":
             from .ipc import main as ipc_main
             # Reconstruct argv for the ipc module's own parser

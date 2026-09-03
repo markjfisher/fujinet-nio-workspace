@@ -419,6 +419,24 @@ def _patch_boot_block(image: Path) -> None:
     image.write_bytes(bytes(data))
 
 
+def create_ffs_adf(environment: dict[str, str], image: Path,
+                   marker_name: str = "KNOWN.TXT",
+                   marker_text: str = "FUJINET FFS ADF READ PASSED\n",
+                   volume_name: str = "NIOFFS") -> None:
+    image.unlink(missing_ok=True)
+    marker = image.parent / marker_name
+    marker.write_text(marker_text, encoding="ascii")
+    subprocess.run(
+        [*xdf_command(environment), str(image), "create", "+", "format", volume_name, "ffs",
+         "+", "boot", "install", "+", "write", str(marker), marker_name],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+    )
+    if image.stat().st_size != 1760 * 512:
+        raise AssertionError("FFS ADF is not standard 880 KiB geometry")
+
+
 def create_standard_adf(environment: dict[str, str], image: Path,
                         marker_name: str = "KNOWN.TXT",
                         marker_text: str = "FUJINET ADF READ PASSED\n",
@@ -820,6 +838,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 (catalog_dir / "mappings.bin").write_bytes(
                     b"\x01\x03\x63" + b"\x00" * 14
                 )
+            if case.get("ffs_adf"):
+                create_ffs_adf(amiga_environment, host_root / "ffs.adf")
+                (catalog_dir / "slot-019.bin").write_bytes(b"\x01\x01host:/ffs.adf")
             if case.get("inhibit_poc"):
                 (catalog_dir / "slot-015.bin").write_bytes(b"\x01\x01host:/inhibit-a.adf")
                 (catalog_dir / "slot-016.bin").write_bytes(b"\x01\x01host:/inhibit-b.adf")

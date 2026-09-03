@@ -1,0 +1,22 @@
+C:Assign T: RAM:
+C:FailAt 30
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:Echo "LOAD RC=$RC" >DH0:ffs-load.result
+C:FHOST host:/ >DH0:ffs-host.result
+C:Echo "FHOST RC=$RC" >>DH0:ffs-host.result
+C:FIN 0 ffs.adf >DH0:ffs-fin.result
+C:Echo "FIN RC=$RC" >>DH0:ffs-fin.result
+C:FMOUNT 0 DN0: RO >DH0:ffs-mount.result
+C:Echo "FMOUNT RC=$RC" >>DH0:ffs-mount.result
+C:Dir DN0: >DH0:ffs-dir.result
+C:Echo "DIR RC=$RC" >>DH0:ffs-dir.result
+C:Echo "RESULTS-BEGIN"
+C:Type DH0:ffs-load.result
+C:Type DH0:ffs-host.result
+C:Type DH0:ffs-fin.result
+C:Type DH0:ffs-mount.result
+C:Type DH0:ffs-dir.result
+C:Echo "RESULTS-END"
+C:Wait 3
+C:FLS host:/amiga-e2e-complete/amiga-fin-ffs-adf >NIL:
+C:Echo "E2E COMPLETE"
