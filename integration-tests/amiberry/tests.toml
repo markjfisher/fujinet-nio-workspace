@@ -330,6 +330,8 @@ results = [
   "fumount-live-dos.result",
   "fumount-live-opencnt.result",
   "fumount-bad-argv.result",
+  "fumount-bad-nocolon.result",
+  "fumount-bad-extra.result",
   "fumount-busy-mount.result",
   "fumount-busy-eject.result",
   "fumount-busy-dir-after.result",

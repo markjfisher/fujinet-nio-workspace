@@ -41,8 +41,12 @@ so normal use does not require a static MountList. Mounting another slot on an
 occupied unit replaces its media using the lifecycle appropriate to the old
 and new filesystems. `FUMOUNT drive` unmounts the unit: it retires the
 AmigaDOS filesystem handler (`ACTION_DIE`), then ejects the media, and removes
-the persisted mapping. `FMOUNTRESTORE` replays all valid saved mappings; it
-takes no arguments.
+the persisted mapping. If `ACTION_DIE` has already retired the handler but
+`TD_EJECT` then fails, the unit is left in a partial state: `dol_Task` is
+null (a later `Dir`/`Type`/`DeviceProc` of that `DNx:` may start a new
+handler) while FujiNet media may still be present (`absent=0`). That is not
+rolled back; a later successful `FUMOUNT` of an inactive node retries eject
+only. `FMOUNTRESTORE` replays all valid saved mappings; it takes no arguments.
 
 These commands operate on images already selected in FujiNet catalogue slots.
 They do not accept a host path directly, expose partitions, or turn an

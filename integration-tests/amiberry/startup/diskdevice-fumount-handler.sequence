@@ -22,6 +22,10 @@ C:Echo "OPENCNT RC=$RC" >>DH0:fumount-live-opencnt.result
 
 C:FUMOUNT foo >DH0:fumount-bad-argv.result
 C:Echo "BAD ARGV RC=$RC" >>DH0:fumount-bad-argv.result
+C:FUMOUNT DN0 >DH0:fumount-bad-nocolon.result
+C:Echo "BAD NOCOLON RC=$RC" >>DH0:fumount-bad-nocolon.result
+C:FUMOUNT DN0:x >DH0:fumount-bad-extra.result
+C:Echo "BAD EXTRA RC=$RC" >>DH0:fumount-bad-extra.result
 
 C:FMOUNT 11 DN0: RO >DH0:fumount-busy-mount.result
 C:Echo "FMOUNT BUSY RC=$RC" >>DH0:fumount-busy-mount.result
@@ -48,6 +52,8 @@ C:Type DH0:fumount-live-status.result
 C:Type DH0:fumount-live-dos.result
 C:Type DH0:fumount-live-opencnt.result
 C:Type DH0:fumount-bad-argv.result
+C:Type DH0:fumount-bad-nocolon.result
+C:Type DH0:fumount-bad-extra.result
 C:Type DH0:fumount-busy-mount.result
 C:Type DH0:fumount-busy-eject.result
 C:Type DH0:fumount-busy-dir-after.result

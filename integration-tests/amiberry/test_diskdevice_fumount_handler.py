@@ -39,6 +39,10 @@ def test_fumount_handler_teardown_and_busy(run_amiga_case):
 
     assert "Usage: FUMOUNT DN0:|...|DN7:" in results["fumount-bad-argv.result"]
     assert "BAD ARGV RC=10" in results["fumount-bad-argv.result"]
+    assert "Usage: FUMOUNT DN0:|...|DN7:" in results["fumount-bad-nocolon.result"]
+    assert "BAD NOCOLON RC=10" in results["fumount-bad-nocolon.result"]
+    assert "Usage: FUMOUNT DN0:|...|DN7:" in results["fumount-bad-extra.result"]
+    assert "BAD EXTRA RC=10" in results["fumount-bad-extra.result"]
 
     assert "FMOUNT BUSY RC=0" in results["fumount-busy-mount.result"]
     busy_eject = results["fumount-busy-eject.result"]
