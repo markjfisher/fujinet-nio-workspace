@@ -1,0 +1,60 @@
+- id: "1"
+  title: FUMOUNT retires the DOS handler then ejects
+  description: >-
+    CAP-1, CAP-2, CAP-3 (OpenCnt), CAP-8: Amiga FUMOUNT must FLUSH (fail-safe),
+    then ACTION_DIE, then eject and CloseDevice. The DNx handler must reject
+    DIE while busy. Add an Amiberry sequence that does not DeviceProc DNx: to
+    prove absence.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Edit repos/nio-core-apps/apps/platform/amiga/fumount.c. Consume only the
+    DiskDevice SDK plus dos.library packets. FLUSH failure: no DIE, no eject.
+    DIE failure: no eject. ACTION_DIE is intentional OS 1.3 compatibility, not
+    OS 3.2 Dismount. After success, assert dol_Task via doslistdiag (or DOS
+    list), media absent via fujinet-mount --status, and disk.device lib_OpenCnt
+    via Exec FindName; never DeviceProc/Dir/Type DNx: to prove the handler is
+    gone. Busy path may Dir/Type because the handler is still live. Do not
+    change disk Expunge. Update diskdevice-fmount assertions that assumed
+    keep-handler-after-eject.
+
+- id: "2"
+  title: Disk device Expunge actually unloads
+  description: >-
+    CAP-3, CAP-4: fujinet-disk.device idle Expunge must stop the worker, close
+    transport, discard change registrations, Remove/free the base, and return
+    the LoadSeg segment list, deferring while open or busy.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Mirror amiga/nio.device/fujinet_nio_device.c device_expunge. Replace
+    complete_pending_expunge returning 0 / "No unload" in
+    amiga/disk.device/fujinet_disk_device.c. Extend native expunge tests via
+    fujinet_disk_native_test_expunge. Do not unload under a live handler;
+    that is Story 1's job.
+
+- id: "3"
+  title: Add fujinet-unload-resident
+  description: >-
+    CAP-6: CLI takes one Exec device name, RemDevice, then a fresh FindName to
+    report unloaded vs still resident.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Place beside amiga/tools/fujinet-load-resident.c; wire make native and
+    HDF/FTP install the same way as the loader. Never dereference the device
+    pointer after RemDevice.
+
+- id: "4"
+  title: Amiberry unload then reload without reboot
+  description: >-
+    CAP-5, CAP-7, CAP-9: sequence FUMOUNTs used units, unloads disk then nio,
+    reloads nio then disk, remounts and reads an ADF in one guest session.
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    New integration-tests/amiberry startup sequence + tests.toml + pytest.
+    Gate is one pytest node on wb32 a1200-030, not the full suite. Unload
+    disk before nio; load nio before disk. After FUMOUNT, do not DeviceProc
+    DNx: to prove absence. Assert unload CLI output and post-reload Dir/Type
+    (access is allowed after FMOUNT restarts the handler).
