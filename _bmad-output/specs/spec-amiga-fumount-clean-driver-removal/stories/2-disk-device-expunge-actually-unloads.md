@@ -2,7 +2,8 @@
 title: 'Disk device Expunge actually unloads'
 type: 'feature'
 created: '2026-09-03'
-status: 'draft'
+status: 'done'
+baseline_commit: '0b30f64ec86a46a30ba7f560aa7cf76b65eec88f'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
@@ -68,9 +69,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c` -- Idle Expunge/`CloseDevice` on a non-worker task returns `segment_list` and guest-unloads; worker drain never tears down -- CAP-4.
-- [ ] `repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c` -- Native matrix: busy 0+DELEXP; last close returns sentinel; worker-idle leaves DELEXP and a later expunge returns sentinel; open cancels DELEXP.
-- [ ] `repos/fujinet-nio-driver/amiga/README.md` -- Idle Expunge returns the `InitResident` seglist (no unload CLI).
+- [x] `repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c` -- Idle Expunge/`CloseDevice` on a non-worker task returns `segment_list` and guest-unloads; worker drain never tears down -- CAP-4.
+- [x] `repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c` -- Native matrix: busy 0+DELEXP; last close returns sentinel; worker-idle leaves DELEXP and a later expunge returns sentinel; open cancels DELEXP.
+- [x] `repos/fujinet-nio-driver/amiga/README.md` -- Idle Expunge returns the `InitResident` seglist (no unload CLI).
 
 **Acceptance Criteria:**
 - Given OpenCnt 0 and an idle queue, when Expunge runs on a non-worker task, then the stored seglist is returned and transport has closed once.
@@ -92,3 +93,37 @@ The worker may empty the queue so the device is *expungeable*; it must not expun
 - `source "$NIO_WORKSPACE/scripts/env.sh" && make -C "$NIO_WORKSPACE/repos/fujinet-nio-driver/amiga" native` -- compiles guest `RemTask`/`Remove`/`FreeMem` path.
 
 Do not run full `scripts/amiga-tests` or add a CAP-9 pytest node in this story.
+
+## Suggested Review Order
+
+**Core teardown contract**
+
+- Idle Expunge now returns stored seglist; worker never tears down.
+  [`fujinet_disk_device.c:377`](../../../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L377)
+
+- Guest path stops worker, closes transport once, then Remove/FreeMem.
+  [`fujinet_disk_device.c:406`](../../../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L406)
+
+- Worker drain only finishes I/O; no teardown call.
+  [`fujinet_disk_device.c:792`](../../../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L792)
+
+**Init and sentinel**
+
+- Native init stores sentinel `(BPTR)1` not 0.
+  [`fujinet_disk_device.c:1001`](../../../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L1001)
+
+- Initialize worker_signal and transport_closed.
+  [`fujinet_disk_device.c:208`](../../../../repos/fujinet-nio-driver/amiga/disk.device/fujinet_disk_device.c#L208)
+
+**Native test matrix**
+
+- Idle expunge → sentinel; last close → sentinel.
+  [`test_fujinet_disk_resident.c:271`](../../../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c#L271)
+
+- Worker drain leaves DELEXP; follow-up expunge returns sentinel.
+  [`test_fujinet_disk_resident.c:347`](../../../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_disk_resident.c#L347)
+
+**Documentation**
+
+- README notes idle Expunge returns seglist; no unload CLI.
+  [`README.md:61`](../../../../repos/fujinet-nio-driver/amiga/README.md#L61)
