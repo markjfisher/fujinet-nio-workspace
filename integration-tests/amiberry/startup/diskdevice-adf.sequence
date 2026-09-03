@@ -28,10 +28,9 @@ C:Echo "COPY RC=$RC" >DH0:disk-copy-rw.result
 C:Echo "UPDATE-BEGIN"
 C:fujinet-mount --update 2 >DH0:disk-update.result
 C:Echo "UPDATE-END rc=$RC"
-C:Assign DN2: DISMOUNT
+C:FUMOUNT DN2: >DH0:disk-fumount-rw.result
+C:Echo "FUMOUNT RW RC=$RC" >>DH0:disk-fumount-rw.result
 C:fujinet-mount 13 2 RW >DH0:disk-remount-rw.result
-C:Mount DN2: FROM DEVS:DN2
-C:Echo "DOS REMOUNT 2 RC=$RC" >DH0:disk-dos-remount-2.result
 C:Type DN2:PERSIST.TXT >DH0:disk-persist.result
 C:fujinet-mount --status 0 >DH0:disk-status-0.result
 C:fujinet-mount --status 1 >DH0:disk-status-1.result
@@ -64,8 +63,8 @@ C:Type DH0:disk-status-1-early.result
 C:Type DH0:disk-mount-rw.result
 C:Type DH0:disk-copy-rw.result
 C:Type DH0:disk-update.result
+C:Type DH0:disk-fumount-rw.result
 C:Type DH0:disk-remount-rw.result
-C:Type DH0:disk-dos-remount-2.result
 C:Type DH0:disk-persist.result
 C:Type DH0:disk-eject.result
 C:Type DH0:disk-status-0.result

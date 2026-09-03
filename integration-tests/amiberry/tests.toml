@@ -111,19 +111,19 @@ results = [
   "disk-mount-rw.result",
   "disk-copy-rw.result",
   "disk-update.result",
-  "disk-eject.result",
+  "disk-fumount-rw.result",
   "disk-remount-rw.result",
-  "disk-dos-remount-2.result",
   "disk-persist.result",
   "disk-status-0.result",
   "disk-status-1.result",
   "disk-status-2.result",
-  "disk-status-3.result",
   "disk-malformed.result",
   "disk-mount-direct.result",
   "disk-mount-direct-rc.result",
   "disk-failed-replacement.result",
   "disk-status-7.result",
+  "disk-eject.result",
+  "disk-status-3.result",
 ]
 
 [[test]]
