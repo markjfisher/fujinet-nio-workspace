@@ -777,6 +777,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         driver_root = ROOT / "repos/fujinet-nio-driver"
         nio_device = driver_root / "build/amiga/fujinet-nio.device"
         resident_loader = driver_root / "build/amiga/fujinet-load-resident"
+        resident_unloader = driver_root / "build/amiga/fujinet-unload-resident"
         if case.get("nio_broker"):
             subprocess.run(
                 ["make", "native"],
@@ -876,11 +877,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
             build_cmd.extend([
                 "--nio-device", nio_device,
                 "--resident-loader", resident_loader,
+                "--resident-unloader", resident_unloader,
             ])
         else:
             build_cmd.extend([
                 "--nio-device", nio_device,
                 "--resident-loader", resident_loader,
+                "--resident-unloader", resident_unloader,
                 "--load-nio",
             ])
         if case.get("driver") and not case.get("nio_broker"):

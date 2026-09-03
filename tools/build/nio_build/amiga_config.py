@@ -244,6 +244,7 @@ def sync_development_share(root: Path, share_path: Path) -> list[str]:
         "fujinet-nio.device",
         "fujinet-disk.device",
         "fujinet-load-resident",
+        "fujinet-unload-resident",
         "fujinet-mount",
         "fujinet-nio-baud",
     ):

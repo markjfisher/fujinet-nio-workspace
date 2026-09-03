@@ -2,7 +2,8 @@
 title: 'Add fujinet-unload-resident'
 type: 'feature'
 created: '2026-09-03'
-status: 'draft'
+status: 'done'
+baseline_commit: '723b7249297d20e867abbd643616989636da5bf1'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/SPEC.md'
@@ -73,10 +74,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/fujinet-nio-driver/amiga/tools/fujinet-unload-resident.c` -- CLI per I/O matrix; two-phase Forbid/Permit per Boundaries -- CAP-6.
-- [ ] `repos/fujinet-nio-driver/amiga/Makefile` -- `make native` builds `build/amiga/fujinet-unload-resident`.
-- [ ] `scripts/build-amiga-test-disk`, `conftest.py`, `tasks.py`, `amiga_config.py`, `test_amiga_test_disk.py` -- HDF/`NIO:` install like the loader.
-- [ ] `amiga/README.md` + `docs/amiga/amiberry-testing.md` -- disk unload recipe; pinned stdout strings; `Still resident` → retry after idle (Story 2 deferred case).
+- [x] `repos/fujinet-nio-driver/amiga/tools/fujinet-unload-resident.c` -- CLI per I/O matrix; two-phase Forbid/Permit per Boundaries -- CAP-6.
+- [x] `repos/fujinet-nio-driver/amiga/Makefile` -- `make native` builds `build/amiga/fujinet-unload-resident`.
+- [x] `scripts/build-amiga-test-disk`, `conftest.py`, `tasks.py`, `amiga_config.py`, `test_amiga_test_disk.py` -- HDF/`NIO:` install like the loader.
+- [x] `amiga/README.md` + `docs/amiga/amiberry-testing.md` -- disk unload recipe; pinned stdout strings; `Still resident` → retry after idle (Story 2 deferred case).
 
 **Acceptance Criteria:**
 - Given idle `fujinet-disk.device`, when the CLI is run with that name, then stdout is `Unloaded: fujinet-disk.device` and a later `FindName` misses.
@@ -92,3 +93,52 @@ context:
 - `source "$NIO_WORKSPACE/scripts/env.sh" && uv run pytest tools/build/tests/test_amiga_test_disk.py` -- `--resident-unloader` wiring.
 
 Do not run full `scripts/amiga-tests` or add a CAP-9 pytest node (Story 4). Guest smoke of the CLI is Story 4.
+
+## Suggested Review Order
+
+**Core unloader implementation**
+
+- Two-phase Forbid/Permit critical sections; RemDevice between, fresh FindName after
+  [`fujinet-unload-resident.c:24`](../../../../repos/fujinet-nio-driver/amiga/tools/fujinet-unload-resident.c#L24)
+
+- First check: device absent, print "Not resident", return FAIL
+  [`fujinet-unload-resident.c:31`](../../../../repos/fujinet-nio-driver/amiga/tools/fujinet-unload-resident.c#L31)
+
+- Second check: still present after RemDevice, print "Still resident", return FAIL
+  [`fujinet-unload-resident.c:41`](../../../../repos/fujinet-nio-driver/amiga/tools/fujinet-unload-resident.c#L41)
+
+**Build and installation wiring**
+
+- Makefile adds RESIDENT_UNLOADER variable and native target dependency
+  [`Makefile:11`](../../../../repos/fujinet-nio-driver/amiga/Makefile#L11)
+
+- Build rule mirrors loader: clib2, -lamiga
+  [`Makefile:96`](../../../../repos/fujinet-nio-driver/amiga/Makefile#L96)
+
+- HDF installer accepts --resident-unloader and writes to C:/
+  [`build-amiga-test-disk:42`](../../../../scripts/build-amiga-test-disk#L42)
+
+- conftest passes unloader whenever loader is passed
+  [`conftest.py:780`](../../../../integration-tests/amiberry/conftest.py#L780)
+
+- NIO: share includes unloader for Copy operations
+  [`amiga_config.py:247`](../../../../tools/build/nio_build/amiga_config.py#L247)
+
+**Documentation**
+
+- README replaces "does not ship an unload CLI" with usage and output strings
+  [`README.md:64`](../../../../repos/fujinet-nio-driver/amiga/README.md#L64)
+
+- Documents Still resident → retry after idle (Story 2 drained-worker case)
+  [`README.md:83`](../../../../repos/fujinet-nio-driver/amiga/README.md#L83)
+
+- Amiberry testing guide adds Copy NIO:fujinet-unload-resident C:
+  [`amiberry-testing.md:69`](../../../../docs/amiga/amiberry-testing.md#L69)
+
+**Test infrastructure**
+
+- Python test expects --resident-unloader flag in disk build commands
+  [`test_amiga_test_disk.py:84`](../../../../tools/build/tests/test_amiga_test_disk.py#L84)
+
+- Test validates unloader path passed correctly
+  [`test_amiga_test_disk.py:110`](../../../../tools/build/tests/test_amiga_test_disk.py#L110)

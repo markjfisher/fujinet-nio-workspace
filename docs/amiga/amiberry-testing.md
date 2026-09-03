@@ -66,6 +66,7 @@ to install or run fresh builds explicitly:
 Copy NIO:fujinet-nio.device DEVS:
 Copy NIO:fujinet-disk.device DEVS:
 Copy NIO:fujinet-load-resident C:
+Copy NIO:fujinet-unload-resident C:
 NIO:FLS ...
 ```
 
@@ -107,6 +108,7 @@ Echo "Copying fujinet drivers to harddrive"
 Copy NIO:fujinet-nio.device TO DEVS:
 Copy NIO:fujinet-disk.device TO DEVS:
 Copy NIO:fujinet-load-resident TO C:
+Copy NIO:fujinet-unload-resident TO C:
 ```
 #### Auto loading fujinet drivers on boot
 

@@ -341,6 +341,7 @@ class Build:
         disk_args.extend([
             "--nio-device", driver_root / "build/amiga/fujinet-nio.device",
             "--resident-loader", driver_root / "build/amiga/fujinet-load-resident",
+            "--resident-unloader", driver_root / "build/amiga/fujinet-unload-resident",
             "--load-nio",
         ])
         if with_driver:

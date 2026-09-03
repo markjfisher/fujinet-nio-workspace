@@ -40,6 +40,8 @@ def main() -> int:
                         help="native fujinet-nio.device to install in DEVS:")
     parser.add_argument("--resident-loader", type=Path,
                         help="resident module loader to install in C:")
+    parser.add_argument("--resident-unloader", type=Path,
+                        help="resident module unloader to install in C:")
     parser.add_argument("--load-driver", action="store_true",
                         help="load fujinet-disk.device during startup")
     parser.add_argument("--load-nio", action="store_true",
@@ -72,6 +74,7 @@ def main() -> int:
     for path, label in ((args.disk_device, "disk device"),
                         (args.nio_device, "nio device"),
                         (args.resident_loader, "resident loader"),
+                        (args.resident_unloader, "resident unloader"),
                         (args.disk_mount_tool, "disk mount tool")):
         if path is not None and not path.is_file():
             raise SystemExit(f"{label} not found: {path}")
@@ -116,6 +119,8 @@ def main() -> int:
             run_xdf(args.output, "write", str(args.nio_device), "Devs/fujinet-nio.device")
         if args.resident_loader:
             run_xdf(args.output, "write", str(args.resident_loader), "C/fujinet-load-resident")
+        if args.resident_unloader:
+            run_xdf(args.output, "write", str(args.resident_unloader), "C/fujinet-unload-resident")
         if args.disk_mount_tool:
             run_xdf(args.output, "write", str(args.disk_mount_tool), "C/fujinet-mount")
         for mountlist in args.disk_mountlist:

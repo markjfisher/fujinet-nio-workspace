@@ -25,6 +25,7 @@ class RecordingRunner:
             build.mkdir(parents=True, exist_ok=True)
             (build / "fujinet-nio.device").write_bytes(b"nio")
             (build / "fujinet-load-resident").write_bytes(b"loader")
+            (build / "fujinet-unload-resident").write_bytes(b"unloader")
             (build / "fujinet-disk.device").write_bytes(b"disk")
             (build / "fujinet-mount").write_bytes(b"mount")
 
@@ -80,6 +81,7 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
         self.assertIn("--load-nio", disk_cmd)
         self.assertIn("--nio-device", disk_cmd)
         self.assertIn("--resident-loader", disk_cmd)
+        self.assertIn("--resident-unloader", disk_cmd)
         self.assertNotIn("--startup-script", disk_cmd)
         if with_driver:
             self.assertIn("--load-driver", disk_cmd)
@@ -96,6 +98,7 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
 
         nio_device = runner.driver_root / "build" / "amiga" / "fujinet-nio.device"
         loader = runner.driver_root / "build" / "amiga" / "fujinet-load-resident"
+        unloader = runner.driver_root / "build" / "amiga" / "fujinet-unload-resident"
         self.assertEqual(
             Path(disk_cmd[disk_cmd.index("--nio-device") + 1]),
             nio_device,
@@ -103,6 +106,10 @@ class AmigaTestDiskBootstrapTests(unittest.TestCase):
         self.assertEqual(
             Path(disk_cmd[disk_cmd.index("--resident-loader") + 1]),
             loader,
+        )
+        self.assertEqual(
+            Path(disk_cmd[disk_cmd.index("--resident-unloader") + 1]),
+            unloader,
         )
 
     def test_generated_amiga_test_disk_builds_broker_and_passes_load_nio(self) -> None:
