@@ -306,6 +306,38 @@ results = [
 ]
 
 [[test]]
+name = "diskdevice-fumount-handler"
+project = "apps"
+app = "wifitest"
+driver = true
+timeout = 75
+activity_timeout = 60
+screenshot_quiet = 15
+screenshot_interval = 1.0
+no_activity_timeout = 30
+startup = "startup/diskdevice-fumount-handler.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/diskdevice-fumount-handler"
+results = [
+  "fumount-load.result",
+  "fumount-idle-mount.result",
+  "fumount-idle-eject.result",
+  "fumount-idle-status.result",
+  "fumount-live-mount.result",
+  "fumount-live-dir.result",
+  "fumount-live-eject.result",
+  "fumount-live-status.result",
+  "fumount-live-dos.result",
+  "fumount-live-opencnt.result",
+  "fumount-bad-argv.result",
+  "fumount-busy-mount.result",
+  "fumount-busy-eject.result",
+  "fumount-busy-dir-after.result",
+  "fumount-busy-type.result",
+  "fumount-busy-status.result",
+]
+
+[[test]]
 name = "amiga-fin-slot-catalog"
 project = "core-apps"
 app = "fmount"

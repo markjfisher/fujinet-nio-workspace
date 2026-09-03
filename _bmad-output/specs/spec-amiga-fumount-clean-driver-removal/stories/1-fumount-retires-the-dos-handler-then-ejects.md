@@ -2,7 +2,7 @@
 title: 'FUMOUNT retires the DOS handler then ejects'
 type: 'feature'
 created: '2026-09-03'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'fdda78d547a674b395c66a249529e3397b47553b'
 review_loop_iteration: 0
 context:
@@ -68,11 +68,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `repos/nio-core-apps/apps/platform/amiga/fumount.c` -- Replace Inhibit-keep-handler with FLUSH → DIE (poll `dol_Task`) → eject → CloseDevice; FLUSH/DIE fail-safe as matrix -- product unmount.
-- [ ] `repos/nio-apps/apps/test/devopencnt.c` -- New diagnostic: Forbid/`FindName` `DeviceList` for `fujinet-disk.device`, print `lib_OpenCnt`, no `OpenDevice` -- CAP-3 observation without bumping OpenCnt. Wildcard `apps/test/*.c` picks it up.
-- [ ] `integration-tests/amiberry/startup/` + `tests.toml` + new pytest -- CAP-8: mount known ADF `DN0:`, `Dir` ok, `FUMOUNT`, `Ejected`, `absent=1`, `doslistdiag` `DN0` `task=00000000`, `devopencnt` 0; **no** DeviceProc/Dir/Type `DN0:` after success. Second path: `CD DN0:` (or equivalent lock) then `FUMOUNT` fails, `Dir`/`Type` still works.
-- [ ] `integration-tests/amiberry/startup/diskdevice-fmount.sequence` and `test_diskdevice_fmount.py` -- CAP-10: after `FUMOUNT`, do not poke `DNx:` to prove absence; remount via `FMOUNT` + `Type` still required. Touch restore sequences only if they poke `DNx:` to prove handler gone.
-- [ ] `docs/amiga/disk-media-architecture.md` -- `FUMOUNT` is unmount: handler dies, then eject.
+- [x] `repos/nio-core-apps/apps/platform/amiga/fumount.c` -- Replace Inhibit-keep-handler with FLUSH → DIE (poll `dol_Task`) → eject → CloseDevice; FLUSH/DIE fail-safe as matrix -- product unmount.
+- [x] `repos/nio-apps/apps/test/devopencnt.c` -- New diagnostic: Forbid/`FindName` `DeviceList` for `fujinet-disk.device`, print `lib_OpenCnt`, no `OpenDevice` -- CAP-3 observation without bumping OpenCnt. Wildcard `apps/test/*.c` picks it up.
+- [x] `integration-tests/amiberry/startup/` + `tests.toml` + new pytest -- CAP-8: mount known ADF `DN0:`, `Dir` ok, `FUMOUNT`, `Ejected`, `absent=1`, `doslistdiag` `DN0` `task=00000000`, `devopencnt` 0; **no** DeviceProc/Dir/Type `DN0:` after success. Second path: `CD DN0:` (or equivalent lock) then `FUMOUNT` fails, `Dir`/`Type` still works.
+- [x] `integration-tests/amiberry/startup/diskdevice-fmount.sequence` and `test_diskdevice_fmount.py` -- CAP-10: after `FUMOUNT`, do not poke `DNx:` to prove absence; remount via `FMOUNT` + `Type` still required. Touch restore sequences only if they poke `DNx:` to prove handler gone.
+- [x] `docs/amiga/disk-media-architecture.md` -- `FUMOUNT` is unmount: handler dies, then eject.
 
 **Acceptance Criteria:**
 - Given an idle mounted `DNx:`, when `FUMOUNT DNx:` succeeds, then `dol_Task` is null, media `absent=1`, confirmation is `Ejected DNx:`, and with no other clients `lib_OpenCnt` is 0.
@@ -81,6 +81,8 @@ context:
 - Given existing `diskdevice-fmount` remount-after-eject, when the suite runs, then `FMOUNT` + `Type` still pass and post-unmount absence checks do not `DeviceProc`/`Dir`/`Type` that unit.
 
 ## Spec Change Log
+
+- 2026-09-03: CAP-8 sequence covers idle (no `Dir` before `FUMOUNT DN1:`), live handler teardown, bad argv, and Shell `CD DN0:` busy refusal. FLUSH-fail remains a code fail-safe (`DoPkt(ACTION_FLUSH)` false → no DIE/eject); no guest injection was available on a healthy FFS volume. A host boolean wrapper around `flush_ok != 0` was removed after review — it did not execute `fumount.c`.
 
 ## Design Notes
 
@@ -95,3 +97,34 @@ context:
 - `source scripts/env.sh && uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_diskdevice_fmount.py::test_fmount_fumount_standard_adf` -- CAP-10 fmount node. Run restore node only if those sequences/assertions changed.
 
 Do not run full `scripts/amiga-tests`. Do not change disk Expunge to make OpenCnt/unload pass.
+
+## Suggested Review Order
+
+**Handler teardown**
+
+- FLUSH fail-safe then DIE; retirement is `dol_Task` poll, not `DoPkt`.
+  [`fumount.c:140`](../../../../repos/nio-core-apps/apps/platform/amiga/fumount.c#L140)
+
+- Poll plus a final DOS-list check so a late DIE is not reported busy.
+  [`fumount.c:66`](../../../../repos/nio-core-apps/apps/platform/amiga/fumount.c#L66)
+
+**OpenCnt observation**
+
+- `FindName` on `DeviceList` under Forbid; never `OpenDevice`.
+  [`devopencnt.c:15`](../../../../repos/nio-apps/apps/test/devopencnt.c#L15)
+
+**Guest proof**
+
+- Live `DN0:`: Dir, FUMOUNT, status/doslistdiag/opencnt; no post-success Dir/Type.
+  [`diskdevice-fumount-handler.sequence:12`](../../../../integration-tests/amiberry/startup/diskdevice-fumount-handler.sequence#L12)
+
+- Busy `CD DN0:` must not eject; Dir/Type still allowed.
+  [`test_diskdevice_fumount_handler.py:43`](../../../../integration-tests/amiberry/test_diskdevice_fumount_handler.py#L43)
+
+**Peripherals**
+
+- Register the CAP-8 node.
+  [`tests.toml:309`](../../../../integration-tests/amiberry/tests.toml#L309)
+
+- User-facing FUMOUNT is die-then-eject.
+  [`disk-media-architecture.md:42`](../../../../docs/amiga/disk-media-architecture.md#L42)

@@ -39,9 +39,10 @@ digit). Specify the mode explicitly in scripts; the current command defaults
 to RW when it is omitted. `FMOUNT` may create an absent DOS node dynamically,
 so normal use does not require a static MountList. Mounting another slot on an
 occupied unit replaces its media using the lifecycle appropriate to the old
-and new filesystems. `FUMOUNT drive` flushes/ejects the unit and removes its
-persisted mapping. `FMOUNTRESTORE` replays all valid saved mappings; it takes
-no arguments.
+and new filesystems. `FUMOUNT drive` unmounts the unit: it retires the
+AmigaDOS filesystem handler (`ACTION_DIE`), then ejects the media, and removes
+the persisted mapping. `FMOUNTRESTORE` replays all valid saved mappings; it
+takes no arguments.
 
 These commands operate on images already selected in FujiNet catalogue slots.
 They do not accept a host path directly, expose partitions, or turn an

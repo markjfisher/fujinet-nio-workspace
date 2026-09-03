@@ -1,0 +1,56 @@
+C:Assign T: RAM:
+C:FailAt 21
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:Echo "LOAD RC=$RC" >DH0:fumount-load.result
+
+C:FMOUNT 12 DN1: RO >DH0:fumount-idle-mount.result
+C:Echo "FMOUNT IDLE RC=$RC" >>DH0:fumount-idle-mount.result
+C:FUMOUNT DN1: >DH0:fumount-idle-eject.result
+C:Echo "FUMOUNT IDLE RC=$RC" >>DH0:fumount-idle-eject.result
+C:fujinet-mount --status 1 >DH0:fumount-idle-status.result
+
+C:FMOUNT 11 DN0: RO >DH0:fumount-live-mount.result
+C:Echo "FMOUNT LIVE RC=$RC" >>DH0:fumount-live-mount.result
+C:Dir DN0: >DH0:fumount-live-dir.result
+C:Echo "DIR LIVE RC=$RC" >>DH0:fumount-live-dir.result
+C:FUMOUNT DN0: >DH0:fumount-live-eject.result
+C:Echo "FUMOUNT LIVE RC=$RC" >>DH0:fumount-live-eject.result
+C:fujinet-mount --status 0 >DH0:fumount-live-status.result
+C:doslistdiag >DH0:fumount-live-dos.result
+C:devopencnt >DH0:fumount-live-opencnt.result
+C:Echo "OPENCNT RC=$RC" >>DH0:fumount-live-opencnt.result
+
+C:FUMOUNT foo >DH0:fumount-bad-argv.result
+C:Echo "BAD ARGV RC=$RC" >>DH0:fumount-bad-argv.result
+
+C:FMOUNT 11 DN0: RO >DH0:fumount-busy-mount.result
+C:Echo "FMOUNT BUSY RC=$RC" >>DH0:fumount-busy-mount.result
+C:Dir DN0: >DH0:fumount-busy-dir-before.result
+C:CD DN0:
+C:FUMOUNT DN0: >DH0:fumount-busy-eject.result
+C:Echo "FUMOUNT BUSY RC=$RC" >>DH0:fumount-busy-eject.result
+C:Dir DN0: >DH0:fumount-busy-dir-after.result
+C:Echo "DIR BUSY RC=$RC" >>DH0:fumount-busy-dir-after.result
+C:Type DN0:KNOWN.TXT >DH0:fumount-busy-type.result
+C:Echo "TYPE BUSY RC=$RC" >>DH0:fumount-busy-type.result
+C:fujinet-mount --status 0 >DH0:fumount-busy-status.result
+C:CD DH0:
+
+C:FLS host:/amiga-e2e-complete/diskdevice-fumount-handler >NIL:
+C:Type DH0:fumount-load.result
+C:Type DH0:fumount-idle-mount.result
+C:Type DH0:fumount-idle-eject.result
+C:Type DH0:fumount-idle-status.result
+C:Type DH0:fumount-live-mount.result
+C:Type DH0:fumount-live-dir.result
+C:Type DH0:fumount-live-eject.result
+C:Type DH0:fumount-live-status.result
+C:Type DH0:fumount-live-dos.result
+C:Type DH0:fumount-live-opencnt.result
+C:Type DH0:fumount-bad-argv.result
+C:Type DH0:fumount-busy-mount.result
+C:Type DH0:fumount-busy-eject.result
+C:Type DH0:fumount-busy-dir-after.result
+C:Type DH0:fumount-busy-type.result
+C:Type DH0:fumount-busy-status.result
+C:Echo "E2E COMPLETE"

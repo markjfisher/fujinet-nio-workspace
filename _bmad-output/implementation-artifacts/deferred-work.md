@@ -71,3 +71,7 @@
 - source_spec: `_bmad-output/specs/spec-fujibus-slip-separation/stories/2-implement-slipframer.md`
   summary: SlipFramer test frames always have identical small payload; frames with longer payloads or sentinel-adjacent byte values are never exercised.
   evidence: make_valid_frame always produces the same device/cmd/param combination.
+
+- source_spec: `_bmad-output/specs/spec-amiga-fumount-clean-driver-removal/stories/1-fumount-retires-the-dos-handler-then-ejects.md`
+  summary: Guest or stubbed-DoPkt proof that ACTION_FLUSH failure skips ACTION_DIE and TD_EJECT
+  evidence: Healthy FFS FLUSH is never false in Amiberry; a host boolean wrapper around flush_ok != 0 did not execute fumount.c and was removed.
