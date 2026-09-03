@@ -353,10 +353,14 @@ startup = "startup/diskdevice-unload-reload.sequence"
 completion_mode = "nio_marker"
 completion_log = "host:/amiga-e2e-complete/diskdevice-unload-reload"
 results = [
-  "initial-fmount.result",
-  "initial-dir.result",
-  "initial-type.result",
-  "fumount.result",
+  "initial-fmount-dn0.result",
+  "initial-dir-dn0.result",
+  "initial-type-dn0.result",
+  "initial-fmount-dn1.result",
+  "initial-dir-dn1.result",
+  "initial-type-dn1.result",
+  "fumount-dn0.result",
+  "fumount-dn1.result",
   "unload-disk.result",
   "unload-nio.result",
   "reload-nio.result",

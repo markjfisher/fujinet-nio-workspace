@@ -1,0 +1,3 @@
+get /ram/diag.txt -o build/diag.txt
+
+bye

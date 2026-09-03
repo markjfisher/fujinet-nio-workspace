@@ -1,15 +1,24 @@
 C:Assign T: RAM:
 C:FailAt 21
 
-C:FMOUNT 11 DN0: RO >DH0:initial-fmount.result
-C:Echo "FMOUNT RC=$RC" >>DH0:initial-fmount.result
-C:Dir DN0: >DH0:initial-dir.result
-C:Echo "DIR RC=$RC" >>DH0:initial-dir.result
-C:Type DN0:KNOWN.TXT >DH0:initial-type.result
-C:Echo "TYPE RC=$RC" >>DH0:initial-type.result
+C:FMOUNT 11 DN0: RO >DH0:initial-fmount-dn0.result
+C:Echo "FMOUNT DN0 RC=$RC" >>DH0:initial-fmount-dn0.result
+C:Dir DN0: >DH0:initial-dir-dn0.result
+C:Echo "DIR DN0 RC=$RC" >>DH0:initial-dir-dn0.result
+C:Type DN0:KNOWN.TXT >DH0:initial-type-dn0.result
+C:Echo "TYPE DN0 RC=$RC" >>DH0:initial-type-dn0.result
 
-C:FUMOUNT DN0: >DH0:fumount.result
-C:Echo "FUMOUNT RC=$RC" >>DH0:fumount.result
+C:FMOUNT 12 DN1: RO >DH0:initial-fmount-dn1.result
+C:Echo "FMOUNT DN1 RC=$RC" >>DH0:initial-fmount-dn1.result
+C:Dir DN1: >DH0:initial-dir-dn1.result
+C:Echo "DIR DN1 RC=$RC" >>DH0:initial-dir-dn1.result
+C:Type DN1:SECOND.TXT >DH0:initial-type-dn1.result
+C:Echo "TYPE DN1 RC=$RC" >>DH0:initial-type-dn1.result
+
+C:FUMOUNT DN0: >DH0:fumount-dn0.result
+C:Echo "FUMOUNT DN0 RC=$RC" >>DH0:fumount-dn0.result
+C:FUMOUNT DN1: >DH0:fumount-dn1.result
+C:Echo "FUMOUNT DN1 RC=$RC" >>DH0:fumount-dn1.result
 
 C:fujinet-unload-resident fujinet-disk.device >DH0:unload-disk.result
 C:Echo "UNLOAD DISK RC=$RC" >>DH0:unload-disk.result
@@ -29,10 +38,14 @@ C:Type DN0:KNOWN.TXT >DH0:post-type.result
 C:Echo "TYPE RC=$RC" >>DH0:post-type.result
 
 C:FLS host:/amiga-e2e-complete/diskdevice-unload-reload >NIL:
-C:Type DH0:initial-fmount.result
-C:Type DH0:initial-dir.result
-C:Type DH0:initial-type.result
-C:Type DH0:fumount.result
+C:Type DH0:initial-fmount-dn0.result
+C:Type DH0:initial-dir-dn0.result
+C:Type DH0:initial-type-dn0.result
+C:Type DH0:initial-fmount-dn1.result
+C:Type DH0:initial-dir-dn1.result
+C:Type DH0:initial-type-dn1.result
+C:Type DH0:fumount-dn0.result
+C:Type DH0:fumount-dn1.result
 C:Type DH0:unload-disk.result
 C:Type DH0:unload-nio.result
 C:Type DH0:reload-nio.result

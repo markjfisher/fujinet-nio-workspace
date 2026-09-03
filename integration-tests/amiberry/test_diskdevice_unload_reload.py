@@ -1,16 +1,25 @@
 def test_unload_reload_without_reboot(run_amiga_case):
     results = run_amiga_case("diskdevice-unload-reload")
 
-    # Initial mount and I/O
-    assert "FMOUNT RC=0" in results["initial-fmount.result"]
-    assert "DIR RC=0" in results["initial-dir.result"]
-    assert "KNOWN.TXT" in results["initial-dir.result"].upper()
-    assert "TYPE RC=0" in results["initial-type.result"]
-    assert "FUJINET ADF READ PASSED" in results["initial-type.result"]
+    # Initial mount and I/O - DN0:
+    assert "FMOUNT DN0 RC=0" in results["initial-fmount-dn0.result"]
+    assert "DIR DN0 RC=0" in results["initial-dir-dn0.result"]
+    assert "KNOWN.TXT" in results["initial-dir-dn0.result"].upper()
+    assert "TYPE DN0 RC=0" in results["initial-type-dn0.result"]
+    assert "FUJINET ADF READ PASSED" in results["initial-type-dn0.result"]
 
-    # FUMOUNT success
-    assert "Ejected DN0:" in results["fumount.result"]
-    assert "FUMOUNT RC=0" in results["fumount.result"]
+    # Initial mount and I/O - DN1:
+    assert "FMOUNT DN1 RC=0" in results["initial-fmount-dn1.result"]
+    assert "DIR DN1 RC=0" in results["initial-dir-dn1.result"]
+    assert "SECOND.TXT" in results["initial-dir-dn1.result"].upper()
+    assert "TYPE DN1 RC=0" in results["initial-type-dn1.result"]
+    assert "FUJINET SECOND DRIVE PASSED" in results["initial-type-dn1.result"]
+
+    # FUMOUNT both drives
+    assert "Ejected DN0:" in results["fumount-dn0.result"]
+    assert "FUMOUNT DN0 RC=0" in results["fumount-dn0.result"]
+    assert "Ejected DN1:" in results["fumount-dn1.result"]
+    assert "FUMOUNT DN1 RC=0" in results["fumount-dn1.result"]
 
     # Unload disk device
     assert "Unloaded: fujinet-disk.device" in results["unload-disk.result"]

@@ -38,5 +38,7 @@ files:
   # Apps (nio-apps)
   - repos/nio-apps/build/amiga/bin/clock
   - repos/nio-apps/build/amiga/bin/devopencnt
+  - repos/nio-apps/build/amiga/bin/doslistdiag
+
   # Bounce World client
   - repos/bounce-world-client-nio/build/bwcn.amiga
