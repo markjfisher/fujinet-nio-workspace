@@ -24,3 +24,4 @@ __main__.py
 # causal output we don't want to track
 /run-*.sh
 /*-results.txt
+/exchange-results

@@ -1,3 +1,4 @@
-get /ram/diag.txt -o build/diag.txt
+cd /ram
+mget -e -a *.txt -O exchange-results
 
 bye
