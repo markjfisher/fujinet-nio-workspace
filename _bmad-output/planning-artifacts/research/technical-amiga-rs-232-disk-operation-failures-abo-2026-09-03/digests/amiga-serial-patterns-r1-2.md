@@ -35,9 +35,9 @@ At the API boundary, request 38400 or 57600 through `io_Baud` and check `SDCMD_S
 ### C3 — 38400/57600 and `SERPER`
 
 - **claim:** `serial.device` accepts the desired real baud rate in `io_Baud` and rejects a request the underlying hardware cannot support; the documented interface range is 110–292000 baud. Thus 38400/57600 should be requested as numeric `io_Baud` values and accepted only if `SDCMD_SETPARAMS` succeeds. `SERPER` is the Paula hardware period register used by direct-hardware code; its divisor is derived from the PAL/NTSC color clock. The OS device API exposes `io_Baud`, not a caller-supplied `SERPER` value.
-- **source_url:** https://wiki.amigaos.net/wiki/Serial_Device and https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_1989.pdf
-- **publisher:** AmigaOS Documentation Wiki / Commodore-Amiga, *Amiga Hardware Reference Manual*
-- **pub_date:** RKM page revision 2025-01-26; hardware manual edition 1989
+- **source_url:** https://wiki.amigaos.net/wiki/Serial_Device and `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** AmigaOS Documentation Wiki / Commodore-Amiga, *Amiga Hardware Reference Manual* (Ch. 8 extract)
+- **pub_date:** RKM page revision 2025-01-26; hardware manual 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high for API boundary and hardware role; medium for successful operation on every specific machine/driver because acceptance is explicitly hardware-dependent
 - **class:** version/compatibility
@@ -95,9 +95,9 @@ At the API boundary, request 38400 or 57600 through `io_Baud` and check `SDCMD_S
 ### C9 — Overrun and loss handling
 
 - **claim:** The API distinguishes hardware data overrun (`SerErr_LineErr`) from device read-buffer overflow (`SerErr_BufOverflow`); `SDCMD_QUERY` also reports a read-overrun status bit. Reads can complete partially and `io_Actual` is authoritative, including when terminated early by an error. Robust code must preserve/process those `io_Actual` bytes before retrying. However, a Paula hardware overrun means the receive register was not serviced before the next character completed, so at least one byte is already unrecoverable; lossless recovery then requires a higher-level framed protocol with checksum/sequence/retry, not merely another `CMD_READ`.
-- **source_url:** https://wiki.amigaos.net/wiki/Serial_Device and https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_1989.pdf
-- **publisher:** AmigaOS Documentation Wiki / Commodore-Amiga, *Amiga Hardware Reference Manual*
-- **pub_date:** wiki revision 2025-01-26; hardware manual edition 1989
+- **source_url:** https://wiki.amigaos.net/wiki/Serial_Device and `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** AmigaOS Documentation Wiki / Commodore-Amiga, *Amiga Hardware Reference Manual* (Ch. 8 extract)
+- **pub_date:** wiki revision 2025-01-26; hardware manual 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high for error/status meanings, partial completion, and irrecoverability after hardware overrun; medium for the higher-level retry recommendation because it is a direct engineering implication rather than an Amiga API mandate
 - **class:** failure mode / recovery
@@ -156,7 +156,7 @@ Source metadata:
 2. Commodore-Amiga serial.device AutoDoc, `OpenDevice` mirror: https://d0.se/autodocs/serial.device/OpenDevice
 3. Commodore-Amiga serial.device AutoDoc, `CMD_READ` mirror: https://d0.se/autodocs/serial.device/CMD_READ
 4. Amiga/Commodore `devices/serial.h`, ADCD 2.1 mirror: https://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node004B.html
-5. Commodore-Amiga, *Amiga Hardware Reference Manual* (1989 edition scan): https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_1989.pdf
+5. AHRM 3rd ed. Paula UART extract: `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
 6. AmigaOS Documentation Wiki, “Workbench Preferences — Serial Editor”: https://wiki.amigaos.net/wiki/AmigaOS_Manual:_Workbench_Preferences
 7. Christian Bauer / macemu, Basilisk II AmigaOS serial backend: https://github.com/cebix/macemu/blob/master/BasiliskII/src/AmigaOS/serial_amiga.cpp
 8. alfishe, amiga-bootcamp `serial.md` (starting lead, used mainly for contradiction checking): https://github.com/alfishe/amiga-bootcamp/blob/main/10_devices/serial.md

@@ -4,6 +4,12 @@ Decision served: determine whether the handoff hypothesis — “CIA 8520 TX→R
 
 Scope: classic built-in Amiga serial port, Paula/CIA hardware, and Commodore `serial.device` documentation/source. Accessed 2026-09-03. The GitHub source tree is an archival mirror rather than an authenticated Commodore publication; conclusions that depend on it are marked accordingly.
 
+**Working source of truth (print-validated in-tree extracts, not the AHRM PDF):**
+- Paula UART: `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- CIA-B handshake pins: `repos/fujinet-nio-driver/docs/amiga/cia-port-signal-assigments.md`
+- CIA address maps / unused CIAB `sdr`: `repos/fujinet-nio-driver/docs/amiga/cia-chip-register-map.md`
+- Connector spec / software modem control: `repos/fujinet-nio-driver/docs/amiga/serial-interface-connector.md`
+
 ## Verdict
 
 The proposed CIA TX→RX transition mechanism is contradicted by the retrieved evidence. The built-in serial data path is Paula's UART, with distinct receive and transmit shift/buffer paths designed for full-duplex operation. CIA-B provides software-controlled modem/handshake GPIO; its own serial-data register is documented as unused. Neither the Hardware Reference Manual nor the examined classic `serial.device` source contains a transmit/receive mode transition in `CMD_WRITE`.
@@ -24,8 +30,8 @@ These figures are derived from the archived driver's integer algorithm and the o
 ### Claim 1 — Paula, not a CIA, implements the built-in UART
 
 - **claim:** The Paula custom chip contains the built-in UART and its `SERDAT`, `SERDATR`, and `SERPER` registers. The manual's decisive wording is: “The Paula custom chip contains a Universal Asynchronous Receiver/Transmitter, or UART.”
-- **source URL:** https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
-- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition
+- **source:** `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition (Ch. 8 Serial I/O extract)
 - **pub_date:** 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high
@@ -34,8 +40,8 @@ These figures are derived from the archived driver's integer algorithm and the o
 ### Claim 2 — CIA-B handles modem-control GPIO, not TXD/RXD serialization
 
 - **claim:** CIA-B port A maps DTR and RTS as outputs and CD, CTS, and DSR as inputs. The same CIA map calls CIA-B's serial data register “unused.” Separately, the serial connector section states that modem-control signals are software-controlled, asynchronous to TXD/RXD, and have no hardware effect on TXD/RXD. Thus CIA-B participates in handshake/status policy, not Paula's bit serialization.
-- **source URL:** https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
-- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition
+- **source:** `repos/fujinet-nio-driver/docs/amiga/cia-port-signal-assigments.md`, `repos/fujinet-nio-driver/docs/amiga/cia-chip-register-map.md`, `repos/fujinet-nio-driver/docs/amiga/serial-interface-connector.md`
+- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition (App. E Parts 1–2 and 4; App. F maps)
 - **pub_date:** 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high
@@ -44,8 +50,8 @@ These figures are derived from the archived driver's integer algorithm and the o
 ### Claim 3 — transmit does not disable receive; the hardware is intended for full duplex
 
 - **claim:** Receive data moves through its own serial-to-parallel shift register into `SERDATR`, immediately freeing the receive shifter for the next character. Transmit data independently moves from `SERDAT` into an output shift register. The `TBE` status is explicitly described as normally used for full-duplex operation. `SERPER` supplies the interval both between receive samples and between transmitted bits. No receive-disable or TX/RX selector is documented.
-- **source URL:** https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
-- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition
+- **source:** `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition (Ch. 8 Serial I/O extract)
 - **pub_date:** 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high
@@ -54,8 +60,8 @@ These figures are derived from the archived driver's integer algorithm and the o
 ### Claim 4 — Paula overrun is receive-buffer starvation and is cleared through `INTREQ.RBF`
 
 - **claim:** Paula sets `SERDATR.OVRUN` if another complete character arrives before the processor picks up the previous character and clears the receive-buffer-full interrupt. The manual gives a service window of one character time (8–10 bit times). It specifies that resetting `INTREQ` bit 11 (`INTF_RBF`) resets the overrun condition; reading `SERDATR` alone is not documented as the clear action.
-- **source URL:** https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
-- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition
+- **source:** `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition (Ch. 8 Serial I/O extract)
 - **pub_date:** 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high
@@ -94,8 +100,8 @@ These figures are derived from the archived driver's integer algorithm and the o
 ### Claim 8 — one `SERPER` controls both directions
 
 - **claim:** Hardware defines `SERPER = (3,579,545 / baud) - 1` on NTSC and `(3,546,895 / baud) - 1` on PAL; `N+1` color clocks separate both receive samples and transmitted bits. The RKM likewise defines `io_Baud` as the baud for reads and writes. There is no independent TX and RX baud setting in the built-in UART API.
-- **source URL:** https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
-- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition
+- **source:** `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`
+- **publisher:** Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition (Ch. 8 Serial I/O extract)
 - **pub_date:** 1991-08
 - **accessed:** 2026-09-03
 - **confidence:** high
@@ -143,7 +149,7 @@ These figures are derived from the archived driver's integer algorithm and the o
 
 ## Contradictions and reconciliation
 
-1. **Hardware capability versus connector specification.** The Hardware Reference Manual's UART chapter calls Paula programmable from 110 to over 1,000,000 bit/s and estimates 150–250 kbit/s as possible with tight polling. Appendix E, however, lists 19.2 kHz as the serial connector's maximum operating frequency and 31.25 kHz with a MIDI adapter. These are different layers: divider capability, practical CPU service capability, and conservative external-interface specification. They must not be collapsed into one “maximum baud” claim.
+1. **Hardware capability versus connector specification.** The UART extract calls Paula programmable from 110 to over 1,000,000 bit/s and estimates 150–250 kbit/s as possible with tight polling. The connector extract lists 19.2 kHz as the serial connector's maximum operating frequency and 31.25 kHz with a MIDI adapter. These are different layers: divider capability, practical CPU service capability, and conservative external-interface specification. They must not be collapsed into one “maximum baud” claim.
 
 2. **RKM range versus Release 2 autodoc range.** The RKM prose says the built-in driver accepts 110 to about 1 megabaud (possibly rounding 110 to 112), while the Release 2 autodoc and V42 source enforce 112–292,000. For the decision at hand, both 38,400 and 57,600 lie inside every cited software range, so the discrepancy does not affect their validity.
 
@@ -173,7 +179,7 @@ These figures are derived from the archived driver's integer algorithm and the o
 
 ## Source list
 
-1. Commodore-Amiga / Addison-Wesley, *Amiga Hardware Reference Manual*, Third Edition, August 1991: https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf
+1. In-tree AHRM 3rd ed. extracts (print-validated): `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`, `serial-interface-connector.md`, `cia-port-signal-assigments.md`, `cia-chip-register-map.md`
 2. Commodore-Amiga / Addison-Wesley, *Amiga ROM Kernel Reference Manual: Devices*, Third Edition, 1991: https://www.ikod.se/wp-content/uploads/2020/08/Amiga_ROM_Kernal_Reference_Manual_Devices_Third.pdf
 3. Commodore-Amiga SDK, `devices/serial.h`, Release 2.04 V37.4, 1990-11-06: https://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node004B.html
 4. Commodore-Amiga Includes and Autodocs 2.0, `serial.device` autodoc: https://amigadev.elowar.com/read/ADCD_2.1/Includes_and_Autodocs_2._guide/node05AB.html

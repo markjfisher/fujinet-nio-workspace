@@ -36,7 +36,15 @@ Use `backlog/` for active workspace-level goals and move completed goal files
 to `completed/`. Keep repository-specific implementation details in the
 owning repository's documentation. Active BMad spec folders live in
 `_bmad-output/specs/`; accepted specs move to `_bmad-output/completed-specs/`
-and are not living requirements.
+and are not living requirements. `_bmad-output/archive/` holds superseded
+snapshots (including the 2026-08-28 Amiga RS-232 overrun handoff); do not
+treat those files as current diagnosis or work plans. For RS-232 above 9600
+baud, use `_bmad-output/planning-artifacts/research/technical-amiga-rs-232-disk-operation-failures-abo-2026-09-03/research.md`.
+Amiga RS-232 hardware is defined by print-validated AHRM extracts under
+`repos/fujinet-nio-driver/docs/amiga/` (`Serial-IO-Interface.md`,
+`serial-interface-connector.md`, `cia-port-signal-assigments.md`,
+`cia-chip-register-map.md`), not by the AHRM PDF and not by CIA 8520
+serial-shift folklore.
 
 ## Amiga DiskDevice status and future media work
 

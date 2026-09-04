@@ -79,7 +79,7 @@ Repository state inspected 2026-09-03. Claims below point to immutable repositor
 ### C8 — posting a read first does not keep the Amiga UART “in RX mode”
 
 - **claim:** Current code uses one `IOExtSer` for synchronous write, query, and read. A separate asynchronous read request would be required for overlap and is a valid controlled experiment. However, official documentation says `serial.device` buffers incoming characters after open even without a read pending, and Paula's transmit and receive paths are independent. Consequently a pre-posted read cannot fix a nonexistent TX→RX mode transition. It might still change driver scheduling/delivery latency; that narrower claim requires real-hardware testing.
-- **sources:** https://wiki.amigaos.net/wiki/Serial_Device ; https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf ; https://github.com/markjfisher/fujinet-nio-driver/blob/44bea7fd44434f75a8f2b2622fc075611d1f5e0a/amiga/nio.device/fujinet_nio_serial_backend.c
+- **sources:** https://wiki.amigaos.net/wiki/Serial_Device ; `repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md` ; https://github.com/markjfisher/fujinet-nio-driver/blob/44bea7fd44434f75a8f2b2622fc075611d1f5e0a/amiga/nio.device/fujinet_nio_serial_backend.c
 - **publisher:** Commodore manuals / current project repository
 - **pub_date:** manuals 1991; commit current on 2026-09-03
 - **accessed:** 2026-09-03

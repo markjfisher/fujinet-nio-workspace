@@ -17,22 +17,35 @@ claims_unverified: 1
 
 **Decision this research serves:** Select the fastest, lowest-risk experiments and fixes that make disk-oriented FujiNet NIO request/response operations reliable above 9600 baud while preserving reliable long-lived network traffic.
 
+This report **supersedes** the 2026-08-28 RS-232 overrun handoff (CIA 8520 TX→RX as confirmed cause). That document is archived and must not drive work: [`_bmad-output/archive/handoff-amiga-rs232-overrun-2026-08-28.md`](../../../archive/handoff-amiga-rs232-overrun-2026-08-28.md).
+
 ## Executive summary
 
 The fastest route to reliable 38,400 operation is a controlled response-size and pacing matrix, followed by the least costly fix that the matrix validates. The leading hypothesis is receive-burst pressure: the existing one-second `tx_gap_us` test delayed only the start of the response and did not pace its bytes. [9] If modest inter-byte or inter-chunk pacing prevents the fault, retain 38,400 baud for Amiga-to-ESP requests and apply the fastest response-pacing profile that remains reliable.
 
-Do not build the fix around a CIA TX→RX transition. Paula has independent full-duplex transmit and receive paths; `IO_STATF_OVERRUN`/`SerErr_LineErr` means the prior received character was not serviced before the next one completed. `CMD_READ` reports that latched fault but did not necessarily cause it. [1][2][4] Nor is there a separate disk transport: the inspected FHOST, FLS, FIN, appstore, and network call sites all reach the same resident serial backend. [6][7][13] Response length, burst shape, service timing, system load, and cold/warm state are the remaining differentiators. FLS permits a 420-byte payload. [13]
+Do not build the fix around a CIA TX→RX transition. Paula has independent full-duplex transmit and receive paths; `IO_STATF_OVERRUN`/`SerErr_LineErr` means the prior received character was not serviced before the next one completed. `CMD_READ` reports that latched fault but did not necessarily cause it. [1][2][4][14][15] Nor is there a separate disk transport: the inspected FHOST, FLS, FIN, appstore, and network call sites all reach the same resident serial backend. [6][7][13] Response length, burst shape, service timing, system load, and cold/warm state are the remaining differentiators. FLS permits a 420-byte payload. [13]
 
 Repeat RTS/CTS only after setting `SERF_7WIRE` before `OpenDevice()`; the previous test set it too late to validate Amiga seven-wire mode. [3][5] Test a separate pre-posted read as a scheduling experiment, not as a way to switch Paula into receive mode. A ping is justified only if failures prove cold-only: use it once per physical backend open/reconfiguration. If warm requests fail, per-request ping adds another vulnerable response. Possible robust designs include READY/GO or request IDs with replay and duplicate suppression; RFC 7252 supplies precedent for the latter pattern. [11]
 
 ## Established hardware constraints
+
+**AHRM source of truth (in-tree, print-validated).** Do not fetch the Hardware Reference Manual PDF. Use these extracts:
+
+- Paula UART: [`Serial-IO-Interface.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md) [1]
+- CIA-B handshake pins: [`cia-port-signal-assigments.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/cia-port-signal-assigments.md) [14]
+- CIA address maps / unused CIAB `sdr`: [`cia-chip-register-map.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/cia-chip-register-map.md) [14]
+- DB25 spec, software modem control, 19.2 kHz connector rating: [`serial-interface-connector.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/serial-interface-connector.md) [15]
+
+Do not re-derive Paula behaviour from the archived overrun handoff or from CIA 8520 serial-shift folklore.
+
+The Paula UART extract states: Paula contains the UART; receive and transmit use separate shift/buffer paths; `TBE` is for full-duplex and `TSRE` for half-duplex; `SERPER` sets the interval for both receive sampling and transmit bit times; overrun is set if another character completes before software picks up `SERDATR` and clears `INTF_RBF`, with a service window of one character time (8–10 bit times).
 
 ### No TX→RX transition
 
 There is no documented hardware transition from transmit mode to receive mode:
 
 - Paula has separate TX and RX shift/buffer paths intended for full-duplex use. `TBE`/`SERDAT` service does not disable `RBF`/`SERDATR`. [1]
-- CIA-B handles RTS, CTS, DTR, DSR, and CD policy; its own serial shift register is unused for the built-in RS-232 data path. [1]
+- CIA-B handles RTS, CTS, DTR, DSR, and CD policy; CIAB `sdr` is unused and RS-232 data is Paula. Modem-control lines are software-driven and have no hardware effect on TXD/RXD. [14][15]
 - `serial.device` buffers received characters continuously after `OpenDevice()`, whether or not `CMD_READ` is pending. [3]
 - A Paula overrun occurs when the RBF handler does not clear the prior received character before the next one completes. At the stock driver's programmed rates, the RBF handler has about 262 µs per character at requested 38,400 and 175 µs at requested 57,600 on PAL. [1][4]
 - The driver latches the hardware overrun and reports it when a read reaches the marked receive-buffer position. Thus, a diagnostic can report the fault at `CMD_READ` after a completed write without implying that the write caused it. [4]
@@ -130,7 +143,7 @@ At 38,400 baud, a 750 µs inter-byte delay plus the normal character time approx
 - The handoff reports an overrun even with a one-second pre-response gap. That contradicts a pure turnaround-settling problem but not burst-service starvation, because the implemented gap occurs once before the same unpaced burst. [9]
 - A true hardware overrun is not caused by the configured 2,112-byte software receive buffer filling; the official API distinguishes `SerErr_LineErr` from `SerErr_BufOverflow`. Increasing `io_RBufLen` further is unlikely to solve this particular status, although a large buffer remains appropriate. [2][3][6]
 - Because Bounce World runs for hours at 38,400, any explanation must account for why it remains reliable. The response-profile hypothesis remains medium confidence until actual wire lengths, timing, and overrun rates are captured.
-- The exact V42 divisor implementation comes from an unofficial source archive. The hardware ownership, overrun definition, public baud API, and seven-wire open-time requirement do not depend on that archive. [1][2][3][4]
+- The exact V42 divisor implementation comes from an unofficial source archive. The hardware ownership, overrun definition, public baud API, and seven-wire open-time requirement do not depend on that archive. [1][2][3][4][14][15]
 
 ## Hardware-matrix decision gates
 
@@ -144,7 +157,7 @@ At 38,400 baud, a 750 µs inter-byte delay plus the normal character time approx
 
 | Ref | Claim/finding supported | Publisher/source | Publication date | Accessed | Confidence |
 | --- | --- | --- | --- | --- | --- |
-| [1] | Paula UART ownership, independent TX/RX, RBF overrun and `SERPER` formula | [Commodore-Amiga, Amiga Hardware Reference Manual, 3rd ed.](https://www.ikod.se/wp-content/uploads/2020/08/Amiga_Hardware_Reference_Manual_3rd_Edition.pdf) | 1991-08 | 2026-09-03 | High |
+| [1] | Paula UART ownership, independent TX/RX, RBF overrun and `SERPER` formula | [`repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md) (AHRM 3rd ed. Ch. 8 Serial I/O; print-validated) | 1991-08 | 2026-09-04 | High |
 | [2] | `serial.device` baud/high-speed/error contract | [Commodore-Amiga, ROM Kernel Reference Manual: Devices](https://www.ikod.se/wp-content/uploads/2020/08/Amiga_ROM_Kernal_Reference_Manual_Devices_Third.pdf) | 1991 | 2026-09-03 | High |
 | [3] | Continuous input buffering, seven-wire open-time requirement, separate requests | [AmigaOS Documentation Wiki, Serial Device (RKM-derived)](https://wiki.amigaos.net/wiki/Serial_Device) | revision 2025-01-26 | 2026-09-03 | High |
 | [4] | Classic driver overrun latch/delivery and baud algorithm | [Commodore V42 serial.device archival source mirror](https://github.com/Arquivotheca/amiga-os-src/tree/b78c1ada537615c6eda889ad97b4ccd51ff4a178b/os-source/v42/src/workbench/devs/serial) | 1991–1993 | 2026-09-03 | Medium |
@@ -157,6 +170,8 @@ At 38,400 baud, a 750 µs inter-byte delay plus the normal character time approx
 | [11] | Separate response, identifiers, retransmission, duplicate handling precedent | [IETF RFC 7252](https://www.rfc-editor.org/info/rfc7252/) | 2014-06 | 2026-09-03 | High as protocol precedent |
 | [12] | `CMD_READ` query/post pattern and warning against multiple outstanding reads | [Commodore serial.device CMD_READ AutoDoc mirror](https://d0.se/autodocs/serial.device/CMD_READ) | c. 1990 | 2026-09-03 | High |
 | [13] | Inspected FHOST/FLS/FIN application call sites and FLS's 420-byte service-payload limit | [nio-core-apps at 542af6cc](https://github.com/markjfisher/nio-core-apps/tree/542af6cc28f737ba1819a6e3b5a98fab474ecbc6) | 2026-09 | 2026-09-03 | High |
+| [14] | CIA-B DTR/RTS/CD/CTS/DSR GPIO; CIAB `sdr` unused; RS-232 UART is Paula | [`cia-port-signal-assigments.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/cia-port-signal-assigments.md) (AHRM App. E Part 4) and [`cia-chip-register-map.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/cia-chip-register-map.md) (AHRM App. F maps + SDR assignment note); print-validated | 1991-08 | 2026-09-04 | High |
+| [15] | Serial connector pinout; modem control software-only and asynchronous to TXD/RXD; 19.2 kHz connector rating | [`serial-interface-connector.md`](../../../../../repos/fujinet-nio-driver/docs/amiga/serial-interface-connector.md) (AHRM App. E serial spec); print-validated | 1991-08 | 2026-09-04 | High |
 
 ## Staleness map
 
