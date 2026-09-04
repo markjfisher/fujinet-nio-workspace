@@ -1,0 +1,13 @@
+[
+  {"claim":"Paula full-duplex UART; no CIA TX/RX transition","class":"classic-hardware","pub_date":"1991-08"},
+  {"claim":"RBF overrun is a one-character receive-service failure","class":"classic-hardware","pub_date":"1991-08"},
+  {"claim":"serial.device buffers receive data without a pending read","class":"classic-api","pub_date":"2025-01"},
+  {"claim":"SERF_7WIRE must be set before OpenDevice","class":"classic-api","pub_date":"2025-01"},
+  {"claim":"Prior RTS/CTS experiment set SERF_7WIRE too late","class":"historical-code","pub_date":"2026-08"},
+  {"claim":"All Amiga service calls share fujinet-nio.device serial backend","class":"current-code","pub_date":"2026-09"},
+  {"claim":"Exchange tool perturbs cold state and warms before file-list marker","class":"current-code","pub_date":"2026-09"},
+  {"claim":"tx_gap_us delays response start but does not pace its burst","class":"current-code","pub_date":"2026-09"},
+  {"claim":"ESP TX is gated by CTS; RTS reports ESP RX FIFO capacity","class":"version-compatibility","pub_date":"2026-09"},
+  {"claim":"Burst shape and RBF service latency are the leading remaining cause","class":"experimental","pub_date":"2026-09"},
+  {"claim":"One-time ping only helps as cold-start sacrificial warm-up","class":"architecture-pattern","pub_date":"2026-09"}
+]
