@@ -2,7 +2,7 @@
 title: 'Amiga RS-232 cold/warm + response-size diagnostic (research rank 1)'
 type: 'feature'
 created: '2026-09-04'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: '143dd7586eae2b9fcd96d27887cbd68cfb91a108'
 context:
@@ -63,13 +63,13 @@ Driver paths under `repos/fujinet-nio-driver/`.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `amiga/tools/fujinet_nio_exchange_opts.c` (+ header) — parse/validate; cold vs always-WARMUP plan
-- [ ] `amiga/tools/fujinet-nio-exchange.c` — prove without pre-trial serial open; matrix; host-get; LIST `--size`/`--uri`; cold SET_BAUD; warm WARMUP then measure; trial log; `elapsed_us` or `-`
-- [ ] `amiga/tests/test_fujinet_nio_exchange_opts.c` + Makefile — flags, size/baud/uri, LIST bytes, warm WARMUP
-- [ ] `amiga/tests/test_fujinet_nio_device.c` — SET_BAUD then EXCHANGE re-opens backend
-- [ ] `amiga/Makefile` — link opts
-- [ ] `integration-tests/amiberry/test_nio_broker.py` — ISOLATED without priming probe
-- [ ] `fujinet_nio_serial_backend.c` + `fujinet_nio_backend.h` — comment-only CIA/TX→RX cleanup
+- [x] `amiga/tools/fujinet_nio_exchange_opts.c` (+ header) — parse/validate; cold vs always-WARMUP plan
+- [x] `amiga/tools/fujinet-nio-exchange.c` — prove without pre-trial serial open; matrix; host-get; LIST `--size`/`--uri`; cold SET_BAUD; warm WARMUP then measure; trial log; `elapsed_us` or `-`
+- [x] `amiga/tests/test_fujinet_nio_exchange_opts.c` + Makefile — flags, size/baud/uri, LIST bytes, warm WARMUP
+- [x] `amiga/tests/test_fujinet_nio_device.c` — SET_BAUD then EXCHANGE re-opens backend
+- [x] `amiga/Makefile` — link opts
+- [x] `integration-tests/amiberry/test_nio_broker.py` — ISOLATED without priming probe
+- [x] `fujinet_nio_serial_backend.c` + `fujinet_nio_backend.h` — comment-only CIA/TX→RX cleanup
 
 **Acceptance Criteria:**
 - Given `--type file-list --backend cold --size 8 --uri …`, when run, then first FujiBus is LIST maxPayloadBytes=8 and the log has `backend=cold`, `req_len`, actual `resp_len`, `elapsed_us` or `-`, result/cause/native/status.
@@ -86,3 +86,56 @@ Driver paths under `repos/fujinet-nio-driver/`.
 - `source "$NIO_WORKSPACE/scripts/env.sh" && make -C repos/fujinet-nio-driver/amiga native` -- `fujinet-nio-exchange` links
 
 **Manual checks (if no CLI):** Do not run `scripts/amiga-tests` or `nio-broker-isolated`. CIA cleanup is comments only.
+
+## Suggested Review Order
+
+**Entry and matrix dispatch**
+
+- Flag mode is `argc >= 2`; no-arg prove is unchanged.
+  [`fujinet-nio-exchange.c:577`](../../repos/fujinet-nio-driver/amiga/tools/fujinet-nio-exchange.c#L577)
+
+- Parse fails before `OpenDevice` for 57600, unknown type, and missing `--uri`.
+  [`fujinet_nio_exchange_opts.c:55`](../../repos/fujinet-nio-driver/amiga/tools/fujinet_nio_exchange_opts.c#L55)
+
+**Cold vs warm plan**
+
+- Cold is always `SET_BAUD` then MEASURE; warm always includes unmeasured `WARMUP`.
+  [`fujinet_nio_exchange_opts.c:120`](../../repos/fujinet-nio-driver/amiga/tools/fujinet_nio_exchange_opts.c#L120)
+
+- The Amiga tool executes that plan; baud mismatch aborts before `WARMUP`.
+  [`fujinet-nio-exchange.c:486`](../../repos/fujinet-nio-driver/amiga/tools/fujinet-nio-exchange.c#L486)
+
+**Measured packets**
+
+- Host-get is `0xF0` / `0x01` with version 1, copied from FHOST without editing it.
+  [`fujinet_nio_exchange_opts.c:206`](../../repos/fujinet-nio-driver/amiga/tools/fujinet_nio_exchange_opts.c#L206)
+
+- LIST `maxPayloadBytes` comes from `--size`; matrix cap is 1024.
+  [`fujinet_nio_exchange_opts.c:222`](../../repos/fujinet-nio-driver/amiga/tools/fujinet_nio_exchange_opts.c#L222)
+
+**Prove isolation**
+
+- Isolation is FindName/FindTask only; `try_open_serial` is post-trial.
+  [`fujinet-nio-exchange.c:238`](../../repos/fujinet-nio-driver/amiga/tools/fujinet-nio-exchange.c#L238)
+
+**Trial log**
+
+- One line per MEASURE: `req_len`, `resp_len`, `elapsed_us` or `-`, `ttfb_us=-`.
+  [`fujinet_nio_exchange_opts.c:172`](../../repos/fujinet-nio-driver/amiga/tools/fujinet_nio_exchange_opts.c#L172)
+
+**Comment-only Paula RBF**
+
+- Overrun wording is Paula RBF, not CIA UART or TX→RX.
+  [`fujinet_nio_serial_backend.c:219`](../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_serial_backend.c#L219)
+
+**Tests**
+
+- Native opts tests cover flags, LIST bytes, warm WARMUP, and usage errors.
+  [`test_fujinet_nio_exchange_opts.c:18`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_exchange_opts.c#L18)
+
+- SET_BAUD then EXCHANGE re-opens the backend.
+  [`test_fujinet_nio_device.c:298`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_device.c#L298)
+
+- ISOLATED no longer expects a pre-trial serial probe string.
+  [`test_nio_broker.py:7`](../../integration-tests/amiberry/test_nio_broker.py#L7)
+

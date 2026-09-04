@@ -3,7 +3,8 @@ def test_isolated_exchange(run_amiga_case):
 
     assert "LOAD RC=0" in results["nio-load.result"]
     exchange = results["nio-exchange.result"]
-    assert "ISOLATED disk.device=absent FLS=absent serial-free-before=1" in exchange
+    assert "ISOLATED disk.device=absent FLS=absent" in exchange
+    assert "serial-free-before" not in exchange
     assert "EXCHANGE io=0 nio=0" in exchange
     assert "REUSE io=0 nio=0" in exchange
     assert "RESIDENT serial-busy-after-opencnt0=1" in exchange
