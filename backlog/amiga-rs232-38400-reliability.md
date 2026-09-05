@@ -32,7 +32,7 @@ A disk block must not complete OK with a truncated body (already fail-closed)
 and must not leave the volume needing a human requester because one RBF miss
 dropped a sector command.
 
-- [ ] NIO-layer retry of **idempotent** DiskDevice commands after
+- [x] NIO-layer retry of **idempotent** DiskDevice commands after
       `FN_ERR_TRANSPORT` / `FN_ERR_TIMEOUT`, only after stream drain+reopen.
       READ is idempotent. WRITE of the same 512-byte ADF sector is replay-safe.
       Do not retry non-idempotent FujiBus commands without request IDs.

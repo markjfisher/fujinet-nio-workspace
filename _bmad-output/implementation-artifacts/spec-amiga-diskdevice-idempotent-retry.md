@@ -2,8 +2,9 @@
 title: 'Retry idempotent Amiga DiskDevice sector exchanges after RS-232 recovery'
 type: 'bugfix'
 created: '2026-09-04'
-status: 'draft'
+status: 'in-progress'
 review_loop_iteration: 0
+baseline_commit: '1d937cfd480f7de638e8fba5a5210e7d1633bc6f'
 context:
   - '{project-root}/docs/agent-test-policy.md'
   - '{project-root}/backlog/amiga-rs232-38400-reliability.md'
@@ -53,9 +54,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `amiga/channels/rs232/fujinet_nio_client.c` -- add private packet classification and a three-total-attempt raw exchange loop for DiskService READ_SECTOR/WRITE_SECTOR only.
-- [ ] `amiga/tests/test_fujinet_nio_client_retry.c`, `amiga/tests/Makefile` -- add deterministic scripted transport tests for recovery, exhaustion, byte-identical replay, response-length isolation, excluded commands, malformed/truncated sector packets, and non-retryable errors.
-- [ ] `amiga/channels/rs232/README.md`, `backlog/amiga-rs232-38400-reliability.md` -- record the narrow policy and check off implementation only after automated verification; leave physical hardware proof open until observed.
+- [x] `amiga/channels/rs232/fujinet_nio_client.c` -- add private packet classification and a three-total-attempt raw exchange loop for DiskService READ_SECTOR/WRITE_SECTOR only.
+- [x] `amiga/tests/test_fujinet_nio_client_retry.c`, `amiga/tests/Makefile` -- add deterministic scripted transport tests for recovery, exhaustion, byte-identical replay, response-length isolation, excluded commands, malformed/truncated sector packets, and non-retryable errors.
+- [x] `amiga/channels/rs232/README.md`, `backlog/amiga-rs232-38400-reliability.md` -- record the narrow policy and check off implementation only after automated verification; leave physical hardware proof open until observed.
 
 **Acceptance Criteria:**
 - Given the broker has returned a transport/timeout fault and completed drain-and-close, when a DiskDevice sector READ or same-sector WRITE is retried successfully, then the request completes with `io_Error=0` and full `io_Actual`.
@@ -81,3 +82,10 @@ WRITE_SECTOR is retry-safe here specifically because every replay is byte-identi
 
 **Manual checks (hardware):**
 - At 38,400 baud with 16-byte/2,000-us ESP pacing, capture a `cause=7` during CMD_READ and CMD_WRITE and record full success after retry or bounded final error, never success with short `io_Actual`.
+
+**Run results (2026-09-05):**
+- Focused retry matrix: PASS.
+- Full Amiga driver native contracts: PASS.
+- Amiga m68k native build: PASS.
+- `diskdevice-adf` guest node: FAIL twice at the existing writable DN2 remount requester after `disk-persist.result`. Evidence runs `test-evidence/amiberry-20260904-221444/diskdevice-adf` and `test-evidence/amiberry-20260904-221513/diskdevice-adf`, captured before this spec's baseline, show the same requester at the same checkpoint. Current FujiBus logs show successful exchanges and no retry-triggering transport fault before the requester. This pre-existing Phase 2 lifecycle regression is outside the frozen retry scope.
+- Physical 38,400-baud `cause=7` recovery: pending real-hardware execution.
