@@ -3,7 +3,7 @@ id: SPEC-fujibus-slip-separation
 companions:
   - brownfield.md
 sources:
-  - ../../planning-artifacts/backlog-fujibus-slip-separation.md
+  - backlog-fujibus-slip-separation.md
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate. Source documents listed in frontmatter are for traceability — consult them only if you need narrative rationale or prose color this contract intentionally omits.

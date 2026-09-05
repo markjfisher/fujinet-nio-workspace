@@ -200,3 +200,37 @@ by this refactor; it is on the Amiga side of the broker, not the ESP side.
 - Optionally flatten `bootstrap.cpp`'s `TransportKind` switch into per-platform bootstrap files
 
 **Non-goals:** Any new hardware or protocol support.
+
+## Completion validation (2026-09-05)
+
+The FujiBus/SLIP separation and its build-profile follow-on are complete.
+
+- `FujiBusTransport` now receives an `IFramer`; `SlipFramer` owns SLIP state;
+  `NativeFramer` is available for packet-native profiles; and bootstrap wiring
+  selects the framer by `TransportKind` construction.
+- POSIX build profiles are separate source files selected by CMake, with no
+  preprocessor conditionals in the POSIX profile files.
+- ESP32 intentionally remains consolidated in
+  `repos/fujinet-nio/src/platform/esp32/build_profile.cpp`. PlatformIO/ESP-IDF
+  compiles the component's sources together, so the profile macro chain is
+  required there. Splitting ESP32 variants into separate component sources
+  would be a larger, independent build-system change with little benefit for
+  the current profile set.
+- This exception is documented in `repos/fujinet-nio/docs/build_profiles.md`,
+  the source-file comment, and
+  `_bmad-output/implementation-artifacts/spec-per-platform-build-profile-files.md`.
+
+Validation evidence:
+
+- POSIX profile static check: no `#ifdef`, `#elif`, or `#if defined` outside
+  `esp32.cpp`; the legacy `src/lib/build_profile.cpp` is absent.
+- Build-only validation passed for `fujibus-pty-debug`, `fujibus-tcp-debug`,
+  `fujibus-rs232-debug`, `atari-pty-debug`, `atari-netsio-debug`,
+  `atari-fujibus-netsio-debug`, and `lib-only`.
+- Focused SLIP, framer, transport, and build-profile tests passed (7 test
+  cases, 28 assertions).
+- The complete `fujibus-pty-debug` ctest suite passed: 2/2 tests.
+
+The ESP32 consolidation is therefore an accepted design decision, not an
+unfinished task. No backlog work remains; this artifact is archived with the
+completed spec.
