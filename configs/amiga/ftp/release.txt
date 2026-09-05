@@ -4,33 +4,35 @@
 # Device binaries go to /dev/NIO/Devs/; applications and helpers go to /dev/NIO/C/.
 
 # Device drivers
-put repos/fujinet-nio-driver/build/amiga/fujinet-nio.device -o /dev/NIO/Devs/fujinet-nio.device
-put repos/fujinet-nio-driver/build/amiga/fujinet-disk.device -o /dev/NIO/Devs/fujinet-disk.device
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio.device      -o /dev/NIO/Devs/
+put repos/fujinet-nio-driver/build/amiga/fujinet-disk.device     -o /dev/NIO/Devs/
 
 # Driver helpers (C:)
-put repos/fujinet-nio-driver/build/amiga/fujinet-load-resident -o /dev/NIO/C/fujinet-load-resident
-put repos/fujinet-nio-driver/build/amiga/fujinet-mount -o /dev/NIO/C/fujinet-mount
-put repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud -o /dev/NIO/C/fujinet-nio-baud
-put repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange -o /dev/NIO/C/fujinet-nio-exchange
-put repos/fujinet-nio-driver/build/amiga/fujinet-unload-resident -o /dev/NIO/C/fujinet-unload-resident
+put repos/fujinet-nio-driver/build/amiga/fujinet-load-resident   -o /dev/NIO/C/
+put repos/fujinet-nio-driver/build/amiga/fujinet-mount           -o /dev/NIO/C/
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud        -o /dev/NIO/C/
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange    -o /dev/NIO/C/
+put repos/fujinet-nio-driver/build/amiga/fujinet-unload-resident -o /dev/NIO/C/
 
 # Core FujiNet apps (nio-core-apps)
-put repos/nio-core-apps/build/amiga/bin/fapp -o /dev/NIO/C/fapp
-put repos/nio-core-apps/build/amiga/bin/fboot -o /dev/NIO/C/fboot
-put repos/nio-core-apps/build/amiga/bin/fdrive -o /dev/NIO/C/fdrive
-put repos/nio-core-apps/build/amiga/bin/fhost -o /dev/NIO/C/fhost
-put repos/nio-core-apps/build/amiga/bin/fin -o /dev/NIO/C/fin
-put repos/nio-core-apps/build/amiga/bin/fls -o /dev/NIO/C/fls
-put repos/nio-core-apps/build/amiga/bin/fmount -o /dev/NIO/C/fmount
-put repos/nio-core-apps/build/amiga/bin/fmountrestore -o /dev/NIO/C/fmountrestore
-put repos/nio-core-apps/build/amiga/bin/fout -o /dev/NIO/C/fout
-put repos/nio-core-apps/build/amiga/bin/fumount -o /dev/NIO/C/fumount
+put repos/nio-core-apps/build/amiga/bin/fapp                     -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fboot                    -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fdrive                   -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fhost                    -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fin                      -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fls                      -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fmount                   -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fmountrestore            -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fout                     -o /dev/NIO/C/
+put repos/nio-core-apps/build/amiga/bin/fumount                  -o /dev/NIO/C/
 
 # Apps (nio-apps)
-put repos/nio-apps/build/amiga/bin/clock -o /dev/NIO/C/clock
-put repos/nio-apps/build/amiga/bin/devopencnt -o /dev/NIO/C/devopencnt
+put repos/nio-apps/build/amiga/bin/checksumbench                 -o /dev/NIO/C/
+put repos/nio-apps/build/amiga/bin/clock                         -o /dev/NIO/C/
+put repos/nio-apps/build/amiga/bin/devopencnt                    -o /dev/NIO/C/
+put repos/nio-apps/build/amiga/bin/doslistdiag                   -o /dev/NIO/C/
 
 # Bounce World client
-put repos/bounce-world-client-nio/build/bwcn.amiga -o /dev/NIO/C/bwcn.amiga
+put repos/bounce-world-client-nio/build/bwcn.amiga               -o /dev/NIO/C/bouncy-world
 
 bye

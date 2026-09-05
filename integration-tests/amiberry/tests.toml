@@ -12,6 +12,18 @@ settings = [
 ]
 
 [[test]]
+name = "checksumbench"
+project = "apps"
+app = "checksumbench"
+timeout = 600
+activity_timeout = 600
+no_activity_timeout = 120
+startup = "startup/checksumbench.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/checksumbench"
+results = ["checksumbench.result"]
+
+[[test]]
 name = "wifi-config"
 project = "apps"
 app = "wificonfigtest"
