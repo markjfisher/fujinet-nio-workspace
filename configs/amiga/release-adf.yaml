@@ -36,6 +36,7 @@ files:
   - repos/nio-core-apps/build/amiga/bin/fumount
 
   # Apps (nio-apps)
+  - repos/nio-apps/build/amiga/bin/checksumbench
   - repos/nio-apps/build/amiga/bin/clock
   - repos/nio-apps/build/amiga/bin/devopencnt
   - repos/nio-apps/build/amiga/bin/doslistdiag
