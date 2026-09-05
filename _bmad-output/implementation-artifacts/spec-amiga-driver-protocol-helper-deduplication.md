@@ -63,10 +63,11 @@ context: []
 ## Spec Change Log
 
 - 2026-09-05: Human review confirmed that generation and validation use the same checksum algorithm; added one shared helper with an explicit skip-byte mode and direct vector coverage, avoiding duplicate production/test implementations.
+- 2026-09-05: Refined the checksum contract to a pure packet-aware helper: it excludes `FN_CHECKSUM_OFFSET` without mutation; creators assign the result and validators compare it. The generic helper remains for arbitrary byte arrays.
 
 ## Design Notes
 
-Generation and validation use one shared checksum helper with an explicit `skip_checksum_byte` parameter; all FujiBus packet callers skip encoded byte 4, while direct tests cover both modes. MS-DOS endian helpers retain their `NIO_PROTO_PTR` contract and are out of scope. The helper is Amiga-private rather than exposing internal `fujinet-nio-lib` macros.
+Generation and validation use the shared library's pure `fn_calc_packet_checksum()`, which excludes `FN_CHECKSUM_OFFSET` without mutating packets. Creation callers assign its return value; validation callers compare it with the encoded checksum byte. The generic `fn_calc_checksum()` remains available for arbitrary byte arrays. MS-DOS transport retains its legacy pointer contract and remains out of scope.
 
 ## Verification
 
