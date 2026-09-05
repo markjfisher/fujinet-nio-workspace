@@ -75,3 +75,7 @@
 - source_spec: `_bmad-output/completed-specs/spec-amiga-fumount-clean-driver-removal/stories/1-fumount-retires-the-dos-handler-then-ejects.md`
   summary: Guest or stubbed-DoPkt proof that ACTION_FLUSH failure skips ACTION_DIE and TD_EJECT
   evidence: Healthy FFS FLUSH is never false in Amiberry; a host boolean wrapper around flush_ok != 0 did not execute fumount.c and was removed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-amiga-driver-protocol-helper-deduplication.md`
+  summary: Add overflow and direct-call validation to the exchange file-list packet builder
+  evidence: The pre-existing public builder accepts URI lengths whose complete packet would overflow 16-bit length arithmetic and silently truncates max_payload_bytes above 65535; this refactor exposed the boundary but did not change its contract.
