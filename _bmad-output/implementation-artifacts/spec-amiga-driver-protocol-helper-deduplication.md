@@ -62,9 +62,11 @@ context: []
 
 ## Spec Change Log
 
+- 2026-09-05: Human review confirmed that generation and validation use the same checksum algorithm; added one shared helper with an explicit skip-byte mode and direct vector coverage, avoiding duplicate production/test implementations.
+
 ## Design Notes
 
-The retry classifier checksum has a different contract from request generation: it derives the expected checksum while skipping encoded byte 4. Keep it local and rename it for clarity if useful. MS-DOS endian helpers retain their `NIO_PROTO_PTR` contract and are out of scope. The new header is Amiga-private rather than exposing internal `fujinet-nio-lib` macros.
+Generation and validation use one shared checksum helper with an explicit `skip_checksum_byte` parameter; all FujiBus packet callers skip encoded byte 4, while direct tests cover both modes. MS-DOS endian helpers retain their `NIO_PROTO_PTR` contract and are out of scope. The helper is Amiga-private rather than exposing internal `fujinet-nio-lib` macros.
 
 ## Verification
 
