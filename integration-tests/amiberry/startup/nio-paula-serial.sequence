@@ -1,0 +1,15 @@
+C:Assign T: RAM:
+C:Failat 100
+C:fujinet-load-resident DEVS:fujinet-serial.device fujinet-serial.device
+C:Echo "SERIAL LOAD RC=$RC" >DH0:serial-load.result
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device
+C:Echo "LOAD RC=$RC" >DH0:nio-load.result
+C:fujinet-nio-exchange --type clock --backend cold --baud 19200 --trials 1 --serial-device fujinet-serial.device >DH0:nio-exchange.result
+C:Echo "TOOL RC=$RC" >DH0:nio-tool-rc.result
+C:fujinet-nio-exchange --type file-list --backend cold --baud 19200 --trials 1 --size 256 --uri host:/amiga-e2e-complete/nio-paula-serial --serial-device fujinet-serial.device >DH0:nio-marker.result
+C:Echo "RESULTS-BEGIN"
+C:Type DH0:serial-load.result
+C:Type DH0:nio-load.result
+C:Type DH0:nio-exchange.result
+C:Type DH0:nio-tool-rc.result
+C:Echo "RESULTS-END"

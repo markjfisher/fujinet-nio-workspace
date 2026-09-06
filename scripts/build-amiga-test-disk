@@ -50,6 +50,8 @@ def main() -> int:
                         help="fujinet-mount command to install in C:")
     parser.add_argument("--disk-mountlist", action="append", type=Path,
                         default=[], help="DNx MountList entry to install in DEVS:")
+    parser.add_argument("--devs-file", action="append", type=Path, default=[],
+                        help="extra file to copy into DEVS: under its basename")
     parser.add_argument("--command", default=None,
                         help="startup command; defaults to the installed app name")
     parser.add_argument("--startup-script", type=Path,
@@ -89,6 +91,9 @@ def main() -> int:
     for path in args.disk_mountlist:
         if not path.is_file():
             raise SystemExit(f"disk MountList not found: {path}")
+    for path in args.devs_file:
+        if not path.is_file():
+            raise SystemExit(f"DEVS file not found: {path}")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.unlink(missing_ok=True)
@@ -125,6 +130,8 @@ def main() -> int:
             run_xdf(args.output, "write", str(args.disk_mount_tool), "C/fujinet-mount")
         for mountlist in args.disk_mountlist:
             run_xdf(args.output, "write", str(mountlist), f"Devs/{mountlist.name}")
+        for devs_file in args.devs_file:
+            run_xdf(args.output, "write", str(devs_file), f"Devs/{devs_file.name}")
         installed_names = {args.app_name}
         for app_dir in args.extra_app_dir:
             for app in sorted(app_dir.iterdir()):

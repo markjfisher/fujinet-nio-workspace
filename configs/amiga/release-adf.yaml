@@ -17,6 +17,7 @@ files:
   # Driver
   - repos/fujinet-nio-driver/build/amiga/fujinet-nio.device
   - repos/fujinet-nio-driver/build/amiga/fujinet-disk.device
+  - repos/fujinet-nio-driver/build/amiga/fujinet-serial.device
   - repos/fujinet-nio-driver/build/amiga/fujinet-load-resident
   - repos/fujinet-nio-driver/build/amiga/fujinet-mount
   - repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud

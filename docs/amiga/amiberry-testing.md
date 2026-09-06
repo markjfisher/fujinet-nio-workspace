@@ -65,6 +65,7 @@ to install or run fresh builds explicitly:
 ```text
 Copy NIO:fujinet-nio.device DEVS:
 Copy NIO:fujinet-disk.device DEVS:
+Copy NIO:fujinet-serial.device DEVS:
 Copy NIO:fujinet-load-resident C:
 Copy NIO:fujinet-unload-resident C:
 NIO:FLS ...
@@ -107,6 +108,7 @@ A useful script to put in C:copy-fujinet is:
 Echo "Copying fujinet drivers to harddrive"
 Copy NIO:fujinet-nio.device TO DEVS:
 Copy NIO:fujinet-disk.device TO DEVS:
+Copy NIO:fujinet-serial.device TO DEVS:
 Copy NIO:fujinet-load-resident TO C:
 Copy NIO:fujinet-unload-resident TO C:
 ```

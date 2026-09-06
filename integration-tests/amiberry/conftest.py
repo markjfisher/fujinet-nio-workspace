@@ -879,6 +879,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 "--resident-loader", resident_loader,
                 "--resident-unloader", resident_unloader,
             ])
+            if case.get("fujinet_serial"):
+                serial_device = driver_root / "build/amiga/fujinet-serial.device"
+                if not serial_device.is_file():
+                    raise AssertionError(
+                        f"Amiga Paula serial device was not built: {serial_device}"
+                    )
+                build_cmd.extend(["--devs-file", serial_device])
         else:
             build_cmd.extend([
                 "--nio-device", nio_device,

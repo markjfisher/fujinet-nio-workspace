@@ -6,6 +6,7 @@
 # Device drivers
 put repos/fujinet-nio-driver/build/amiga/fujinet-nio.device      -o /dev/NIO/Devs/
 put repos/fujinet-nio-driver/build/amiga/fujinet-disk.device     -o /dev/NIO/Devs/
+put repos/fujinet-nio-driver/build/amiga/fujinet-serial.device   -o /dev/NIO/Devs/
 
 # Driver helpers (C:)
 put repos/fujinet-nio-driver/build/amiga/fujinet-load-resident   -o /dev/NIO/C/

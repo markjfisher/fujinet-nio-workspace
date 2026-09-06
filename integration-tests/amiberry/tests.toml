@@ -882,3 +882,22 @@ results = [
   "nio-exchange.result",
   "nio-tool-rc.result",
 ]
+
+[[test]]
+name = "nio-paula-serial"
+project = "driver"
+app = "fujinet-nio-exchange"
+nio_broker = true
+fujinet_serial = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/nio-paula-serial.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/nio-paula-serial"
+results = [
+  "serial-load.result",
+  "nio-load.result",
+  "nio-exchange.result",
+  "nio-tool-rc.result",
+]
