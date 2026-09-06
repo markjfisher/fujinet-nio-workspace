@@ -247,6 +247,7 @@ def sync_development_share(root: Path, share_path: Path) -> list[str]:
         "fujinet-unload-resident",
         "fujinet-mount",
         "fujinet-nio-baud",
+        "fujinet-nio-serial",
     ):
         sources.append(driver / name)
     for bin_dir in (

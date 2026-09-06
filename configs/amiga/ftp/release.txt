@@ -11,6 +11,7 @@ put repos/fujinet-nio-driver/build/amiga/fujinet-disk.device     -o /dev/NIO/Dev
 put repos/fujinet-nio-driver/build/amiga/fujinet-load-resident   -o /dev/NIO/C/
 put repos/fujinet-nio-driver/build/amiga/fujinet-mount           -o /dev/NIO/C/
 put repos/fujinet-nio-driver/build/amiga/fujinet-nio-baud        -o /dev/NIO/C/
+put repos/fujinet-nio-driver/build/amiga/fujinet-nio-serial      -o /dev/NIO/C/
 put repos/fujinet-nio-driver/build/amiga/fujinet-nio-exchange    -o /dev/NIO/C/
 put repos/fujinet-nio-driver/build/amiga/fujinet-unload-resident -o /dev/NIO/C/
 
