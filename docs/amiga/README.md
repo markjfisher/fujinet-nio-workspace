@@ -8,6 +8,9 @@
   not this `fujinet-serial.device` cut, and how to add it later.
 - [`amiberry-testing.md`](amiberry-testing.md) — interactive and automated
   Amiberry setup, focused integration tests, retained evidence, and debugging.
+- [`cli-stack-and-iorequest.md`](cli-stack-and-iorequest.md) — default Shell
+  STACK 4096 (`#80000006` CHK) and never `WaitIO` an OpenDevice-only
+  IORequest.
 
 Active cross-repository work is tracked in [`../../backlog/`](../../backlog/),
 and completed acceptance records are retained in

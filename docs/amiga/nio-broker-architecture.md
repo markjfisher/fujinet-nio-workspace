@@ -344,9 +344,12 @@ fn_transport_exchange_buffers(ctx, request, req_len, response, resp_cap, resp_le
     → return ctx->req.fn_nio_error
 
 fn_transport_close(ctx)
-    → if pending: WaitIO/AbortIO on ctx->req before CloseDevice
+    → if CheckIO says ctx->req is still outstanding after SendIO/BeginIO:
+          AbortIO then WaitIO (after DoIO, WaitIO already ran)
     → CloseDevice(&ctx->req.fn_io)
     → delete port; ctx->device_open = 0
+      Never WaitIO an IORequest used only for OpenDevice; see
+      docs/amiga/cli-stack-and-iorequest.md.
 ```
 
 `FN_AMIGA_EXPLICIT_LIFECYCLE` remains meaningful: the disk device manages
@@ -520,10 +523,13 @@ the queue/in-progress slot idle, completes that delayed expunge (stop
 worker, `backend_close` if open, release resident state). A later
 `OpenDevice` before that last close clears `LIBF_DELEXP`.
 
-Callers must `AbortIO`/`WaitIO` before `CloseDevice` on that `IORequest`.
-Close does not abort an in-progress exchange; the worker still `ReplyMsg`s
-once. A still-queued request on the same `IORequest` is completed as
-aborted so it is not left in the FIFO.
+If that `IORequest` was submitted with `SendIO`/`BeginIO` and `CheckIO`
+says it is still outstanding, callers must `AbortIO`/`WaitIO` before
+`CloseDevice`. After `DoIO`, `WaitIO` has already run. Do not `WaitIO` an
+`IORequest` used only for `OpenDevice`. Close does not abort an
+in-progress exchange; the worker still `ReplyMsg`s once. A still-queued
+request on the same `IORequest` is completed as aborted so it is not left
+in the FIFO. See `docs/amiga/cli-stack-and-iorequest.md`.
 
 ### Expunge while work remains
 

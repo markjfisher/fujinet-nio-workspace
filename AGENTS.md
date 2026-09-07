@@ -125,4 +125,6 @@ test that can fail for that change, recorded and run. Do not default to the
 full Amiberry suite, every firmware preset, or `scripts/build.sh all`.
 
 When changing `repos/fujinet-nio-lib`, run complete `make check`. Amiga guest
-procedure: `docs/amiga/amiberry-testing.md`.
+procedure: `docs/amiga/amiberry-testing.md`. Amiga CLI tools: default Shell
+STACK is 4096; do not `WaitIO` an OpenDevice-only IORequest
+(`docs/amiga/cli-stack-and-iorequest.md`).
