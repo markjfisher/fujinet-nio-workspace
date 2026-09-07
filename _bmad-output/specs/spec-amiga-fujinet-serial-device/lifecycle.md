@@ -83,24 +83,36 @@ Deferred completion uses a software interrupt the device owns. Do not attach tha
 
 ## Exchange receive arming
 
-Selected lifecycle:
+Selected lifecycle (PiStorm fallback taken 2026-09-07):
 
 ```text
 exchange completes
     -> FLUSH
-    -> RBF quiesced
+    -> pending READ aborted, software queue cleared
+    -> RBF stays armed
 
 next exchange
-    -> WRITE/READ/QUERY rearms RBF
-    -> request is transmitted
-    -> FujiNet response arrives
+    -> WRITE drains leftover SERDATR, discards the software queue, then TXs
+    -> FujiNet response arrives into the still-armed receiver
 ```
 
-Rearm RBF before the first byte of the new request is written to `SERDAT`. Because FujiNet is request/response, that should avoid a legitimate receive window while RBF is masked.
+FLUSH-quiesce plus rearm-before-TX lost the first 38400 request after idle
+(cold `cause=4` 13.7 s timeout, warm WARMUP `nio=6`, FLS single-shot fail)
+with and without ESP 16/2000 pacing. Later trials in the same command
+succeeded after timeout closed and reopened the backend. Always-armed
+receive is now the production path. Close still masks RBF.
 
-If rearm finds an RBF condition already pending: sample `SERDATR` and retain byte/status before clearing the pending interrupt; repeat while `INTF_RBF` remains asserted.
+Always-armed did not fix the same first-request timeout after a clean
+reboot. Open had been programming `DEVICE_BAUD_DEFAULT` 19200, then
+`SETPARAMS` jumped to 38400. 19200 first-open worked because that jump
+never happened. Open now programs `io_Baud` from the `OpenDevice` request
+(broker fills it before `OpenDevice`). `SETPARAMS` waits for TX idle
+(`TSRE`, RBF masked), writes `SERPER` once, discards RX garbage, and
+re-arms before return. The broker still issues `SETPARAMS` after open.
 
-Always-armed receive is the documented PiStorm fallback if testing shows lost leading response bytes or unacceptable rearm latency. Do not switch to it without that evidence.
+If WRITE finds an RBF condition already pending: sample `SERDATR` and
+retain, then discard the software queue so idle/late bytes are not parsed
+as the next frame. Do not mask RBF around that drain.
 
 ## Pending CMD_READ ownership
 
@@ -123,7 +135,7 @@ COMPLETING / ABORTING     <-- deferred software interrupt is the RBF-side owner
 
 Exactly one path may transition a pending READ out of `PENDING` and exactly one `ReplyMsg()` may occur. Protect the transition with `Disable()`/`Enable()` or equivalent so the deferred completion path and task-level `AbortIO()` cannot both complete the same request.
 
-`CMD_FLUSH` with a pending READ: same single-owner cancellation path as `AbortIO`, complete with `IOERR_ABORTED`, then clear the software receive queue and quiesce RBF. Must not leave a retained IORequest pointer referring to discarded queue state. Paula/`misc.resource` ownership is retained.
+`CMD_FLUSH` with a pending READ: same single-owner cancellation path as `AbortIO`, complete with `IOERR_ABORTED`, then clear the software receive queue. RBF stays armed. Must not leave a retained IORequest pointer referring to discarded queue state. Paula/`misc.resource` ownership is retained.
 
 Final close must resolve any retained READ through that same path before vector removal or resource release. No ISR-visible pointer to an IORequest or device-private state may remain after vector removal.
 
@@ -157,9 +169,10 @@ Do not extend the hardware matrix without asking. Use the AHRM-extract SERPER fo
 | Stock access while FujiNet owns Paula | `fujinet-serial.device` holds `misc.resource` | Stock serial must not manipulate the UART concurrently | Ownership remains exclusive; no dual-driver UART access |
 | BITS claim fails after PORT | `MR_SERIALPORT` acquired, `MR_SERIALBITS` busy | Free `MR_SERIALPORT` only; fail open | No Paula/RBF mutation |
 | READ vs AbortIO race | Final requested byte arrives while `AbortIO()` runs | Deferred completion path and `AbortIO` compete; exactly one owner and one reply | No duplicate reply, stale pointer, or lost ownership |
-| FLUSH with pending READ | READ retained by device | Cancel READ once, clear queue, quiesce RBF, retain Paula ownership | READ completes `IOERR_ABORTED` |
-| Rearm with pending RBF | RBF condition exists while receive is quiesced | Capture `SERDATR` byte/status before clearing RBF; drain while still asserted | No lost leading byte |
-| FLUSH then WRITE | Quiesced after FLUSH, new request starts | RBF armed before the first byte is written to `SERDAT` | No TX while receive is still masked |
+| FLUSH with pending READ | READ retained by device | Cancel READ once, clear queue, keep RBF armed, retain Paula ownership | READ completes `IOERR_ABORTED` |
+| WRITE after FLUSH | Idle or late bytes may sit in SERDATR | Drain then discard the software queue; RBF stays armed; then TX | First 38400 request after idle is not masked |
+| Open at 38400 | `OpenDevice` `io_Baud` is 38400 | Claim programs 38400 once; no 19200 detour | Default 19200 only if request baud is out of range |
+| SETPARAMS rate change | TX may still be shifting; RX may hold divisor-change garbage | Wait `TSRE` with RBF masked, apply `SERPER`, discard RX, re-arm | First TX after settle is at the requested rate |
 | Burst already pending in Paula | Handler entered with more than one RBF byte ready | Drain: sample/retain/ack-once per byte until `INTF_RBF` is clear | Returning with RBF still asserted is a livelock |
 | RBF handler vs ReplyMsg | Byte(s) satisfy a pending READ | Handler only rings + `Cause()`s; software interrupt copies and replies | No `ReplyMsg` or IORequest mutation on the RBF handler path |
 | Final close with pending READ | Last opener closes while READ is retained | Resolve request before vector/resource teardown | No ISR access after teardown |
@@ -183,8 +196,10 @@ single acknowledgement per byte
 drain while INTF_RBF still asserted
 handler does not ReplyMsg or mutate IORequest
 Cause-deferred READ completion
-FLUSH -> WRITE rearm ordering
-rearm with already-pending RBF
+FLUSH keeps RBF armed
+WRITE drains leftover RBF then discards idle queue
+open programs requested baud (no 19200 then 38400 detour)
+SETPARAMS waits TX idle, applies SERPER, discards RX garbage
 blocking READ satisfied later
 AbortIO before data
 AbortIO vs final-byte race (deferred path vs AbortIO)
@@ -199,5 +214,6 @@ one-time teardown / delayed expunge
 Host coverage lives in `amiga/tests/test_fujinet_serial_lifecycle.c` driving
 `serial.device/fujinet_serial_lifecycle.c`. The assembler RBF handler in
 `fujinet_serial_rbf.S` is a twin of that drain plus a `Cause()` tail; it is
-not a caller of C. Always-armed receive remains the documented PiStorm
-fallback only and is not the implemented default.
+not a caller of C. Always-armed receive is the production path; close still
+masks RBF. Open programs the `OpenDevice` `io_Baud` (default 19200 only when
+the request baud is out of range).

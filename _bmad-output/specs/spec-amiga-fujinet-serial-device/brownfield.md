@@ -46,4 +46,4 @@ The draft also treated the RBF path as an interrupt-server boundary. The rewrite
 
 Stage 4: success does not idle-close the serial backend. After a one-shot clock the backend (and therefore Paula ownership) can remain until the next SET_SERIAL/SET_BAUD, error close, or expunge. SET_SERIAL already closes the backend so the next EXCHANGE opens the newly named device.
 
-Chosen receive policy: `CMD_FLUSH` quiesces RBF; the next WRITE/READ/QUERY rearms it before the first new TX byte. Continuous arming is a documented PiStorm fallback only. See `lifecycle.md`.
+Chosen receive policy: `CMD_FLUSH` keeps RBF armed and clears the software queue. WRITE drains leftover `SERDATR` and discards the queue before TX. FLUSH-quiesce was the first PiStorm cut; first 38400 request after idle timed out with no RX (`cause=4`) with and without 16/2000 pacing. Always-armed did not fix a clean-reboot first open at 38400: the device programmed 19200 on claim then `SETPARAMS` 38400. Open now takes `io_Baud` from `OpenDevice`; the broker fills it before `OpenDevice`. See `lifecycle.md`.
