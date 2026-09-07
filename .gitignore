@@ -19,6 +19,7 @@ __main__.py
 /scratch
 /repos/PDCurses/
 /repos/bounce-world/
+/repos/8n1
 /images/
 
 # causal output we don't want to track

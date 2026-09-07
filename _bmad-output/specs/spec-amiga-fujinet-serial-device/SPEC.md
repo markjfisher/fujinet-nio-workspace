@@ -2,6 +2,7 @@
 id: SPEC-amiga-fujinet-serial-device
 companions:
   - conventions.md
+  - lifecycle.md
   - brownfield.md
   - failure-modes.md
   - ../../../repos/fujinet-nio-driver/docs/amiga/Serial-IO-Interface.md
@@ -31,27 +32,34 @@ The in-tree draft proved a clock round-trip on Amiberry and printed `status=0` o
   - **success:** `C:fujinet-nio-serial` with no args prints the current name and unit; with a name (optional unit) SET_SERIAL persists until unload or reboot; `fujinet-nio-exchange --serial-device NAME` selects for that run only; omitting it uses the last SET_SERIAL value; default remains `serial.device` unit 0. Host tests in `test_fujinet_nio_device.c` and `test_fujinet_nio_exchange_opts.c` pass.
 - **CAP-2**
   - **intent:** An operator can load a FujiNet-owned Exec device named `fujinet-serial.device` that presents an `IOExtSer` subset sufficient for the broker serial backend.
-  - **success:** `make native` in `repos/fujinet-nio-driver/amiga` produces `build/amiga/fujinet-serial.device`; `fujinet-load-resident DEVS:fujinet-serial.device fujinet-serial.device` returns 0; exclusive open of unit 0; 8N1 only; baud 300–230400 accepted by SETPARAMS; unsupported parity/word/stop rejected. Stock `serial.device` is not renamed or replaced on disk.
+  - **success:** `make native` in `repos/fujinet-nio-driver/amiga` produces `build/amiga/fujinet-serial.device`; `fujinet-load-resident DEVS:fujinet-serial.device fujinet-serial.device` returns 0; unit 0 exclusive; first open claims `misc.resource` serial ownership before any Paula or RBF change; if those resources are already owned, `OpenDevice` fails with no Paula/RBF/INTENA mutation; 8N1 only; SETPARAMS accepts 300–230400; unsupported parity/word/stop rejected. Stock `serial.device` is not renamed, patched, expunged, or replaced on disk.
 - **CAP-3**
   - **intent:** The broker can complete FujiBus request/response through that device at 9600, 19200, and 38400.
-  - **success:** Cold clock via `fujinet-nio-exchange --type clock --backend cold --baud <rate> --serial-device fujinet-serial.device --trials 1` returns `result=0` at each of 9600, 19200, and 38400 on Amiberry; the same command is the hardware matrix entry in `rs232-cold-warm-hardware-test.md`. 57600 is not in this spec.
+  - **success:** Cold clock via `fujinet-nio-exchange --type clock --backend cold --baud <rate> --serial-device fujinet-serial.device --trials 1` returns `result=0` at each of 9600, 19200, and 38400 on Amiberry; the same command is the hardware matrix entry in `rs232-cold-warm-hardware-test.md`. SETPARAMS acceptance of 300–230400 is not a claim that those rates are interrupt-validated. 57600 is not in this spec.
 - **CAP-4**
   - **intent:** The workspace Amiberry harness can prove load, select, one clock, and a successful FileDevice list marker through `fujinet-serial.device`.
   - **success:** `uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 integration-tests/amiberry/test_nio_paula_serial.py::test_paula_serial_clock` passes. File-list `maxPayloadBytes` is large enough for FileDevice (not 8; 256 is the known-good size). Default suite cases remain on `serial.device`.
 - **CAP-5**
   - **intent:** On the operator’s PiStorm Amiga, a successful cold clock through `fujinet-serial.device` leaves the machine usable.
-  - **success:** The one-shot in CAP-3 at 19200 prints one trial line containing `status=0` (or `result=0`) **and** returns to the Shell prompt with no power-LED flash and no PiStorm cold-reboot screen. Printing the line then dying is failure.
+  - **success:** The one-shot in CAP-3 at 19200 prints one trial line containing `status=0` (or `result=0`) **and** returns to the Shell prompt with no power-LED flash and no PiStorm cold-reboot screen. Printing the line then dying is failure. PiStorm is the sole hardware-stability gate; a real 68000 return-to-Shell is not required before 38400 is called done.
 - **CAP-6**
-  - **intent:** Host-side tests can fail SERPER math, ring/overrun ingest, and SET_SERIAL name rules without booting AmigaOS.
-  - **success:** `source "$NIO_WORKSPACE/scripts/env.sh" && make -C repos/fujinet-nio-driver/amiga tests` includes `test_fujinet_paula_uart` and the SET_SERIAL/opts cases and passes. These tests do not claim interrupt or PiStorm coverage.
+  - **intent:** Host-side tests can fail SERPER math, ring/overrun ingest, SET_SERIAL name rules, and the rewrite’s ownership/lifecycle contracts without booting AmigaOS.
+  - **success:** `source "$NIO_WORKSPACE/scripts/env.sh" && make -C repos/fujinet-nio-driver/amiga tests` includes `test_fujinet_paula_uart`, the SET_SERIAL/opts cases, and the named lifecycle cases in `lifecycle.md`, and passes. These tests do not claim PiStorm coverage.
 
 ## Constraints
 
 - Hardware truth is the print-validated AHRM extracts listed in `companions:`. Do not fetch the AHRM PDF. Do not diagnose from CIA 8520 serial-shift folklore or the archived 2026-08-28 overrun handoff.
 - Paula receive and transmit are independent full-duplex paths. `IO_STATF_OVERRUN` / `SerErr_LineErr` means the prior received character was not picked up before the next completed.
-- Applications that use `serial.device` request baud in `io_Baud` and SETPARAMS. A FujiNet Paula device may program `SERPER` itself; Kickstart must not rewrite `SERPER` while that device owns Paula.
-- Exec interrupt servers scratch `D0–D1/A0–A1` only and return with `RTS`. `SetIntVector` still uses that convention, not a raw 68k `RTE` handler.
-- Do not rename, patch, or ship a replacement for Kickstart `serial.device`. Do not integrate or document third-party serial drivers.
+- On first open, acquire the built-in serial hardware through `misc.resource` (including `MR_SERIALPORT` and the required serial-control resource(s)) before changing `SERPER`, serial interrupt enables, or `INTB_RBF`. If the hardware is already owned, fail `OpenDevice()` cleanly without modifying Paula or interrupt state. Exclusive open of `fujinet-serial.device` only blocks a second open of this device; it does not substitute for `misc.resource`.
+- Treat `INTB_RBF` as an exclusive Exec interrupt handler installed with `SetIntVector()`. By project policy the FujiNet handler may use only `D0-D1/A0-A1` as scratch and must preserve all other registers. Exec also permits `A5/A6` as handler scratch, but this handler does not require them. Return with `RTS`, not `RTE`. This is the RBF interrupt-handler boundary, not an interrupt-server chain.
+- Every serviced RBF event follows exactly this ordering: read `SERDATR`, record the received byte and status, then clear `INTF_RBF` once. Never clear RBF before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP acknowledgement. Apply the same order to pending-RBF handling during rearm or teardown.
+- Preserve and restore the previous `INTB_RBF` handler and the relevant previous RBF interrupt-enable state. Do not claim to preserve or restore the previous `SERPER` divisor: it is write-only and cannot be read back. Successful close must not depend on reconstructing a prior baud rate. While this device owns Paula it may program `SERPER` itself; Kickstart must not rewrite `SERPER` during that ownership.
+- Pending `CMD_READ` completion, `AbortIO`, `CMD_FLUSH`, and final close must use one atomic request-ownership transition and produce at most one `ReplyMsg()`. Protect the transition with `Disable()`/`Enable()` or equivalent so the ISR and task-level `AbortIO()` cannot both complete the same request. State model and teardown order live in `lifecycle.md`.
+- If a pending READ exists when `CMD_FLUSH` is issued, cancel it through that same path with `IOERR_ABORTED`, then clear the software receive queue and quiesce RBF. FLUSH must not leave a retained IORequest pointer referring to discarded queue state.
+- Before removing the RBF vector or releasing Paula/`misc.resource` ownership, final close must ensure that no pending IORequest remains retained by the device. Any retained request uses the same one-time cancellation/completion path as `AbortIO`.
+- Keep distinct private latches `hardware_overrun_latched` (Paula `SERDATR` overrun) and `software_ring_overflow_latched` (private receive ring had no free slot). Public QUERY/status may collapse both into the existing overrun indication. Expose the private distinction to host/native test state where practical.
+- SETPARAMS accepted range is 300–230400 for ABI compatibility. FujiNet hardware acceptance matrix is 9600 / 19200 / 38400 only. Do not extend that matrix without asking. Accepted SETPARAMS rates are not interrupt-validated on real hardware.
+- Do not rename, patch, expunge, or ship a replacement for Kickstart `serial.device`. Do not integrate or document third-party serial drivers.
 - Default broker backend stays `serial.device` unit 0. `fujinet-serial.device` is opt-in via SET_SERIAL or `--serial-device`.
 - SET_SERIAL / GET_SERIAL ABI stays: `FUJINET_NIO_CMD_SET_SERIAL` = `CMD_NONSTD+3`, GET = `+4`; payload little-endian unit then a NUL-terminated Exec name; names 1..30 printable, no `:/\` or space. Header: `fujinet_nio_serial_config.h`. CLI: `fujinet-nio-serial`.
 - Device name is `fujinet-serial.device` (not `fujinet-nio-serial.device`). Unit 0 only, exclusive open.
@@ -69,6 +77,7 @@ The in-tree draft proved a clock round-trip on Amiberry and printed `status=0` o
 - Redesigning the broker public EXCHANGE ABI or Stage 3/4 idle-close policy except as needed to open/close `fujinet-serial.device` correctly.
 - Packet-native (Zorro/floppy) backends.
 - Making Amiberry Paula emulation a substitute for CAP-5.
+- Extending the real-hardware acceptance matrix beyond 9600 / 19200 / 38400 without asking.
 
 ## Success signal
 
@@ -77,11 +86,6 @@ An operator loads `fujinet-serial.device`, selects it with `fujinet-nio-serial`,
 ## Assumptions
 
 - SET_SERIAL, `fujinet-nio-serial`, release/FTP/share install of `fujinet-serial.device`, and the Amiberry `fujinet_serial` flag are keepers from the draft.
-- A rewrite may throw away the current RBF server and interrupt install path.
+- A rewrite may throw away the current RBF handler and interrupt install path.
 - ESP pacing 16/2000 remains the product default; this spec does not require turning pacing off to pass CAP-5.
-
-## Open Questions
-
-- Is PiStorm the only hardware gate, or must a real 68000 also return to Shell before 38400 is called done?
-- Must `CMD_READ` wait for bytes like stock `serial.device`, or is QUERY-then-immediate-READ the broker contract?
-- After a completed exchange, should Paula RBF stay armed for warm reuse or be released until the next open/write?
+- Continuous RBF arming is retained only as a documented PiStorm fallback if testing shows lost leading response bytes or unacceptable rearm latency.
