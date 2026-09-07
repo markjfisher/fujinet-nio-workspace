@@ -15,31 +15,31 @@ context:
 
 **Problem:** The draft `fujinet-serial.device` completes an Amiberry exchange and printed success on PiStorm, but its guessed RBF interrupt teardown then rebooted the PiStorm machine. The broker needs an opt-in, FujiNet-owned Exec serial device that services Paula receive deadlines without disturbing Kickstart `serial.device`.
 
-**Approach:** Rewrite Paula interrupt ownership and the `IOExtSer` command subset as an explicit open/request/flush/close lifecycle. Preserve runtime SET_SERIAL/GET_SERIAL selection, install surfaces, host UART math, and the existing focused Amiberry case; make `CMD_READ` wait when data is not yet available and support timer-driven `AbortIO`.
+**Approach:** Rewrite Paula ownership and the `IOExtSer` command subset as an explicit acquire/open/request/flush/close lifecycle. Preserve runtime SET_SERIAL/GET_SERIAL selection, install surfaces, host UART math, and the existing focused Amiberry case; make `CMD_READ` wait when data is not yet available and support timer-driven `AbortIO`.
 
 ## Boundaries & Constraints
 
-**Always:** Use the print-validated in-tree Paula extracts as hardware truth; compile for 68000 with soft-float; keep `fujinet-serial.device` unit 0 exclusive; keep SET_SERIAL/GET_SERIAL ABI, `fujinet-nio-serial`, install lists, and default `serial.device` unit 0; acknowledge RBF once after reading `SERDATR`; preserve only D0-D1/A0-A1 across the Exec interrupt-server boundary; keep PiStorm as the sole hardware gate.
+**Always:** Use the print-validated in-tree Paula extracts as hardware truth; compile for 68000 with soft-float; keep `fujinet-serial.device` unit 0 exclusive; keep SET_SERIAL/GET_SERIAL ABI, `fujinet-nio-serial`, install lists, and default `serial.device` unit 0. First open must claim `misc.resource` serial ownership (including `MR_SERIALPORT` and required serial-control resources) before changing Paula, and failure rolls back only acquisitions made by this device. `SetIntVector(INTB_RBF)` is an exclusive RBF interrupt-handler boundary: use D0-D1/A0-A1 as scratch and preserve every other register. Every serviced receive is `read SERDATR -> retain byte/status -> clear INTF_RBF once`; never acknowledge first. Preserve/restore the prior RBF vector and relevant interrupt-enable state, but never claim to restore write-only SERPER. Keep distinct private latches/counters for Paula hardware overrun and software-ring overflow; public status may collapse them. Keep PiStorm as the sole hardware-stability gate; acceptance at 9600/19200/38400 does not validate every accepted SETPARAMS rate.
 
 **Ask First:** Any need to change broker public ABI, Stage 3/4 backend lifetime, ESP pacing, installation names, the default backend, or the 9600/19200/38400 acceptance matrix.
 
-**Never:** Rename or replace Kickstart `serial.device`; use CIA serial-shift behavior; restore the draft double-INTREQ/NOP rationale; claim Amiberry proves PiStorm stability; add 57600 or hardware flow control.
+**Never:** Rename, expunge, patch, or replace Kickstart `serial.device`; use CIA serial-shift behavior; acknowledge twice, acknowledge before `SERDATR`, or retain the draft NOP rationale; claim Amiberry proves PiStorm stability; add 57600 or hardware flow control.
 
 ## I/O & Edge-Case Matrix
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|---------------|----------------------------|----------------|
-| Open/configure | Unit 0, exclusive; SETPARAMS 300–230400 8N1 | Claim Paula, preserve prior state, program one SERPER divisor | Reject other units, second open, invalid baud/parity/word/stop |
-| Receive | READ with enough queued bytes or bytes arriving later | Copy requested bytes, complete once; QUERY reports queued count/status | Pending READ is abortable; latch hardware/software overrun |
-| Exchange lifecycle | WRITE after open/flush, then QUERY/READ, then FLUSH | Rearm RBF before request; FLUSH clears queue and quiesces RBF while retaining ownership | No stale interrupt or duplicate reply/ack |
-| Close/expunge | Open device with armed or quiesced receive | Mask RBF, clear pending request, restore vector/state once, return safely | Delayed expunge waits for final close |
+| Open/configure | Unit 0, exclusive; SETPARAMS 300–230400 8N1 | Claim misc serial resources before Paula/vector access; preserve RBF vector/enable state and program a divisor | Reject other units, second open, invalid baud/parity/word/stop; release partial claims only |
+| Receive | READ with enough queued bytes or bytes arriving later | Copy requested bytes, complete it once; QUERY reports queued count/status | Retained READ is atomically owned by exactly one of RBF completion, AbortIO, FLUSH, or close; keep hardware and ring-overflow diagnostics distinct |
+| Exchange lifecycle | WRITE after open/flush, then QUERY/READ, then FLUSH | Rearm RBF before first TX byte; during rearm sample pending `SERDATR` before clearing RBF | FLUSH aborts one retained READ with `IOERR_ABORTED`, clears RX, then quiesces RBF while retaining ownership |
+| Close/expunge | Open device with armed or quiesced receive | Resolve/cancel retained READ before masking/removing RBF, restoring vector/enables, and releasing resources once | No pending IORequest survives final teardown; delayed expunge waits for final close |
 
 </frozen-after-approval>
 
 ## Code Map
 
-- `repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c:34` -- replace draft Paula ownership, synchronous READ, flush, close, and AbortIO behavior.
-- `repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_rbf.S:1` -- replace rejected offset-driven double-ack ISR with the new Exec interrupt-server boundary.
+- `repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c:34` -- replace draft Paula ownership, synchronous READ, flush, close, and AbortIO behavior; add misc.resource acquisition and atomic retained-READ ownership.
+- `repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_rbf.S:1` -- replace rejected offset-driven double-ack ISR with the new exclusive RBF interrupt-handler boundary.
 - `repos/fujinet-nio-driver/amiga/serial.device/fujinet_paula_uart.c:5` -- retain AHRM-derived SERPER/SERDAT/ring primitives; extend only pure, host-testable state logic.
 - `repos/fujinet-nio-driver/amiga/tests/test_fujinet_paula_uart.c:12` -- existing SERPER, ring, and overrun regression coverage.
 - `repos/fujinet-nio-driver/amiga/tests/Makefile:14` -- add focused device/lifecycle native coverage to `make tests`.
@@ -50,8 +50,8 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `amiga/serial.device/fujinet_serial_device.c`, `fujinet_serial_rbf.S`, and related private headers -- replace interrupt ownership and request lifecycle; remove rejected double acknowledgements and hard-coded draft coupling.
-- [ ] `amiga/serial.device/fujinet_paula_uart.c` and `amiga/tests/` -- preserve valid math/ring behavior and add tests for arm/quiesce transitions, blocking READ completion, abort, overrun, flush, and one-time teardown.
+- [ ] `amiga/serial.device/fujinet_serial_device.c`, `fujinet_serial_rbf.S`, and related private headers -- replace ownership and request lifecycle. Claim misc serial resources before all Paula/vector changes; use one read-retain-ack RBF sequence; atomically arbitrate pending READ completion/abort/flush/close; restore only vector and relevant interrupt-enable state; remove duplicate acknowledgement/NOP and hard-coded draft coupling.
+- [ ] `amiga/serial.device/fujinet_paula_uart.c` and `amiga/tests/` -- preserve valid math/ring behavior and add tests for resource contention and partial-claim rollback; arm-before-write, pending rearm ingest, blocking READ, AbortIO, final-byte/AbortIO race, FLUSH/close cancellation, distinct overrun latches, and one-time vector/resource teardown.
 - [ ] `_bmad-output/specs/spec-amiga-fujinet-serial-device/` and `repos/fujinet-nio-driver/docs/amiga/rs232-cold-warm-hardware-test.md` -- record the chosen READ/RBF lifecycle, its always-armed alternative, and PiStorm-only CAP-5 gate without changing commands.
 - [ ] Preserve existing SET_SERIAL, install-list, `--devs-file`, share, ADF/FTP, and `nio-paula-serial` wiring; modify only if verification exposes a regression.
 
@@ -63,7 +63,9 @@ context:
 
 ## Design Notes
 
-Paula ownership lasts from exclusive open through close. `CMD_FLUSH` masks/quiesces RBF but does not return the vector; the next WRITE/READ/QUERY rearms it. This minimizes idle interrupt exposure while retaining warm broker ownership. The alternative is continuous RBF arming for stock-like unsolicited buffering; retain it as a documented fallback if PiStorm testing shows rearm latency or lost leading bytes. `CMD_READ` follows stock waiting semantics because the broker already supplies timer AbortIO and immediate zero-byte completion creates a race after QUERY.
+Paula ownership lasts from successful misc-resource acquisition through final close. `CMD_FLUSH` atomically aborts a retained READ, clears RX, and masks/quiesces RBF without returning the vector; the next WRITE, READ, or QUERY rearms it, with RBF armed before the first new TX byte. Rearming samples a pending receive before clearing RBF, so no leading byte is discarded. This minimizes idle interrupt exposure while retaining warm broker ownership. Continuous RBF arming remains a documented PiStorm fallback if rearm latency or a lost leading byte is demonstrated.
+
+`CMD_READ` follows stock waiting semantics because the broker already supplies timer AbortIO and immediate zero-byte completion creates a race after QUERY. Its retained request has one ownership transition, protected by `Disable()/Enable()` or equivalent: RBF completion, AbortIO, FLUSH, and final close compete to remove it, and only the winner replies. Final teardown first resolves/cancels that request, then masks RBF, restores the saved vector/enables, and releases each acquired resource once.
 
 ## Verification
 
