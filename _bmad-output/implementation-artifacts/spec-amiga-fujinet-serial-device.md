@@ -2,8 +2,9 @@
 title: 'Amiga FujiNet Paula serial device rewrite'
 type: 'feature'
 created: '2026-09-07'
-status: 'draft'
+status: 'done'
 review_loop_iteration: 0
+baseline_commit: '9aa885f9260bc716840615c78d9db851b56ef17d'
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-fujinet-serial-device/SPEC.md'
   - '{project-root}/_bmad-output/specs/spec-amiga-fujinet-serial-device/lifecycle.md'
@@ -75,10 +76,10 @@ Read-only: broker `fujinet_nio_serial_backend.c:89` SendIO READ + 5s timer Abort
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `amiga/serial.device/fujinet_serial_device.c`, `fujinet_serial_rbf.S`, `fujinet_serial_lifecycle.c`, and related private headers -- replace ownership and request lifecycle. Claim `MR_SERIALPORT` then `MR_SERIALBITS` before Paula/vector changes; RBF handler only rings and `Cause()`s (drain while asserted, one ack per byte); complete pending READ on a device-owned software interrupt; atomically arbitrate deferred completion/abort/flush/close; restore the vector only if it is still ours; release BITS then PORT; drop duplicate ack/NOP and `fujinet_serial_rbf_off.h`.
-- [ ] `amiga/serial.device/fujinet_paula_uart.c` and `amiga/tests/` -- keep SERPER/ring math; split overrun latches; add named lifecycle cases from `lifecycle.md` to `make tests`.
-- [ ] `_bmad-output/specs/spec-amiga-fujinet-serial-device/` and `repos/fujinet-nio-driver/docs/amiga/rs232-cold-warm-hardware-test.md` -- record chosen READ/RBF lifecycle, always-armed fallback, and PiStorm-only CAP-5 without changing commands.
-- [ ] Preserve SET_SERIAL, install-list, `--devs-file`, share, ADF/FTP, and `nio-paula-serial` wiring; touch only if verification exposes a regression.
+- [x] `amiga/serial.device/fujinet_serial_device.c`, `fujinet_serial_rbf.S`, `fujinet_serial_lifecycle.c`, and related private headers -- replace ownership and request lifecycle. Claim `MR_SERIALPORT` then `MR_SERIALBITS` before Paula/vector changes; RBF handler only rings and `Cause()`s (drain while asserted, one ack per byte); complete pending READ on a device-owned software interrupt; atomically arbitrate deferred completion/abort/flush/close; restore the vector only if it is still ours; release BITS then PORT; drop duplicate ack/NOP and `fujinet_serial_rbf_off.h`.
+- [x] `amiga/serial.device/fujinet_paula_uart.c` and `amiga/tests/` -- keep SERPER/ring math; split overrun latches; add named lifecycle cases from `lifecycle.md` to `make tests`.
+- [x] `_bmad-output/specs/spec-amiga-fujinet-serial-device/` and `repos/fujinet-nio-driver/docs/amiga/rs232-cold-warm-hardware-test.md` -- record chosen READ/RBF lifecycle, always-armed fallback, and PiStorm-only CAP-5 without changing commands.
+- [x] Preserve SET_SERIAL, install-list, `--devs-file`, share, ADF/FTP, and `nio-paula-serial` wiring; touch only if verification exposes a regression.
 
 **Acceptance Criteria:**
 - Given a clean wb32 A1200-030 test image, when the focused Paula case loads and selects `fujinet-serial.device`, then clock and size-256 FileDevice marker complete with result 0 while default cases remain on `serial.device`.
@@ -88,10 +89,11 @@ Read-only: broker `fujinet_nio_serial_backend.c:89` SendIO READ + 5s timer Abort
 
 - 2026-09-07: Folded long pre-implementation review into SPEC.md, new `lifecycle.md`, companions, and this artifact (misc.resource, exclusive Exec RBF handler ABI, SERPER-not-restored, pending-READ ownership, named native tests).
 - 2026-09-07: Recorded Paula-vs-CIA-B handshake map (`docs/amiga/rs232-paula-and-cia-handshake.md`); this cut claims `MR_SERIALBITS` but does not drive RTS/CTS.
+- 2026-09-07: Implemented the Paula ownership rewrite (misc.resource claim order, sample-then-ack RBF drain, Cause-deferred READ, FLUSH rearm, split overrun latches, host lifecycle tests).
 
 ## Design Notes
 
-Host tests drive a pure-C lifecycle model (claim order, READ ownership, sample-then-ack drain, FLUSH rearm). The assembler ISR is a twin of that drain plus a `Cause()` tail, not a caller of C. `_LVOCause` needs `A6=SysBase`; Exec already lists `A6` as interrupt-handler scratch. Use `A6` only for that call. The sample/retain/ack loop stays `D0-D1/A0-A1`. Do not write SERPER on close.
+Host tests drive a pure-C lifecycle model (claim order, READ ownership, sample-then-ack drain, FLUSH rearm). The assembler ISR is a twin of that drain plus a `Cause()` tail, not a caller of C. `_LVOCause` is invoked with SysBase in `A0` so the handler stays inside `D0-D1/A0-A1`. Do not write SERPER on close.
 
 Paula ownership lasts from successful `misc.resource` acquisition through final close. `CMD_FLUSH` aborts a retained READ with `IOERR_ABORTED`, clears RX, and masks RBF without returning the vector. The next WRITE, READ, or QUERY rearms it before the first new `SERDAT` byte, sampling a pending RBF first. Always-armed receive is the documented PiStorm fallback only.
 
@@ -110,3 +112,46 @@ Exactly one path leaves `PENDING`; exactly one `ReplyMsg()`. `Disable()`/`Enable
 
 **Manual checks:**
 - Operator runs `fujinet-nio-exchange --type clock --backend cold --baud 19200 --serial-device fujinet-serial.device --trials 1` on PiStorm; result/status is 0 and Shell remains usable.
+
+## Suggested Review Order
+
+**Paula ownership**
+
+- Claim PORT then BITS before any Paula or RBF mutation.
+  [`fujinet_serial_device.c:188`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L188)
+
+- Teardown resolves a retained READ, restores the vector only if still ours, frees BITS then PORT.
+  [`fujinet_serial_device.c:218`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L218)
+
+**RBF handler**
+
+- Sample SERDATR, retain, ack once, drain while asserted; Cause via A0.
+  [`fujinet_serial_rbf.S:29`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_rbf.S#L29)
+
+- Software interrupt is the sole READ completion owner.
+  [`fujinet_serial_device.c:161`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L161)
+
+**Pending READ**
+
+- READ waits; second READ and oversize length are rejected.
+  [`fujinet_serial_device.c:329`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L329)
+
+- AbortIO, FLUSH, and close compete for one reply.
+  [`fujinet_serial_device.c:596`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L596)
+
+- FLUSH quiesces RBF; next WRITE/READ/QUERY rearms and samples a pending byte.
+  [`fujinet_serial_device.c:447`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_serial_device.c#L447)
+
+**Host-testable twin**
+
+- Distinct hardware vs software overrun latches; public status may collapse them.
+  [`fujinet_paula_uart.c:57`](../../repos/fujinet-nio-driver/amiga/serial.device/fujinet_paula_uart.c#L57)
+
+- Named lifecycle cases drive the C model, not the assembler.
+  [`test_fujinet_serial_lifecycle.c:96`](../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_serial_lifecycle.c#L96)
+
+**Docs**
+
+- Chosen FLUSH-rearm lifecycle and PiStorm-only CAP-5; commands unchanged.
+  [`rs232-cold-warm-hardware-test.md:70`](../../repos/fujinet-nio-driver/docs/amiga/rs232-cold-warm-hardware-test.md#L70)
+

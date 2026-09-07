@@ -17,8 +17,8 @@ Third-party serial replacements were considered and dropped. They are out of sco
 | `amiga/include/fujinet_paula_uart.h` + `serial.device/fujinet_paula_uart.c` | SERPER, SERDAT 8N1 (`0x0100 \| byte`), ring |
 | `amiga/include/fujinet_serial_device.h` | `"fujinet-serial.device"`, unit 0 |
 | `amiga/serial.device/fujinet_serial_device.c` | Exec device |
-| `amiga/serial.device/fujinet_serial_rbf.S` | RBF handler (draft; treat as failed) |
-| `amiga/include/fujinet_serial_rbf_off.h` | Hardcoded struct offsets for that `.S` |
+| `amiga/serial.device/fujinet_serial_rbf.S` | Exclusive RBF handler (sample, retain, ack once, `Cause` via A0) |
+| `amiga/serial.device/fujinet_serial_lifecycle.c` | Host-testable ownership/READ/RBF model |
 | `amiga/tools/fujinet-nio-serial.c` | GET/SET_SERIAL CLI |
 | `integration-tests/amiberry/startup/nio-paula-serial.sequence` | Load serial device, load nio, clock, file-list marker |
 | `integration-tests/amiberry/test_nio_paula_serial.py` | Asserts load RC=0 and `result=0` |

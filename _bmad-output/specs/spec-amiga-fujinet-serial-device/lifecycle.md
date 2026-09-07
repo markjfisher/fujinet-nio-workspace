@@ -195,3 +195,9 @@ hardware overrun latch
 software ring overflow latch
 one-time teardown / delayed expunge
 ```
+
+Host coverage lives in `amiga/tests/test_fujinet_serial_lifecycle.c` driving
+`serial.device/fujinet_serial_lifecycle.c`. The assembler RBF handler in
+`fujinet_serial_rbf.S` is a twin of that drain plus a `Cause()` tail; it is
+not a caller of C. Always-armed receive remains the documented PiStorm
+fallback only and is not the implemented default.
