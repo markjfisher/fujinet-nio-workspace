@@ -4,7 +4,9 @@
 
 At 38400 PAL the service window is about 262 µs per 8N1 character; at 19200 about 521 µs. If software does not read `SERDATR` and clear `INTF_RBF` in `INTREQ` before the next character completes, `OVRUN` is set and the byte is gone. Framing checksums can retry; lossless recovery after overrun is not a serial-device job.
 
-AHRM Table 8-9: after reading `SERDATR`, reset `INTF_RBF` in `INTREQ` once. Returning from an RBF handler while `INTREQ` is still asserted livelocks interrupt level 5. Never acknowledge before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP sequence.
+AHRM Table 8-9: after reading `SERDATR`, reset `INTF_RBF` in `INTREQ` once. Returning from an RBF handler while `INTREQ` is still asserted livelocks interrupt level 5. Never acknowledge before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP sequence. If more than one byte is already waiting, drain: sample, retain, ack-once, repeat until `INTF_RBF` is clear.
+
+The RBF handler must not `ReplyMsg()` or copy into the caller’s IORequest. Doing Exec completion work on that path is a crash class (re-entered level 5 / supervisor-stack blow-up). Complete a pending READ from a device-owned software interrupt started with `Cause()`, never from `INTB_PORTS`.
 
 Private diagnostics must keep `hardware_overrun_latched` (Paula was not serviced in time) distinct from `software_ring_overflow_latched` (the software queue was not drained in time). Public status may collapse both.
 
@@ -14,13 +16,13 @@ Sharing the RBF interrupt chain with Kickstart let ROM reprogram `SERPER` to 960
 
 Exclusive `OpenDevice` of `fujinet-serial.device` is not enough: another task can still open Kickstart `serial.device` and touch the same UART. Claim `misc.resource` first. If stock `serial.device` already owns the hardware, FujiNet open must fail with no Paula/RBF/`SERPER`/INTENA change.
 
-Do not restore a previous `SERPER` divisor on close: it is write-only.
+Do not restore a previous `SERPER` divisor on close: it is write-only. Restore the previous `INTB_RBF` handler only if the current vector is still the FujiNet handler. If it is not, leave it; still mask RBF and release `MR_SERIALBITS` then `MR_SERIALPORT`.
 
 ## Immediate 0-byte READ vs stock serial.device
 
 Stock `CMD_READ` waits for data. A driver that completes READ immediately with `io_Actual=0` will strand the broker’s `SendIO`+timer path if QUERY ever over-reports, and will not match AutoDocs. The rewrite uses pending stock-like `CMD_READ`. Immediate 0-byte completion is rejected.
 
-A pending READ, `AbortIO`, `CMD_FLUSH`, and final close must not both complete the same request. Dual `ReplyMsg` or a stale retained pointer after FLUSH/close is a crash class.
+A pending READ, `AbortIO`, `CMD_FLUSH`, and final close must not both complete the same request. Dual `ReplyMsg` or a stale retained pointer after FLUSH/close is a crash class. The RBF handler is not a completion owner.
 
 ## FileDevice list as harness marker
 
@@ -28,7 +30,7 @@ A pending READ, `AbortIO`, `CMD_FLUSH`, and final close must not both complete t
 
 ## PiStorm death after success
 
-Observed: trial line with `status=0`, then power-LED flash and PiStorm screen. That is a hard emulator reset, not a waiting Guru. Causes to investigate in the rewrite (not prescriptions): interrupt still pending after the CLI runs; supervisor-stack blow-up from re-entered level 5; `SetIntVector` fighting Emu68; CloseDevice/timer/clib2 after print; tearing down Paula while a READ is still retained. Printing then dying is CAP-5 fail even when FujiBus succeeded.
+Observed: trial line with `status=0`, then power-LED flash and PiStorm screen. That is a hard emulator reset, not a waiting Guru. Causes the rewrite must close: interrupt still pending after the CLI runs; `ReplyMsg`/CopyMem on the RBF handler; supervisor-stack blow-up from re-entered level 5; CloseDevice while a READ is still retained; restoring `INTB_RBF` when the vector is no longer ours. Printing then dying is CAP-5 fail even when FujiBus succeeded.
 
 Final close must resolve retained requests before vector removal. No ISR-visible pointer may remain after teardown.
 

@@ -13,7 +13,7 @@ Owning repo: `repos/fujinet-nio-driver`. Workspace harness: `integration-tests/a
 | Cold/warm matrix / clock | `fujinet-nio-exchange` |
 | Load/unload | `fujinet-load-resident` / `fujinet-unload-resident` |
 | Stock OS serial | `serial.device` (default; never rename) |
-| Serial hardware claim | `misc.resource` (`MR_SERIALPORT` and required serial-control resources) |
+| Serial hardware claim | `misc.resource` (`MR_SERIALPORT` then `MR_SERIALBITS`; release in reverse) |
 
 `docs/amiga/nio-broker-architecture.md` still mentions `fujinet-nio-serial.device` in an Option-B aside. That is not this device. Do not revive that name.
 
