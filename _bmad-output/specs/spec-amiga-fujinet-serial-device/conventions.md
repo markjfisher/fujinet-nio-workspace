@@ -13,7 +13,7 @@ Owning repo: `repos/fujinet-nio-driver`. Workspace harness: `integration-tests/a
 | Cold/warm matrix / clock | `fujinet-nio-exchange` |
 | Load/unload | `fujinet-load-resident` / `fujinet-unload-resident` |
 | Stock OS serial | `serial.device` (default; never rename) |
-| Serial hardware claim | `misc.resource` (`MR_SERIALPORT` then `MR_SERIALBITS`; release in reverse) |
+| Serial hardware claim | `misc.resource` (`MR_SERIALPORT` = Paula UART, then `MR_SERIALBITS` = CIA-B handshake; release in reverse). This cut does not drive RTS/CTS. |
 
 `docs/amiga/nio-broker-architecture.md` still mentions `fujinet-nio-serial.device` in an Option-B aside. That is not this device. Do not revive that name.
 

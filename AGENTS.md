@@ -44,7 +44,9 @@ Amiga RS-232 hardware is defined by print-validated AHRM extracts under
 `repos/fujinet-nio-driver/docs/amiga/` (`Serial-IO-Interface.md`,
 `serial-interface-connector.md`, `cia-port-signal-assigments.md`,
 `cia-chip-register-map.md`), not by the AHRM PDF and not by CIA 8520
-serial-shift folklore.
+serial-shift folklore. Paula owns TXD/RXD (`MR_SERIALPORT`); CIA-B port A
+owns RTS/CTS and the other modem lines (`MR_SERIALBITS`). Process map:
+`docs/amiga/rs232-paula-and-cia-handshake.md`.
 
 ## Amiga DiskDevice status and future media work
 

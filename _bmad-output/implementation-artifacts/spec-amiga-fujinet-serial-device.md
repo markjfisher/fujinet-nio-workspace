@@ -7,6 +7,7 @@ review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/specs/spec-amiga-fujinet-serial-device/SPEC.md'
   - '{project-root}/_bmad-output/specs/spec-amiga-fujinet-serial-device/lifecycle.md'
+  - '{project-root}/docs/amiga/rs232-paula-and-cia-handshake.md'
   - '{project-root}/docs/agent-test-policy.md'
 ---
 
@@ -36,7 +37,7 @@ Keep distinct private latches `hardware_overrun_latched` and `software_ring_over
 
 **Ask First:** Any need to change broker public ABI, Stage 3/4 backend lifetime, ESP pacing, installation names, the default backend, or the 9600/19200/38400 acceptance matrix.
 
-**Never:** Rename, expunge, patch, or replace Kickstart `serial.device`; `RemDevice` another serial owner to steal the port; use CIA serial-shift behavior; `ReplyMsg` or mutate an IORequest from the RBF handler; hitch deferred completion onto `INTB_PORTS`; acknowledge twice, acknowledge before `SERDATR`, or retain the draft NOP rationale; claim Amiberry proves PiStorm stability; add 57600 or hardware flow control; restore write-only `SERPER`; overwrite `INTB_RBF` on close if the vector is no longer ours; treat exclusive open of this device as a substitute for `misc.resource`.
+**Never:** Rename, expunge, patch, or replace Kickstart `serial.device`; `RemDevice` another serial owner to steal the port; use CIA serial-shift behavior; program CIA-B handshake bits in this cut; `ReplyMsg` or mutate an IORequest from the RBF handler; hitch deferred completion onto `INTB_PORTS`; acknowledge twice, acknowledge before `SERDATR`, or retain the draft NOP rationale; claim Amiberry proves PiStorm stability; add 57600 or hardware flow control; restore write-only `SERPER`; overwrite `INTB_RBF` on close if the vector is no longer ours; treat exclusive open of this device as a substitute for `misc.resource`.
 
 ## I/O & Edge-Case Matrix
 
@@ -89,7 +90,7 @@ Keep distinct private latches `hardware_overrun_latched` and `software_ring_over
 ## Spec Change Log
 
 - 2026-09-07: Folded long pre-implementation review into SPEC.md, new `lifecycle.md`, companions, and this artifact (misc.resource, exclusive Exec RBF handler ABI, SERPER-not-restored, pending-READ ownership, named native tests).
-- 2026-09-07: Firm ISR/teardown ordering: `MR_SERIALPORT` then `MR_SERIALBITS`; RBF drain loop; no `ReplyMsg` on the RBF handler; `Cause()` deferred completion; restore vector only if still ours.
+- 2026-09-07: Recorded Paula-vs-CIA-B handshake map (`docs/amiga/rs232-paula-and-cia-handshake.md`); this cut claims `MR_SERIALBITS` but does not drive RTS/CTS.
 
 ## Design Notes
 
@@ -136,7 +137,7 @@ FreeMiscResource(MR_SERIALPORT)
 finish CloseDevice
 ```
 
-No ISR-visible pointer to an IORequest or device-private state may remain after vector removal.
+No ISR-visible pointer to an IORequest or device-private state may remain after vector removal. CIA-B handshake lines are out of this cut; see `docs/amiga/rs232-paula-and-cia-handshake.md`.
 
 ## Verification
 

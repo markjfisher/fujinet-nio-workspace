@@ -42,6 +42,8 @@ Do not expunge, rename, patch, or otherwise steal ownership from Kickstart `seri
 
 While `fujinet-serial.device` owns Paula, stock serial access must not result in both drivers manipulating the UART concurrently. `misc.resource` ownership is the mechanism; do not share the UART.
 
+`MR_SERIALPORT` is Paula (TXD/RXD). `MR_SERIALBITS` is CIA-B port A (RTS/CTS/DTR and the other modem lines). This cut claims both and programs Paula only. Do not write CIA-B PRA/DDRA handshake bits here. Seven-wire later is additive CIA + `SERF_7WIRE` at open + ESP CTS/RTS; it does not change the RBF handler. See `docs/amiga/rs232-paula-and-cia-handshake.md`.
+
 ## RBF interrupt-handler boundary
 
 `INTB_RBF` is installed with `SetIntVector()`, so this is an exclusive Exec interrupt handler, not an interrupt-server chain entry.

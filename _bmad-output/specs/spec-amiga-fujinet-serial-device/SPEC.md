@@ -9,6 +9,7 @@ companions:
   - ../../../repos/fujinet-nio-driver/docs/amiga/serial-interface-connector.md
   - ../../../repos/fujinet-nio-driver/docs/amiga/cia-port-signal-assigments.md
   - ../../../repos/fujinet-nio-driver/docs/amiga/cia-chip-register-map.md
+  - ../../../docs/amiga/rs232-paula-and-cia-handshake.md
   - ../../../repos/fujinet-nio-driver/docs/amiga/rs232-cold-warm-hardware-test.md
   - ../../planning-artifacts/research/technical-amiga-rs-232-disk-operation-failures-abo-2026-09-03/research.md
   - ../../../docs/agent-test-policy.md
@@ -50,7 +51,7 @@ The in-tree draft proved a clock round-trip on Amiberry and printed `status=0` o
 
 - Hardware truth is the print-validated AHRM extracts listed in `companions:`. Do not fetch the AHRM PDF. Do not diagnose from CIA 8520 serial-shift folklore or the archived 2026-08-28 overrun handoff.
 - Paula receive and transmit are independent full-duplex paths. `IO_STATF_OVERRUN` / `SerErr_LineErr` means the prior received character was not picked up before the next completed.
-- On first open, acquire `misc.resource` as `MR_SERIALPORT` then `MR_SERIALBITS` before changing `SERPER`, serial interrupt enables, or `INTB_RBF`. If either is already owned, fail `OpenDevice()` cleanly without modifying Paula or interrupt state, and free only resources this open acquired. Exclusive open of `fujinet-serial.device` only blocks a second open of this device; it does not substitute for `misc.resource`. Do not `RemDevice` another owner to steal the port.
+- On first open, acquire `misc.resource` as `MR_SERIALPORT` then `MR_SERIALBITS` before changing `SERPER`, serial interrupt enables, or `INTB_RBF`. If either is already owned, fail `OpenDevice()` cleanly without modifying Paula or interrupt state, and free only resources this open acquired. Exclusive open of `fujinet-serial.device` only blocks a second open of this device; it does not substitute for `misc.resource`. Do not `RemDevice` another owner to steal the port. Claim `MR_SERIALBITS` in this cut but do not program CIA-B handshake bits (`RTS*`/`CTS*`/`DTR*`); process map: `docs/amiga/rs232-paula-and-cia-handshake.md`.
 - Treat `INTB_RBF` as an exclusive Exec interrupt handler installed with `SetIntVector()`. By project policy the FujiNet handler may use only `D0-D1/A0-A1` as scratch and must preserve all other registers. Exec also permits `A5/A6` as handler scratch, but this handler does not require them. Return with `RTS`, not `RTE`. This is the RBF interrupt-handler boundary, not an interrupt-server chain.
 - The RBF handler must not `ReplyMsg()`, copy into the caller’s IORequest, or transition a pending READ. It only samples `SERDATR`, retains into the private ring, and acknowledges. If a pending READ can now be satisfied, `Cause()` a device-owned software interrupt (or an equivalent path started from that `Cause`) to perform the one-owner transition and `ReplyMsg()`. Do not hitch deferred work onto `INTB_PORTS`.
 - Every serviced RBF byte follows exactly this ordering: read `SERDATR`, record the received byte and status, then clear `INTF_RBF` once. If master `INTEN` is clear, return without acknowledging. Otherwise the handler may repeat that sequence while `INTF_RBF` remains asserted. One acknowledgement per byte. Never clear RBF before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP acknowledgement. Apply the same order to pending-RBF handling during rearm or teardown.
@@ -74,7 +75,7 @@ The in-tree draft proved a clock round-trip on Amiberry and printed `status=0` o
 - Third-party or shareware serial.device replacements, by any name.
 - 57600 baud until 38400 is stable on hardware.
 - Switching the default Amiberry suite off `serial.device`.
-- RTS/CTS (`SERF_7WIRE`) as the 38400 fix in this cut.
+- RTS/CTS (`SERF_7WIRE`) as the 38400 fix in this cut. Claim `MR_SERIALBITS`; do not drive CIA-B handshake lines. Later seven-wire work is `backlog/amiga-rs232-38400-reliability.md` rank 3 and `docs/amiga/rs232-paula-and-cia-handshake.md`.
 - Redesigning the broker public EXCHANGE ABI or Stage 3/4 idle-close policy except as needed to open/close `fujinet-serial.device` correctly.
 - Packet-native (Zorro/floppy) backends.
 - Making Amiberry Paula emulation a substitute for CAP-5.

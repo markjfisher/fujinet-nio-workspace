@@ -52,6 +52,9 @@ dropped a sector command.
   bounded-run blocker is documented with its exact trial evidence.
 - [ ] Optional later (research rank 3): seven-wire RTS/CTS with
       `SERF_7WIRE` before `OpenDevice()`, only with analyzer capture.
+      RTS/CTS are CIA-B, not Paula; see
+      [`docs/amiga/rs232-paula-and-cia-handshake.md`](../docs/amiga/rs232-paula-and-cia-handshake.md).
+      The first attempt set `SERF_7WIRE` after open and is inconclusive.
 - [ ] Do not start 57600, READY/GO, or a custom `serial.device` unless
       retry+pacing cannot meet disk reliability.
 
