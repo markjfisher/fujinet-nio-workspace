@@ -42,10 +42,11 @@ dropped a sector command.
       short successful read.
 
   The explicit procedure is now `fujinet-nio-exchange --type disk-read|disk-write
-  --provocation --backend cold --baud 38400 --slot 1..8 --lba N --trials N`.
-  It requires ESP pacing `0/0/0`, uses the resident DiskDevice path, and logs
-  per-attempt `result/cause/native/status`, response length, retry ordinal,
-  final `io_Error`, and `io_Actual`. Execution count in this workspace is 0
+  --provocation --backend cold --baud 38400|57600 --slot 1..8 --lba N --trials N`.
+  Product gate is 38400; 57600 is opt-in soak. Both require ESP pacing `0/0/0`,
+  use the resident DiskDevice path, and log per-attempt
+  `result/cause/native/status`, response length, retry ordinal, final
+  `io_Error`, and `io_Actual`. Execution count in this workspace is 0
   READ + 0 WRITE trials; no hardware result has been recorded yet because no
   real Amiga/ESP session was available;
   this checkbox remains open until a genuine `cause=7` is observed or the
