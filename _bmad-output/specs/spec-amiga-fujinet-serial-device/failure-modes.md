@@ -4,7 +4,7 @@
 
 At 38400 PAL the service window is about 262 µs per 8N1 character; at 19200 about 521 µs. If software does not read `SERDATR` and clear `INTF_RBF` in `INTREQ` before the next character completes, `OVRUN` is set and the byte is gone. Framing checksums can retry; lossless recovery after overrun is not a serial-device job.
 
-AHRM Table 8-9: after reading `SERDATR`, reset `INTF_RBF` in `INTREQ` once. Returning from an RBF handler while `INTREQ` is still asserted livelocks interrupt level 5. Never acknowledge before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP sequence. If more than one byte is already waiting, drain: sample, retain, ack-once, repeat until `INTF_RBF` is clear.
+AHRM Table 8-9: after reading `SERDATR`, reset `INTF_RBF` in `INTREQ` once. Returning from an RBF handler while `INTREQ` is still asserted livelocks interrupt level 5. Never acknowledge before sampling `SERDATR`. Ack immediately after the sample, then process the captured word (do not re-test `SERDATR_RBF`). Never use the rejected duplicate-`INTREQ`/NOP sequence. If more than one byte is already waiting, drain: sample, ack-once, retain, repeat until `INTF_RBF` is clear.
 
 The RBF handler must not `ReplyMsg()` or copy into the caller’s IORequest. Doing Exec completion work on that path is a crash class (re-entered level 5 / supervisor-stack blow-up). Complete a pending READ from a device-owned software interrupt started with `Cause()`, never from `INTB_PORTS`.
 

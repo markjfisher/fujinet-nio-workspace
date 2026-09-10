@@ -1,0 +1,57 @@
+.KEY type/A,backend/K,baud/K,trials/K,lba/K,slot/K
+
+; run-exchange AmigaDOS run script
+
+.DEF backend cold
+.DEF baud 38400
+.DEF trials 50
+.DEF slot 1
+
+; ------------------------------------------------------------
+; file-list
+; ------------------------------------------------------------
+
+IF "<type>" EQ "file-list"
+    fujinet-nio-exchange --type file-list --backend <backend> --baud <baud> --size 512 --uri tnfs://192.168.1.101/bbc --trials <trials>
+    SKIP done
+ENDIF
+
+; ------------------------------------------------------------
+; disk-read
+; Default LBA is 0
+; ------------------------------------------------------------
+
+IF "<type>" EQ "disk-read"
+    fujinet-nio-exchange --type disk-read --provocation --backend <backend> --baud <baud> --slot <slot> --lba <lba$0>
+    SKIP done
+ENDIF
+
+; ------------------------------------------------------------
+; disk-write
+; Default LBA is 1000
+; ------------------------------------------------------------
+
+IF "<type>" EQ "disk-write"
+    fujinet-nio-exchange --type disk-write --provocation --backend <backend> --baud <baud> --slot <slot> --lba <lba$1000> --trials <trials>
+    SKIP done
+ENDIF
+
+; ------------------------------------------------------------
+; clock
+; ------------------------------------------------------------
+
+IF "<type>" EQ "clock"
+    fujinet-nio-exchange --type clock --backend <backend> --baud <baud> --trials <trials>
+    SKIP done
+ENDIF
+
+; ------------------------------------------------------------
+; Unknown type
+; ------------------------------------------------------------
+
+ECHO "Unknown exchange type: <type>"
+ECHO "Valid types: file-list, disk-read, disk-write, clock"
+QUIT 10
+
+LAB done
+

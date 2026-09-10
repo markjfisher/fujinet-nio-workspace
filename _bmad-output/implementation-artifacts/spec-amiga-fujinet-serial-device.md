@@ -26,9 +26,9 @@ context:
 
 Acquire `MR_SERIALPORT` then `MR_SERIALBITS` through `misc.resource` before changing Paula serial registers, serial interrupt enables, or the RBF vector. Fail open cleanly if either is already owned; free only what this open acquired. Do not `RemDevice` another owner.
 
-Treat `INTB_RBF` as an exclusive Exec interrupt handler installed with `SetIntVector()`. By project policy use only `D0-D1/A0-A1` as ISR scratch and preserve all other registers. Exec also permits `A5/A6` as handler scratch; this handler does not require them. This is the RBF interrupt-handler boundary, not an interrupt-server chain.
+Treat `INTB_RBF` as an exclusive Exec interrupt handler installed with `SetIntVector()`. Use Exec entry registers (`D1` = INTENA & INTREQ, `A0` = custom base, `A1` = `is_Data`, `A6` = SysBase). Keep `A0` as the custom base; `A5` is the RX/TX store pointer. Return with `RTS`, not `RTE`. This is the RBF interrupt-handler boundary, not an interrupt-server chain.
 
-The RBF handler must not `ReplyMsg()`, copy into the caller IORequest, or transition a pending READ. If master `INTEN` is clear, return without acknowledging. Otherwise service each byte as: read `SERDATR`, retain byte/status into the private ring, clear `INTF_RBF` once; repeat while `INTF_RBF` remains asserted. If a pending READ can now be satisfied, `Cause()` a device-owned software interrupt to complete it. Never acknowledge first. Never use the rejected duplicate-`INTREQ`/NOP sequence. Do not hitch deferred work onto `INTB_PORTS`.
+The RBF handler must not `ReplyMsg()`, copy into the caller IORequest, or transition a pending READ. Entry tests Exec `D1` for `INTB_RBF` (later drain iterations poll `INTREQR`). Service each byte as: read `SERDATR`, clear `INTF_RBF` once, then retain the captured word; repeat while `INTF_RBF` remains asserted. Do not test `SERDATR_RBF`. If a pending READ can now be satisfied, `Cause()` via `_LVOCause(A6)`. Never acknowledge first. Never use the rejected duplicate-`INTREQ`/NOP sequence. `CMD_WRITE` rearms RBF and enables interrupts before the first `SERDAT`/TBE. Do not hitch deferred work onto `INTB_PORTS`.
 
 Pending READ completion (deferred path), `AbortIO`, `CMD_FLUSH`, and final close must use one atomic request-ownership transition and produce at most one reply. The RBF handler is not a completion owner.
 
@@ -93,7 +93,7 @@ Read-only: broker `fujinet_nio_serial_backend.c:89` SendIO READ + 5s timer Abort
 
 ## Design Notes
 
-Host tests drive a pure-C lifecycle model (claim order, READ ownership, sample-then-ack drain, FLUSH rearm). The assembler ISR is a twin of that drain plus a `Cause()` tail, not a caller of C. `_LVOCause` is invoked with SysBase in `A0` so the handler stays inside `D0-D1/A0-A1`. Do not write SERPER on close.
+Host tests drive a pure-C lifecycle model (claim order, READ ownership, sample-then-ack drain, FLUSH rearm). The assembler ISR is a twin of that drain plus a `Cause()` tail, not a caller of C. `_LVOCause` is invoked with SysBase in `A6`. Do not write SERPER on close.
 
 Paula ownership lasts from successful `misc.resource` acquisition through final close. `CMD_FLUSH` aborts a retained READ with `IOERR_ABORTED`, clears RX, and masks RBF without returning the vector. The next WRITE, READ, or QUERY rearms it before the first new `SERDAT` byte, sampling a pending RBF first. Always-armed receive is the documented PiStorm fallback only.
 

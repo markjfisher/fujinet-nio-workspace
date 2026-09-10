@@ -32,7 +32,7 @@ Host SERPER/ring tests passed and are worth keeping if the math still matches AH
 3. **Assembler ISR**, always ack `INTF_RBF`, only scratch D0/D1/A0/A1. Still PiStorm reboot after print.
 4. **Double `INTREQ` write + `NOP` before `RTS`, plus `CMD_FLUSH` to mask RBF and restore Kickstart’s vector before the CLI prints.** Operator: still crashed. Treat as rejected, not as a missing NOP.
 
-The draft also treated the RBF path as an interrupt-server boundary. The rewrite treats `INTB_RBF` as an exclusive Exec interrupt handler (`SetIntVector`). Exec permits `A5/A6` as handler scratch; project policy still restricts this ISR to `D0-D1/A0-A1`.
+The draft also treated the RBF path as an interrupt-server boundary. The rewrite treats `INTB_RBF` as an exclusive Exec interrupt handler (`SetIntVector`). Exec supplies `D1`/`A0`/`A1`/`A6`; the handler keeps `A0` as the custom-chip base and uses `A5` as the RX/TX pointer.
 
 ## Evidence split
 

@@ -50,32 +50,34 @@ While `fujinet-serial.device` owns Paula, stock serial access must not result in
 
 For an Exec interrupt handler, `D0`, `D1`, `A0`, `A1`, `A5`, and `A6` are scratch; all other registers must be preserved.
 
-By project policy the FujiNet handler may use only `D0-D1/A0-A1` as scratch and must preserve all other registers. Exec also permits `A5/A6` as handler scratch, but this handler does not require them. Return with `RTS`, not `RTE`.
+This exclusive `SetIntVector()` handler uses Exec’s entry registers: `D1` = INTENA & INTREQ, `A0` = custom-chip base, `A1` = `is_Data`, `A6` = SysBase. Keep `A0` as the custom base and use `A5` as the RX/TX store pointer. `_LVOCause` is invoked with SysBase already in `A6`. Return with `RTS`, not `RTE`.
 
-The handler must stay short. It must not `ReplyMsg()`, `CopyMem` into the caller’s IORequest, call Exec (except what an interrupt handler is already in), or transition a pending READ out of `PENDING`.
+The handler must stay short. It must not `ReplyMsg()`, `CopyMem` into the caller’s IORequest, call Exec (except `_LVOCause`), or transition a pending READ out of `PENDING`.
 
 Required servicing order:
 
 ```text
-if master INTEN is clear:
+if Exec D1 does not show INTB_RBF:
     return without acknowledging
 
-while INTF_RBF is asserted:
+while INTF_RBF is asserted (entry from D1; later iterations from INTREQR):
     read SERDATR
+        ->
+    clear INTF_RBF once
         ->
     record OVRUN/status and the received byte into the private ring
         (set hardware_overrun_latched or software_ring_overflow_latched as required)
         ->
-    clear INTF_RBF once
-        ->
     if a pending READ can now be satisfied:
-        Cause() a device-owned software interrupt
+        Cause() a device-owned software interrupt via A6
         (do not complete the IORequest here)
 
 return
 ```
 
-One acknowledgement per byte. Never clear RBF before sampling `SERDATR`. Never use the rejected duplicate-`INTREQ`/NOP acknowledgement. Apply the same sample-then-ack order when rearming or tearing down a pending RBF condition.
+One acknowledgement per byte. Never clear RBF before sampling `SERDATR`. Never test `SERDATR_RBF` after RBF was already established by Exec `D1` or `INTREQR`. Never use the rejected duplicate-`INTREQ`/NOP acknowledgement. Apply the same sample-then-ack order when rearming or tearing down a pending RBF condition.
+
+`CMD_WRITE` must rearm RBF and enable CPU interrupts before the first `SERDAT` load or TBE enable. Do not FLUSH, clear-without-read, reset the RX ring, or rearm RBF after TX begins. TBE level 1 may be preempted by RBF level 5; keep RBF enabled for the whole request. After the extra TBE that follows the final `SERDAT` load (`OFF_TX_REM == 0`), disable TBE in `INTENA` (SET/CLR=0). `OFF_TX_DONE` means the final byte left `SERDAT` into the transmit shift register, not that `TSRE` is set.
 
 The drain loop exists so a burst already pending in Paula is taken before the handler returns. Returning while `INTF_RBF` is still asserted livelocks interrupt level 5.
 
@@ -92,7 +94,9 @@ exchange completes
     -> RBF stays armed
 
 next exchange
-    -> WRITE drains leftover SERDATR, discards the software queue, then TXs
+    -> WRITE drains leftover SERDATR, discards the software queue, rearms
+       RBF if needed, enables interrupts, then TX via TBE
+    -> FujiNet response arrives into the still-armed receiver
     -> FujiNet response arrives into the still-armed receiver
 ```
 
@@ -112,7 +116,10 @@ re-arms before return. The broker still issues `SETPARAMS` after open.
 
 If WRITE finds an RBF condition already pending: sample `SERDATR` and
 retain, then discard the software queue so idle/late bytes are not parsed
-as the next frame. Do not mask RBF around that drain.
+as the next frame. Do not mask RBF around that drain or around the
+following TX. Transmit is a TBE interrupt that writes `SERDAT` without
+reading `SERDATR`. Polling `SERDATR` TBE under `Disable()` lost the
+opening SLIP END (`0xC0`) of the first 38400 response.
 
 ## Pending CMD_READ ownership
 
@@ -170,7 +177,7 @@ Do not extend the hardware matrix without asking. Use the AHRM-extract SERPER fo
 | BITS claim fails after PORT | `MR_SERIALPORT` acquired, `MR_SERIALBITS` busy | Free `MR_SERIALPORT` only; fail open | No Paula/RBF mutation |
 | READ vs AbortIO race | Final requested byte arrives while `AbortIO()` runs | Deferred completion path and `AbortIO` compete; exactly one owner and one reply | No duplicate reply, stale pointer, or lost ownership |
 | FLUSH with pending READ | READ retained by device | Cancel READ once, clear queue, keep RBF armed, retain Paula ownership | READ completes `IOERR_ABORTED` |
-| WRITE after FLUSH | Idle or late bytes may sit in SERDATR | Drain then discard the software queue; RBF stays armed; then TX | First 38400 request after idle is not masked |
+| WRITE after FLUSH | Idle or late bytes may sit in SERDATR | Drain then discard the software queue; RBF stays armed; TX via TBE interrupt | First 38400 request after idle is not masked; opening response `C0` is not dropped |
 | Open at 38400 | `OpenDevice` `io_Baud` is 38400 | Claim programs 38400 once; no 19200 detour | Default 19200 only if request baud is out of range |
 | SETPARAMS rate change | TX may still be shifting; RX may hold divisor-change garbage | Wait `TSRE` with RBF masked, apply `SERPER`, discard RX, re-arm | First TX after settle is at the requested rate |
 | Burst already pending in Paula | Handler entered with more than one RBF byte ready | Drain: sample/retain/ack-once per byte until `INTF_RBF` is clear | Returning with RBF still asserted is a livelock |
@@ -198,6 +205,9 @@ handler does not ReplyMsg or mutate IORequest
 Cause-deferred READ completion
 FLUSH keeps RBF armed
 WRITE drains leftover RBF then discards idle queue
+WRITE TX uses TBE interrupt (RBF stays live; no SERDATR TBE poll)
+WRITE Enable then TBE (RBF armed before first SERDAT)
+RBF uses Exec D1/A0/A6; A5 store pointer; sample-then-ack; no SERDATR_RBF test
 open programs requested baud (no 19200 then 38400 detour)
 SETPARAMS waits TX idle, applies SERPER, discards RX garbage
 blocking READ satisfied later
