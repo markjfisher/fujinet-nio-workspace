@@ -24,6 +24,8 @@ Stock `CMD_READ` waits for data. A driver that completes READ immediately with `
 
 A pending READ, `AbortIO`, `CMD_FLUSH`, and final close must not both complete the same request. Dual `ReplyMsg` or a stale retained pointer after FLUSH/close is a crash class. The RBF handler is not a completion owner.
 
+A pending WRITE uses the same rule. Completing WRITE by spinning a CPU iteration limit (`TBE_SPIN_MAX`) is the PiStorm truncation bug: the loop expires before a ~526-byte 38400 packet finishes, the partial request returns an error, remaining TX bytes are abandoned, and the next retry’s opening SLIP `C0` terminates the incomplete FujiNet frame. WRITE must stay pending until TBE accepts every byte (or AbortIO/FLUSH/close claims it). The TBE handler is not a completion owner; it Causes a write software interrupt.
+
 ## FileDevice list as harness marker
 
 `maxPayloadBytes == 0` or below 18 (non-formatted) is `InvalidRequest` (wire status 2). The Amiberry scanner only accepts a later send with `status=0` containing the marker URI. A too-small list looks like a hung guest.
@@ -32,7 +34,7 @@ A pending READ, `AbortIO`, `CMD_FLUSH`, and final close must not both complete t
 
 Observed: trial line with `status=0`, then power-LED flash and PiStorm screen. That is a hard emulator reset, not a waiting Guru. Causes the rewrite must close: interrupt still pending after the CLI runs; `ReplyMsg`/CopyMem on the RBF handler; supervisor-stack blow-up from re-entered level 5; CloseDevice while a READ is still retained; restoring `INTB_RBF` when the vector is no longer ours. Printing then dying is CAP-5 fail even when FujiBus succeeded.
 
-Final close must resolve retained requests before vector removal. No ISR-visible pointer may remain after teardown.
+Final close must resolve retained requests before vector removal. No ISR-visible pointer may remain after teardown. CloseDevice while a WRITE is still feeding TBE is the same class as a retained READ.
 
 ## Isolation
 

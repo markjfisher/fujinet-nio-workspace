@@ -90,6 +90,7 @@ Read-only: broker `fujinet_nio_serial_backend.c:89` SendIO READ + 5s timer Abort
 - 2026-09-07: Folded long pre-implementation review into SPEC.md, new `lifecycle.md`, companions, and this artifact (misc.resource, exclusive Exec RBF handler ABI, SERPER-not-restored, pending-READ ownership, named native tests).
 - 2026-09-07: Recorded Paula-vs-CIA-B handshake map (`docs/amiga/rs232-paula-and-cia-handshake.md`); this cut claims `MR_SERIALBITS` but does not drive RTS/CTS.
 - 2026-09-07: Implemented the Paula ownership rewrite (misc.resource claim order, sample-then-ack RBF drain, Cause-deferred READ, FLUSH rearm, split overrun latches, host lifecycle tests).
+- 2026-09-10: Asynchronous CMD_WRITE: TBE extra event completes WRITE (shifter-accepted, not TSRE); removed TBE_SPIN_MAX busy-wait; AbortIO/FLUSH/close own pending WRITE once.
 
 ## Design Notes
 

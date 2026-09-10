@@ -1,4 +1,4 @@
-# Lifecycle: ownership, RBF, pending READ
+# Lifecycle: ownership, RBF, pending READ/WRITE
 
 Owning repo: `repos/fujinet-nio-driver`. Diagrams, teardown order, edge-case matrix, and named native tests for `fujinet-serial.device`. Kernel constraints in `SPEC.md` cite this companion.
 
@@ -18,7 +18,11 @@ On final close:
 ```text
 stop accepting new ownership transitions
     ->
+resolve/cancel retained WRITE exactly once (TBE completion, AbortIO, FLUSH, or close)
+    ->
 resolve/cancel retained READ exactly once (deferred path or AbortIO path, not the RBF handler)
+    ->
+disable TBE
     ->
 mask RBF
     ->
@@ -26,8 +30,8 @@ handle/clear any required pending receive state safely
     (if INTEN is live: read SERDATR, retain byte/status, clear INTF_RBF once;
      repeat while INTF_RBF remains asserted)
     ->
-if current INTB_RBF vector is still the FujiNet handler:
-    restore the saved previous handler and relevant interrupt-enable state
+if current INTB_RBF / INTB_TBE vectors are still the FujiNet handlers:
+    restore the saved previous handlers and relevant interrupt-enable state
 else:
     do not overwrite the vector
     ->
@@ -77,7 +81,9 @@ return
 
 One acknowledgement per byte. Never clear RBF before sampling `SERDATR`. Never test `SERDATR_RBF` after RBF was already established by Exec `D1` or `INTREQR`. Never use the rejected duplicate-`INTREQ`/NOP acknowledgement. Apply the same sample-then-ack order when rearming or tearing down a pending RBF condition.
 
-`CMD_WRITE` must rearm RBF and enable CPU interrupts before the first `SERDAT` load or TBE enable. Do not FLUSH, clear-without-read, reset the RX ring, or rearm RBF after TX begins. TBE level 1 may be preempted by RBF level 5; keep RBF enabled for the whole request. After the extra TBE that follows the final `SERDAT` load (`OFF_TX_REM == 0`), disable TBE in `INTENA` (SET/CLR=0). `OFF_TX_DONE` means the final byte left `SERDAT` into the transmit shift register, not that `TSRE` is set.
+`CMD_WRITE` is an asynchronous Exec request, symmetric with pending `CMD_READ`. `BeginIO` validates, prepares RX/RBF, clears `IOF_QUICK`, claims `pending_write`, arms TBE, and returns without `ReplyMsg()`. Do not busy-wait TBE with a CPU iteration limit (`TBE_SPIN_MAX`) or infer UART time from a spin loop.
+
+`CMD_WRITE` must rearm RBF and enable CPU interrupts before the first `SERDAT` load or TBE enable. Do not FLUSH, clear-without-read, reset the RX ring, or rearm RBF after TX begins. TBE level 1 may be preempted by RBF level 5; keep RBF enabled for the whole request. After the extra TBE that follows the final `SERDAT` load (`OFF_TX_REM == 0`), disable TBE in `INTENA` (SET/CLR=0) and `Cause()` a device-owned write software interrupt. `OFF_TX_ACCEPTED` means the final byte left `SERDAT` into the transmit shift register, not that `TSRE` is set or that the final stop bit has left the pin. That shifter-accepted extra TBE is normal `CMD_WRITE` completion. Do not wait for TSRE/wire-idle unless a separate explicit reason requires it (SETPARAMS settle still waits `TSRE` with RBF masked).
 
 The drain loop exists so a burst already pending in Paula is taken before the handler returns. Returning while `INTF_RBF` is still asserted livelocks interrupt level 5.
 
@@ -148,6 +154,41 @@ Final close must resolve any retained READ through that same path before vector 
 
 Timer-driven `AbortIO` remains the broker’s timeout mechanism.
 
+## Pending CMD_WRITE ownership
+
+`CMD_WRITE` waits until every requested byte has been accepted into Paula's transmit shift register (stock-like). Immediate 0-byte completion is allowed. Non-zero writes clear `IOF_QUICK` and remain pending until TBE completion, `AbortIO`, `CMD_FLUSH`, or close.
+
+```text
+WRITE complete:
+final byte accepted by transmit shift register
+
+not necessarily:
+final stop bit physically left serial pin
+```
+
+```text
+IDLE
+  |
+  v
+PENDING
+  | \
+  |  \ AbortIO / FLUSH / Close
+  |   \
+  v    v
+COMPLETING / ABORTING     <-- extra TBE Causes a write software interrupt
+       |                    (not the TBE handler itself; not TSRE)
+       v
+     REPLIED
+```
+
+Exactly one of normal TBE completion, `AbortIO`, `CMD_FLUSH`, or final close may take ownership of a pending WRITE and `ReplyMsg()` it. Protect the transition with `Disable()`/`Enable()` or equivalent. No path may issue a duplicate `ReplyMsg()`. No stale `pending_write` pointer may remain after completion or abort.
+
+`io_Actual` is bytes actually committed to `SERDAT` (written into Paula), not bytes merely reserved by decrementing a remaining counter. TBE increments `committed` after the `SERDAT` write.
+
+`CMD_FLUSH` with a pending WRITE: same single-owner cancellation path as `AbortIO`, complete with `IOERR_ABORTED`, disable TBE, then apply the existing READ/RX FLUSH behaviour. No READ or WRITE IORequest may remain retained after FLUSH.
+
+Final close must resolve any retained WRITE through that same path before interrupt-vector removal or `misc.resource` release.
+
 ## Overrun causes
 
 Private:
@@ -177,12 +218,17 @@ Do not extend the hardware matrix without asking. Use the AHRM-extract SERPER fo
 | BITS claim fails after PORT | `MR_SERIALPORT` acquired, `MR_SERIALBITS` busy | Free `MR_SERIALPORT` only; fail open | No Paula/RBF mutation |
 | READ vs AbortIO race | Final requested byte arrives while `AbortIO()` runs | Deferred completion path and `AbortIO` compete; exactly one owner and one reply | No duplicate reply, stale pointer, or lost ownership |
 | FLUSH with pending READ | READ retained by device | Cancel READ once, clear queue, keep RBF armed, retain Paula ownership | READ completes `IOERR_ABORTED` |
+| FLUSH with pending WRITE | WRITE retained by device | Cancel WRITE once, disable TBE, then cancel any pending READ, clear queue, keep RBF armed | WRITE completes `IOERR_ABORTED`; no stale `pending_write` |
 | WRITE after FLUSH | Idle or late bytes may sit in SERDATR | Drain then discard the software queue; RBF stays armed; TX via TBE interrupt | First 38400 request after idle is not masked; opening response `C0` is not dropped |
+| Large CMD_WRITE | 526-byte FujiBus sector write (~138 ms at 38400) | Remains pending until every byte is TBE-accepted; `io_Actual == io_Length` | Must not infer duration from CPU spin; must not truncate ~230–250 bytes |
+| AbortIO during WRITE | WRITE in progress | Disable TBE; `io_Actual` = bytes committed to SERDAT; one `IOERR_ABORTED` reply | No further SERDAT feeding |
+| TBE completion vs AbortIO | Extra TBE Causes completion while AbortIO runs | Exactly one owner and one reply | No duplicate reply or stale pointer |
 | Open at 38400 | `OpenDevice` `io_Baud` is 38400 | Claim programs 38400 once; no 19200 detour | Default 19200 only if request baud is out of range |
 | SETPARAMS rate change | TX may still be shifting; RX may hold divisor-change garbage | Wait `TSRE` with RBF masked, apply `SERPER`, discard RX, re-arm | First TX after settle is at the requested rate |
 | Burst already pending in Paula | Handler entered with more than one RBF byte ready | Drain: sample/retain/ack-once per byte until `INTF_RBF` is clear | Returning with RBF still asserted is a livelock |
 | RBF handler vs ReplyMsg | Byte(s) satisfy a pending READ | Handler only rings + `Cause()`s; software interrupt copies and replies | No `ReplyMsg` or IORequest mutation on the RBF handler path |
 | Final close with pending READ | Last opener closes while READ is retained | Resolve request before vector/resource teardown | No ISR access after teardown |
+| Final close with pending WRITE | Last opener closes while WRITE is retained | Resolve WRITE then READ before vector/resource teardown | No ISR access after teardown |
 | Vector no longer ours | Close finds `INTB_RBF` is not the FujiNet handler | Do not overwrite the vector; still mask RBF and free `misc.resource` | No stolen-vector restore |
 | Ring vs hardware overrun | Paula overrun or private ring full | Public overrun latched; private cause retained separately | Diagnostic state remains distinguishable |
 | Partial-open rollback | Claim or vector install fails after a partial acquisition | Release only resources this open acquired (`BITS` then `PORT` if both were taken) | Paula/RBF/INTENA left as found |
@@ -207,6 +253,14 @@ FLUSH keeps RBF armed
 WRITE drains leftover RBF then discards idle queue
 WRITE TX uses TBE interrupt (RBF stays live; no SERDATR TBE poll)
 WRITE Enable then TBE (RBF armed before first SERDAT)
+small CMD_WRITE completes after extra TBE
+526-byte CMD_WRITE stays pending until every byte is TBE-accepted
+CMD_WRITE does not use TBE_SPIN_MAX or CPU iteration wait
+large WRITE reports io_Actual == io_Length
+AbortIO during WRITE stops TBE, replies IOERR_ABORTED once, partial io_Actual
+TBE completion vs AbortIO (exactly one owner)
+FLUSH with pending WRITE
+final close with pending WRITE
 RBF uses Exec D1/A0/A6; A5 store pointer; sample-then-ack; no SERDATR_RBF test
 open programs requested baud (no 19200 then 38400 detour)
 SETPARAMS waits TX idle, applies SERPER, discards RX garbage
