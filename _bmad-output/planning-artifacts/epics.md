@@ -2,6 +2,7 @@
 stepsCompleted:
   - step-01-validate-prerequisites
   - step-02-design-epics
+  - step-03-create-stories
 inputDocuments:
   - backlog/amiga-faster-backends.md
   - backlog/nio-broker.md
@@ -12,7 +13,9 @@ inputDocuments:
   - _bmad-output/completed-specs/spec-fujibus-slip-separation/brownfield.md
   - repos/fujinet-nio/docs/context_bootstrap.md
   - repos/fujinet-nio/docs/protocol_reference.md
-status: story-set-review
+status: approved-with-execution-gates
+storySetApproved: 2026-09-11
+planningValidation: pass-with-execution-gates
 storyReviewMode: complete-set-at-user-request
 requirementsConfirmed: 2026-09-11
 epicStructureApproved: 2026-09-11
@@ -24,7 +27,7 @@ updated: 2026-09-11
 
 ## Overview
 
-Planning-only input for a future Amiga Zorro-II packet-native backend, using an RP2350B bridge to ESP32-S3. The corrected requirements and three-epic structure were approved on 2026-09-11, including the ABI sign-off dependency below. At the user's request, all stories are drafted together for review, overriding per-story/per-epic review pauses while retaining the existing BMAD structure. Stories are proposed, not implemented or individually accepted. Hardware-gated stories are bounded planning envelopes: they require the named evidence before implementation details can be finalized.
+Planning-only input for a future Amiga Zorro-II packet-native backend, using an RP2350B bridge to ESP32-S3. The corrected requirements, three-epic structure and complete story set were approved on 2026-09-11, including the ABI sign-off dependency below. At the user's request, stories were reviewed as a complete set rather than one at a time. Approval accepts their planning scope, not implementation completion or permission to bypass readiness gates. Stories 1.5 and 3.6 require explicit human stop-and-review checkpoints; Story 3.2 may be subdivided after ABI design. Hardware-gated stories remain bounded planning envelopes until their named evidence exists.
 
 The user's detailed planning request and `backlog/amiga-faster-backends.md` supply feature requirements; no separate feature PRD was supplied. Existing broker architecture supplies the brownfield constraints. Completed specs are historical evidence, not instructions to repeat completed work. Sources under `_bmad-output/archive/` are excluded. Actual code takes precedence where a historical description no longer matches implementation; discrepancies below must be resolved explicitly, not silently interpreted as implemented capabilities.
 
@@ -287,7 +290,7 @@ Epic 1 delivers software validation independently. Epic 2 project setup and RP23
 
 Codec/framer/mock/tool/parity changes are consolidated in Epic 1 rather than split into overlapping technical-layer epics. Epic 3 necessarily revisits composition and test entry points to replace simulated I/O with physical I/O, but that split is justified by hardware feedback and separate acceptance evidence. Epic 2's bridge project becomes Epic 3's implementation owner; it does not create a competing protocol or duplicate service stack.
 
-The complete proposed story set below implements FR16 as a planning deliverable. Every story is for review, not a record of completed work. References to other story numbers are implementation dependencies, not an instruction to implement during this planning task. “None” means no dependency on another new story; existing project contracts still apply.
+The approved story set below implements FR16 as a planning deliverable, not a record of completed work. References to other story numbers are implementation dependencies, not an instruction to implement during this planning task. “None” means no dependency on another new story; existing project contracts still apply.
 
 ## Epic 1: Developers can prove native FujiBus service parity before hardware exists
 
@@ -408,6 +411,8 @@ So that native failures cannot mix responses or silently replay ambiguous writes
 **Likely files/modules:** `repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_device.c`, `test_fujinet_nio_client_retry.c`, focused new native-backend tests, `amiga/nio.device/fujinet_nio_device.c` only for necessary binding/lifecycle support. Read/link `common/fujinet_disk_retry.c` and library `fn_raw_call` unchanged.
 
 **Dependencies:** 1.4. **Hardware required:** No. **Requirements:** FR2, FR3, FR6, FR9. **Verification:** V-BROKER, V-RETRY and new focused tests; V-LIB only if separately approved library changes become necessary.
+
+**Mandatory human checkpoint — stop and review carefully:** Before implementation, review the proposed ownership/failure model, both existing retry paths, ambiguous-write cases, and planned evidence. At completion, stop for explicit human acceptance of results and unresolved discrepancies before marking this story accepted or releasing dependent work. Passing automated tests alone is insufficient. Carry `spec_checkpoint: true` and `done_checkpoint: true` into the future dispatch entry; do not silently default either to false.
 
 **Acceptance Criteria:**
 
@@ -659,7 +664,7 @@ So that pre-hardware completion means more than host mocks passing.
 
 ## Epic 2: Bridge developers can make an evidence-backed feasibility and ABI decision
 
-Deliver an isolated bridge project and independently useful feasibility evidence. Stories 2.1–2.3 can proceed alongside Epic 1. Story 2.4 cannot approve the ABI before Story 1.6 acceptance. No register map, mailbox layout, PIO program, firmware concurrency model, or ESP link protocol is specified by the story drafts below.
+Deliver an isolated bridge project and independently useful feasibility evidence. Stories 2.1–2.3 can proceed alongside Epic 1. Story 2.4 cannot approve the ABI before Story 1.6 acceptance. No register map, mailbox layout, PIO program, firmware concurrency model, or ESP link protocol is specified by the planning stories below.
 
 ### Story 2.1: Create an isolated, reproducible bridge project skeleton
 
@@ -807,6 +812,8 @@ So that Amiga requests and ESP replies cross the board without service translati
 
 **Dependencies:** 1.14, 2.4. **Hardware required:** Yes. **Requirements:** FR5, FR9, FR11, FR14. **Verification:** Standalone bridge tests/build plus V-HW.
 
+**Approved sizing condition:** This story may be subdivided after ABI design (2.4). Review its size against the agreed state machine before implementation. Any subdivision must retain all packet ownership, backpressure and reset acceptance criteria, preserve traceability to 3.2, and update the dispatch dependencies. Story 3.4 must wait for all required replacement slices, not merely the first one. No subdivision or speculative firmware architecture is imposed now.
+
 **Acceptance Criteria:**
 
 **Given** conforming bus/link test peers
@@ -911,6 +918,8 @@ So that recovery does not silently misroute replies or duplicate writes.
 
 **Dependencies:** 3.4. **Hardware required:** Yes. **Requirements:** FR2, FR5, FR9, FR13, FR15. **Verification:** V-HW with per-fault traces, transmission/effect counts and owning regression tests for fixes.
 
+**Mandatory human checkpoint — stop and review carefully:** Before implementation/physical fault injection, review the fault procedure, disposable-media protections, ownership transitions, actual caller retries and observability of remote effects. At completion, stop for explicit human acceptance of traces, coverage gaps and recovery limits before marking this story accepted or releasing readiness Story 3.7. Passing automated tests alone is insufficient. Carry `spec_checkpoint: true` and `done_checkpoint: true` into the future dispatch entry; do not silently default either to false.
+
 **Acceptance Criteria:**
 
 **Given** failure before delivery, after service effect, or before response receipt
@@ -953,7 +962,9 @@ So that I can decide whether this hardware is suitable for my system.
 
 ## Dependency and review summary
 
-There are **25 proposed stories: 14 software/pre-hardware, 4 bridge setup/feasibility/ABI, and 7 physical implementation/acceptance**. Each lists a bounded outcome, owning modules, prerequisites, tests and unknowns. All are review drafts; conditional hardware stories are not ready to execute until their evidence gates exist.
+There are **25 approved planning stories: 14 software/pre-hardware, 4 bridge setup/feasibility/ABI, and 7 physical implementation/acceptance**. Each lists a bounded outcome, owning modules, prerequisites, tests and unknowns. The count may change when 3.2 is subdivided after ABI design. Approval is not implementation acceptance; conditional hardware stories are not ready to execute until their evidence gates exist.
+
+**Approval conditions for downstream spec/build:** Stories 1.5 and 3.6 are deliberate human stop-and-review points before implementation and after results, not routine unattended work. Preserve both checkpoints in dispatch metadata and require explicit acceptance before releasing dependent stories. Story 3.2 may be subdivided after 2.4 with preserved scope/criteria and updated downstream dependencies. No new spec folder or dispatch file is created by this approval update.
 
 ```text
 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6  [accepted software packet contract]
@@ -1008,4 +1019,11 @@ Start with **1.1 — independent wire-format fixtures**. It is confined to one r
 
 ### Planning verification record (2026-09-11)
 
-Only this workspace planning document changed. After sourcing `scripts/env.sh`, an inline Node document check passed: 25 stories with all required fields and Given/When/Then/And criteria; no duplicate, unknown, cyclic or same-epic forward dependencies; Story 2.4 depends on 1.6; setup/feasibility has no Epic 1 dependency; all 16 FRs have story coverage; input document paths exist; no remaining template placeholders or trailing whitespace. `git diff --check` passed. These are structural/document checks, not implementation acceptance: no firmware, Amiga binaries, services or hardware tests were run for this planning-only change. The complete story set is awaiting user review; BMAD final-validation approval remains pending.
+Only this workspace planning document changed. After sourcing `scripts/env.sh`, an inline Node document check passed: 25 stories with all required fields and Given/When/Then/And criteria; no duplicate, unknown, cyclic or same-epic forward dependencies; Story 2.4 depends on 1.6; setup/feasibility has no Epic 1 dependency; all 16 FRs have story coverage; input document paths exist; no remaining template placeholders or trailing whitespace. `git diff --check` passed. These are structural/document checks, not implementation acceptance: no firmware, Amiga binaries, services or hardware tests were run for this planning-only change. The user subsequently approved the complete story set with the 1.5/3.6 review gates and 3.2 sizing condition recorded above.
+
+### Final planning validation
+
+- **Requirements:** All 16 FRs have mapped delivery/evidence; FR16 is the planning artifact itself. NFRs remain binding in the story scopes, verification strategy and gates. No UI or database work applies.
+- **Architecture:** Existing backend/framer/service seams are preserved; no greenfield starter template is required for Epic 1. The standalone bridge skeleton belongs in Epic 2. No electrical mapping, physical ABI values, fallback path or on-wire correlation is invented.
+- **Structure and dependencies:** Software, feasibility and physical integration remain distinct risk boundaries with justified file overlap. No story requires a later story in its epic. Epic 2 setup/feasibility is independent, while ABI approval requires 1.6; Epic 3 consumes accepted outputs rather than enabling earlier epics retroactively.
+- **Readiness:** Planning coverage/structure passes. This is deliberately not an all-stories-ready-for-development verdict: 1.5/3.6 require human checkpoints; 3.2 needs post-ABI sizing review and possible subdivision; hardware stories require their stated evidence and detailed execution procedures. These conditions must survive spec derivation and sprint readiness review.
