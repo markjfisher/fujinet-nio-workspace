@@ -41,3 +41,6 @@
 [submodule "repos/nio-config"]
 	path = repos/nio-config
 	url = git@github.com:markjfisher/nio-config.git
+[submodule "repos/fujinet-nio-hardware"]
+	path = repos/fujinet-nio-hardware
+	url = git@github.com:markjfisher/fujinet-nio-hardware.git
