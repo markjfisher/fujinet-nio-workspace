@@ -115,6 +115,9 @@ accepted (`completed/amiga-nio-broker-stage-4.md`); do not restore FIFO-empty
 
 ## Git commits
 
+When completing a story, commit its changes with a message describing the change
+and relevant verification. Never push changes.
+
 Never add a `Co-authored-by` (or `Co-Authored-By`) trailer to any commit.
 Do not attribute Cursor, Copilot, Claude, or any other agent as a co-author.
 
