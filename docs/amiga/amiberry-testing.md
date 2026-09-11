@@ -44,7 +44,9 @@ development share (e.g. NIO:)
 ```
 
 1. Start FujiNet NIO yourself on TCP port `65504` (your usual config is fine;
-   the TCP channel must be enabled).
+   the TCP channel must be enabled). See
+   [`posix_tcp_serial_channel.md`](../../repos/fujinet-nio/docs/posix_tcp_serial_channel.md)
+   for the build/run steps and `fujinet.yaml` TCP settings.
 2. Point a workbench profile at a **persistent** VHD/HDF in
    `configs/amiga/workbenches.yaml` (the `harddrive` field).
 3. Boot Amiberry:
