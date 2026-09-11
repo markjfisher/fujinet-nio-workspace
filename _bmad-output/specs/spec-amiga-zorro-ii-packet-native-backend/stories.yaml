@@ -1,0 +1,177 @@
+# Approved planning stories; prerequisites and hardware gates are in execution-gates.md.
+# This list does not mark any story ready or complete and does not launch implementation.
+
+- id: "1-1"
+  title: "Establish independent FujiBus wire-format regression fixtures"
+  description: "Establish independent literal raw/SLIP packet fixtures and rejection cases without production changes. Covers SPEC.md CAP-1 and approved Story 1.1 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.1 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-2"
+  title: "Expose the canonical raw FujiBus codec without breaking serial callers"
+  description: "Expose the canonical raw codec while preserving existing serial entry points and wire behavior. Covers SPEC.md CAP-1 and approved Story 1.2 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.2 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-3"
+  title: "Make framer composition use raw FujiBus packets consistently"
+  description: "Make the framer boundary consistently raw, with SLIP wrapping owned by stream framing. Covers SPEC.md CAP-1, CAP-2 and approved Story 1.3 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.3 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-4"
+  title: "Provide a bounded native packet adapter and deterministic I/O double"
+  description: "Provide explicit bounded native packet I/O and deterministic boundary, capacity, failure and reset tests. Covers SPEC.md CAP-2 and approved Story 1.4 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.4 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-5"
+  title: "Prove native broker ownership and recovery against existing retry callers"
+  description: "Prove real broker and retry-caller ownership and recovery safety under ambiguous completion, with mandatory human review. Covers SPEC.md CAP-3 and approved Story 1.5 in the epic companion."
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: "Use approved Story 1.5 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-6"
+  title: "Accept the canonical software packet contract for bridge design"
+  description: "Obtain explicit acceptance of the canonical raw representation, packet boundaries, ownership and relevant failure behavior. Covers SPEC.md CAP-3, CAP-6 and approved Story 1.6 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: "Use approved Story 1.6 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-7"
+  title: "Prove file-list and clock parity through the real core"
+  description: "Prove file-list and clock parity through real core handlers using isolated filesystem and time fixtures. Covers SPEC.md CAP-4 and approved Story 1.7 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.7 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-8"
+  title: "Prove disk read/write parity with independently checked backing storage"
+  description: "Prove disk read/write parity and fault effects against independently checked disposable backing storage. Covers SPEC.md CAP-4, CAP-3 and approved Story 1.8 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.8 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-9"
+  title: "Add a host-side native packet test endpoint for guest integration"
+  description: "Provide the host side of a verified native guest test connection backed by real services, not a physical bridge ABI. Covers SPEC.md CAP-4 and approved Story 1.9 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.9 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-10"
+  title: "Build an Amiga native-test broker binary using the host endpoint"
+  description: "Build and validate the guest native-test broker binary behind the existing exchange ABI without serial transport dependencies. Covers SPEC.md CAP-3, CAP-4 and approved Story 1.10 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.10 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-11"
+  title: "Let exchange-tool read-only operations run without serial setup"
+  description: "Enable native-compatible file-list and clock operation planning in the exchange tool while preserving serial CLI compatibility. Covers SPEC.md CAP-4 and approved Story 1.11 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.11 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-12"
+  title: "Add safe ordinary disk operations to the exchange tool"
+  description: "Separate safe ordinary disk operations from serial provocation and verify writes only against explicit disposable fixtures. Covers SPEC.md CAP-4 and approved Story 1.12 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.12 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-13"
+  title: "Extend host parity to catalogue and media lifecycle contracts"
+  description: "Prove host-side catalogue and media lifecycle parity with the established slot, mount and protection contracts. Covers SPEC.md CAP-4 and approved Story 1.13 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.13 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "1-14"
+  title: "Accept end-to-end native guest parity and fault isolation"
+  description: "Accept actual Amiga guest/tool/resident-device native parity against real services, with fault-isolation evidence. Covers SPEC.md CAP-3, CAP-4 and approved Story 1.14 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 1.14 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "2-1"
+  title: "Create an isolated, reproducible bridge project skeleton"
+  description: "Create an independently buildable RP2350B bridge skeleton without disturbing existing POSIX/ESP targets. Covers SPEC.md CAP-5 and approved Story 2.1 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 2.1 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "2-2"
+  title: "Establish RP2350B/Zorro bus and PIO feasibility evidence"
+  description: "Obtain measured RP2350B/Zorro bus and PIO feasibility evidence without approving a hardware ABI. Covers SPEC.md CAP-5 and approved Story 2.2 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 2.2 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "2-3"
+  title: "Establish bridge-to-ESP transfer and reset feasibility"
+  description: "Obtain measured bridge-to-ESP transfer, backpressure and reset feasibility evidence using provisional isolated probes. Covers SPEC.md CAP-5 and approved Story 2.3 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 2.3 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "2-4"
+  title: "Approve an evidence-backed bridge packet ABI"
+  description: "Approve the hardware packet ABI only after accepted software semantics and positive relevant hardware feasibility evidence. Covers SPEC.md CAP-6 and approved Story 2.4 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: "Use approved Story 2.4 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-1"
+  title: "Implement the Amiga Zorro access backend behind the broker"
+  description: "Implement and fixture-test the Amiga Zorro access backend behind the existing broker contract. Covers SPEC.md CAP-3, CAP-7 and approved Story 3.1 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.1 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-2"
+  title: "Implement the bridge's opaque packet transfer engine"
+  description: "Implement the agreed bridge transfer engine, allowing post-ABI subdivision that preserves scope and downstream gates. Covers SPEC.md CAP-7 and approved Story 3.2 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.2 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-3"
+  title: "Connect the approved bridge link to the ESP FujiBus path"
+  description: "Connect the agreed ESP link adapter to the existing raw FujiBus and service path. Covers SPEC.md CAP-7 and approved Story 3.3 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.3 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-4"
+  title: "Validate complete hardware file-list, clock and disk exchanges"
+  description: "Validate the complete physical chain using the actual exchange tool and file, clock and disposable-disk operations. Covers SPEC.md CAP-7 and approved Story 3.4 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.4 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-5"
+  title: "Validate existing Amiga media and catalogue workflows on Zorro"
+  description: "Validate existing Amiga media and catalogue workflows on hardware without expanding supported formats. Covers SPEC.md CAP-8 and approved Story 3.5 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.5 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-6"
+  title: "Validate hardware fault containment and recovery"
+  description: "Validate physical fault containment and recovery through actual callers with mandatory human review of procedures and results. Covers SPEC.md CAP-3, CAP-8 and approved Story 3.6 in the epic companion."
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: "Use approved Story 3.6 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
+
+- id: "3-7"
+  title: "Publish measured performance and Zorro-only installation readiness"
+  description: "Publish validated Zorro-only installation guidance, recovery limits and measured performance after parity and fault acceptance. Covers SPEC.md CAP-8 and approved Story 3.7 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: "Use approved Story 3.7 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."

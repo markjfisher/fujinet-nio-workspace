@@ -1,0 +1,63 @@
+# Execution gates and story contract mapping
+
+The approved epic companion contains every story's scope, files, acceptance criteria, risks and planned test commands. This companion makes the readiness rules explicit for spec derivation and dispatch; it does not declare any story completed. No production or hardware work has been performed by creating this package.
+
+## Identity, order and dispatch limits
+
+Approved story `1.5` maps to dispatch ID `1-5`, and likewise throughout. IDs are quoted, unpadded and prefix-free; list order, not filename sorting, determines sequential dispatch. The dispatch schema has no dependency or hardware-state fields: a runner must honor the contract below and the approved story before starting. Listing a hardware story does not authorize it to run without evidence.
+
+The default list follows the approved epic/story order and is a valid sequential topological order. This is not a new dependency forcing bridge setup or feasibility to wait for Epic 1. A separately selected 2-1/2-2/2-3 run may proceed alongside Epic 1 if its own prerequisites, hardware and ownership are satisfied. This package does not create a parallel scheduler or launch any run.
+
+Before starting a story, establish acceptance of all actual prerequisites, required toolchain/guest/hardware availability, and its exact execution/verification procedure. Stop if any is absent; do not skip it silently or substitute a mock pass for physical evidence. An implementation plan and focused tests are prepared when the story becomes ready, not guessed now for every future hardware story.
+
+## Required prerequisites
+
+| Dispatch ID | Accepted prerequisites | Evidence/environment gate | Capability |
+| --- | --- | --- | --- |
+| 1-1 | None | Host tests; independent fixtures | CAP-1 |
+| 1-2 | 1-1 | Host codec/compatibility tests | CAP-1 |
+| 1-3 | 1-2 | Framer/transport compatibility tests | CAP-1, CAP-2 |
+| 1-4 | 1-3 | Explicit packet boundaries and bounded fault tests | CAP-2 |
+| 1-5 | 1-4 | Human review before work and after real broker/retry-path evidence | CAP-3 |
+| 1-6 | 1-1, 1-2, 1-3, 1-4, 1-5 | Explicit software packet-contract acceptance | CAP-3, CAP-6 |
+| 1-7 | 1-4 | Real file/clock handlers, isolated storage/time | CAP-4 |
+| 1-8 | 1-4, 1-5 | Real disk handlers, independent backing-byte and effect checks | CAP-3, CAP-4 |
+| 1-9 | 1-6, 1-7, 1-8 | Verified host endpoint and test-only guest connection design | CAP-4 |
+| 1-10 | 1-5, 1-9 | Amiga toolchain/guest and actual test broker | CAP-3, CAP-4 |
+| 1-11 | 1-10 | Actual guest exchange tool; no serial setup on native path | CAP-4 |
+| 1-12 | 1-8, 1-11 | Guest disk tool and explicit disposable write fixtures | CAP-4 |
+| 1-13 | 1-7, 1-8 | Host media/catalogue lifecycle parity | CAP-4 |
+| 1-14 | 1-6, 1-10, 1-11, 1-12, 1-13 | Actual guest/resident-driver and real-core acceptance | CAP-3, CAP-4 |
+| 2-1 | None | Verified standalone toolchain/build; no hardware needed | CAP-5 |
+| 2-2 | 2-1 | Suitable RP2350B/Zorro hardware and instruments | CAP-5 |
+| 2-3 | 2-1 | RP2350B/ESP32-S3 link hardware and instruments; independent of 2-2 | CAP-5 |
+| 2-4 | 1-6, 2-2, 2-3 | Accepted software contract, positive relevant feasibility and explicit ABI agreement | CAP-6 |
+| 3-1 | 1-14, 2-4 | Suitable Zorro hardware and ABI-conforming access fixture | CAP-3, CAP-7 |
+| 3-2 | 1-14, 2-4 | Hardware, conforming peers and post-ABI sizing review | CAP-7 |
+| 3-3 | 1-14, 2-4 | ESP32-S3 and conforming link fixture | CAP-7 |
+| 3-4 | 3-1, 3-2, 3-3 | Complete working physical chain | CAP-7 |
+| 3-5 | 3-4 | Physical media/catalogue acceptance | CAP-8 |
+| 3-6 | 3-4 | Human review before fault injection and after physical evidence | CAP-3, CAP-8 |
+| 3-7 | 3-5, 3-6 | Accepted physical parity/recovery plus actual measurements/install validation | CAP-8 |
+
+## Human checkpoints
+
+The user confirmed no routine checkpoints for ordinary stories, with the following exceptions. These dispatch settings do not weaken any acceptance or hardware gate in the contract.
+
+- **1-5 and 3-6:** both `spec_checkpoint: true` and `done_checkpoint: true`. Pause after the detailed story plan and before implementation; pause again after results before acceptance/releasing dependent work. Review actual caller retries, ambiguous completion, ownership transitions, stale-response isolation, transmission/effect counts and unresolved gaps. For 3-6 also review fault-injection safety and disposable-media protections. Automated passes are not human approval.
+- **1-6 and 2-4:** `done_checkpoint: true`, `spec_checkpoint: false`. Present the completed contract/evidence for explicit approval before any dependent story is released. If the runner marks implementation “done” before this review, that is not contract acceptance.
+- **All others:** both checkpoint booleans are false. Required hardware, explicit acceptance criteria and the 3-2 sizing condition still apply; missing prerequisites or unsafe findings always stop work.
+
+Routine `invoke_dev_with` notes only point to the matching approved story and this gate companion; they contain no hidden requirements. A dispatcher must pass the SPEC and all mandatory companions to the implementing skill. No per-story implementation files or runtime state are generated by this package.
+
+## Critical gates that must survive later derivation
+
+**Software-to-hardware ABI:** 1-6 must explicitly accept the canonical raw FujiBus representation, packet-boundary semantics, ownership rules and relevant failure behavior. Codec tests alone do not qualify. Positive 2-2/2-3 feasibility can be recorded independently, but cannot finalize/approve 2-4 before that software acceptance. Unrelated unfinished Epic 1 guest/tool work does not block ABI approval once 1-6 is accepted. Actual hardware implementation still waits for 1-14 as well as 2-4.
+
+**Retry safety:** existing disk retries include some writes, and `fn_raw_call` can replay failures. Unknown completion cannot be erased by close/open or an arbitrary delay. Exercise the actual callers. If safe containment cannot be achieved behind the existing backend, withhold 1-6/physical recovery acceptance and obtain a specific scope decision; do not silently change higher-layer semantics.
+
+**3-2 subdivision:** after ABI design, assess size against the agreed state machine. If split, preserve scope, acceptance criteria and traceability; update the dispatch list and require every necessary replacement slice before 3-4. Do not create overlapping IDs such as `3-2` and `3-2-a` in the same list. Apply the installed schema's pinned-ID/retirement rules if a story spec already exists. No split is selected now.
+
+**No physical failover or remote concurrency:** native deployment never switches to an assumed serial backend. Locally queued requests execute remotely one at a time until a future approved safe-correlation design; no transaction field is invented by a test runner or bridge.
+
+**Release:** missing physical evidence, unreviewed faults or unmet media assertions keep readiness blocked. The 25-story planning approval and this package's validation are not acceptance records for 1-6, 1-14, 2-4 or any hardware story.
