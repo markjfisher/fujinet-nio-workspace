@@ -20,14 +20,14 @@ storyReviewMode: complete-set-at-user-request
 requirementsConfirmed: 2026-09-11
 epicStructureApproved: 2026-09-11
 feature: amiga-zorro-ii-packet-native-backend
-updated: 2026-09-11
+updated: 2026-09-14
 ---
 
 # fujinet-nio-workspace - Epic Breakdown
 
 ## Overview
 
-Planning-only input for a future Amiga Zorro-II packet-native backend, using an RP2350B bridge to ESP32-S3. The corrected requirements, three-epic structure and complete story set were approved on 2026-09-11, including the ABI sign-off dependency below. At the user's request, stories were reviewed as a complete set rather than one at a time. Approval accepts their planning scope, not implementation completion or permission to bypass readiness gates. Stories 1.5 and 3.6 require explicit human stop-and-review checkpoints; Story 3.2 may be subdivided after ABI design. Hardware-gated stories remain bounded planning envelopes until their named evidence exists.
+Planning-only input for a future Amiga Zorro-II packet-native backend, using an RP2350B bridge to ESP32-S3. The corrected requirements, three-epic structure and complete story set were approved on 2026-09-11, including the ABI sign-off dependency below. At the user's request, stories were reviewed as a complete set rather than one at a time. Approval accepts their planning scope, not implementation completion or permission to bypass readiness gates. Under the user's 2026-09-14 amendment, Stories 1.5/1.6 require evidence-backed agent technical acceptance, escalating only limitations, scope decisions or meaningful tradeoffs; Story 3.6 retains human checkpoints; Story 3.2 may be subdivided after ABI design. Hardware-gated stories remain bounded planning envelopes until their named evidence exists.
 
 The user's detailed planning request and `backlog/amiga-faster-backends.md` supply feature requirements; no separate feature PRD was supplied. Existing broker architecture supplies the brownfield constraints. Completed specs are historical evidence, not instructions to repeat completed work. Sources under `_bmad-output/archive/` are excluded. Actual code takes precedence where a historical description no longer matches implementation; discrepancies below must be resolved explicitly, not silently interpreted as implemented capabilities.
 
@@ -412,7 +412,7 @@ So that native failures cannot mix responses or silently replay ambiguous writes
 
 **Dependencies:** 1.4. **Hardware required:** No. **Requirements:** FR2, FR3, FR6, FR9. **Verification:** V-BROKER, V-RETRY and new focused tests; V-LIB only if separately approved library changes become necessary.
 
-**Mandatory human checkpoint — stop and review carefully:** Before implementation, review the proposed ownership/failure model, both existing retry paths, ambiguous-write cases, and planned evidence. At completion, stop for explicit human acceptance of results and unresolved discrepancies before marking this story accepted or releasing dependent work. Passing automated tests alone is insufficient. Carry `spec_checkpoint: true` and `done_checkpoint: true` into the future dispatch entry; do not silently default either to false.
+**Technical acceptance — user amendment, 2026-09-14:** The agent reviews the ownership/failure model, both actual retry paths, ambiguous-write cases and evidence, and records an explicit technical acceptance or hold with full revisions before releasing dependents. Both dispatch checkpoints are false. Suite passes alone are insufficient; inspect scenario coverage and transmission/effect counts. Consult the user only for unresolved limitations, scope changes or meaningful tradeoffs. Hardware tests are not required for this software story.
 
 **Acceptance Criteria:**
 
@@ -435,6 +435,8 @@ I want an accepted, tested software packet contract,
 So that hardware ABI decisions are based on stable semantics rather than mock conventions.
 
 **Objective / scope:** Review and publish raw representation, packet boundaries, capacity/ownership, send/receive/reset outcomes, and relevant failure behavior established in 1.1–1.5. This is the explicit software prerequisite for Epic 2 ABI sign-off, not a hardware approval.
+
+**Decision owner — user amendment, 2026-09-14:** The agent may accept 1.6 after an evidence-backed coverage audit and independent review. Both dispatch checkpoints are false. Record accepted or held status and full evidence revisions; escalate only unresolved limitations, scope changes or meaningful tradeoffs. Historical 1.5 completion is preserved but does not prove missing scenarios.
 
 **Likely files/modules:** Proposed `repos/fujinet-nio/docs/native-packet-contract.md`, workspace `backlog/amiga-faster-backends.md` for the gate/evidence link, and this BMAD artifact's acceptance record; no implementation changes required for the review itself.
 
@@ -964,7 +966,7 @@ So that I can decide whether this hardware is suitable for my system.
 
 There are **25 approved planning stories: 14 software/pre-hardware, 4 bridge setup/feasibility/ABI, and 7 physical implementation/acceptance**. Each lists a bounded outcome, owning modules, prerequisites, tests and unknowns. The count may change when 3.2 is subdivided after ABI design. Approval is not implementation acceptance; conditional hardware stories are not ready to execute until their evidence gates exist.
 
-**Approval conditions for downstream spec/build:** Stories 1.5 and 3.6 are deliberate human stop-and-review points before implementation and after results, not routine unattended work. Preserve both checkpoints in dispatch metadata and require explicit acceptance before releasing dependent stories. Story 3.2 may be subdivided after 2.4 with preserved scope/criteria and updated downstream dependencies. No new spec folder or dispatch file is created by this approval update.
+**Approval conditions for downstream spec/build:** As amended by the user on 2026-09-14, Stories 1.5/1.6 use evidence-backed agent technical acceptance with both dispatch checkpoints false. Missing coverage remains blocking; unresolved limitations, scope changes and meaningful tradeoffs require a user decision. Story 3.6 retains human review before physical work and after results, and 2.4 retains human ABI approval. Story 3.2 may be subdivided after 2.4 with preserved scope/criteria and updated dependencies.
 
 ```text
 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6  [accepted software packet contract]
@@ -1026,4 +1028,4 @@ Only this workspace planning document changed. After sourcing `scripts/env.sh`, 
 - **Requirements:** All 16 FRs have mapped delivery/evidence; FR16 is the planning artifact itself. NFRs remain binding in the story scopes, verification strategy and gates. No UI or database work applies.
 - **Architecture:** Existing backend/framer/service seams are preserved; no greenfield starter template is required for Epic 1. The standalone bridge skeleton belongs in Epic 2. No electrical mapping, physical ABI values, fallback path or on-wire correlation is invented.
 - **Structure and dependencies:** Software, feasibility and physical integration remain distinct risk boundaries with justified file overlap. No story requires a later story in its epic. Epic 2 setup/feasibility is independent, while ABI approval requires 1.6; Epic 3 consumes accepted outputs rather than enabling earlier epics retroactively.
-- **Readiness:** Planning coverage/structure passes. This is deliberately not an all-stories-ready-for-development verdict: 1.5/3.6 require human checkpoints; 3.2 needs post-ABI sizing review and possible subdivision; hardware stories require their stated evidence and detailed execution procedures. These conditions must survive spec derivation and sprint readiness review.
+- **Readiness:** Planning coverage/structure passes. This is deliberately not an all-stories-ready-for-development verdict: 1.5/1.6 require evidence-backed technical acceptance under the 2026-09-14 amendment, while 3.6 retains human checkpoints; 3.2 needs post-ABI sizing review and possible subdivision; hardware stories require their stated evidence and detailed execution procedures. These conditions must survive spec derivation and sprint readiness review.

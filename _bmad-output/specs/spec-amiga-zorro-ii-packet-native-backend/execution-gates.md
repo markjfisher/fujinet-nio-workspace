@@ -10,6 +10,20 @@ The default list follows the approved epic/story order and is a valid sequential
 
 Before starting a story, establish acceptance of all actual prerequisites, required toolchain/guest/hardware availability, and its exact execution/verification procedure. Stop if any is absent; do not skip it silently or substitute a mock pass for physical evidence. An implementation plan and focused tests are prepared when the story becomes ready, not guessed now for every future hardware story.
 
+When dispatching, read the prerequisite decision records as well as story status.
+For 1-6, require `contract_acceptance: accepted` and its cited technical review;
+`done_checkpoint: false` never bypasses this evidence check. The same coverage
+rule applies to 1-5 even though its historical implementation status is done.
+
+**Current hold, 2026-09-14:** the
+[1.6 technical audit](stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-decision-record--2026-09-14)
+finds 1-5's complete ambiguity/retry evidence insufficient. This blocks technical
+acceptance of 1-6 and dispatch of direct 1-5 dependents 1-8 and 1-10, plus their
+downstream consumers. Direct 1-6 dependents 1-9, 1-14 and 2-4 also remain blocked.
+Story 1-7 and independent 2-1/2-2/2-3 may proceed if their own prerequisites hold.
+Keep this disposition until a reviewed follow-up closes the named gaps; do not
+reinterpret the historical 1-5 completion label as current safety acceptance.
+
 ## Required prerequisites
 
 | Dispatch ID | Accepted prerequisites | Evidence/environment gate | Capability |
@@ -18,7 +32,7 @@ Before starting a story, establish acceptance of all actual prerequisites, requi
 | 1-2 | 1-1 | Host codec/compatibility tests | CAP-1 |
 | 1-3 | 1-2 | Framer/transport compatibility tests | CAP-1, CAP-2 |
 | 1-4 | 1-3 | Explicit packet boundaries and bounded fault tests | CAP-2 |
-| 1-5 | 1-4 | Human review before work and after real broker/retry-path evidence | CAP-3 |
+| 1-5 | 1-4 | Evidence-backed technical review of real broker/retry-path coverage | CAP-3 |
 | 1-6 | 1-1, 1-2, 1-3, 1-4, 1-5 | Explicit software packet-contract acceptance | CAP-3, CAP-6 |
 | 1-7 | 1-4 | Real file/clock handlers, isolated storage/time | CAP-4 |
 | 1-8 | 1-4, 1-5 | Real disk handlers, independent backing-byte and effect checks | CAP-3, CAP-4 |
@@ -40,12 +54,13 @@ Before starting a story, establish acceptance of all actual prerequisites, requi
 | 3-6 | 3-4 | Human review before fault injection and after physical evidence | CAP-3, CAP-8 |
 | 3-7 | 3-5, 3-6 | Accepted physical parity/recovery plus actual measurements/install validation | CAP-8 |
 
-## Human checkpoints
+## Technical acceptance and human checkpoints
 
 The user confirmed no routine checkpoints for ordinary stories, with the following exceptions. These dispatch settings do not weaken any acceptance or hardware gate in the contract.
 
-- **1-5 and 3-6:** both `spec_checkpoint: true` and `done_checkpoint: true`. Pause after the detailed story plan and before implementation; pause again after results before acceptance/releasing dependent work. Review actual caller retries, ambiguous completion, ownership transitions, stale-response isolation, transmission/effect counts and unresolved gaps. For 3-6 also review fault-injection safety and disposable-media protections. Automated passes are not human approval.
-- **1-6 and 2-4:** `done_checkpoint: true`, `spec_checkpoint: false`. Present the completed contract/evidence for explicit approval before any dependent story is released. If the runner marks implementation “done” before this review, that is not contract acceptance.
+- **1-5 and 1-6 — user amendment, 2026-09-14:** both checkpoint booleans are false. The agent owns technical coverage review and may explicitly accept the software contract on sufficient evidence. Review actual callers, ambiguous completion, ownership, stale responses, and transmission/effect counts; record full revisions and the technical verdict. Passing a suite or an implementation “done” label alone is insufficient. Ask the user only for an unresolved limitation, scope change or meaningful tradeoff. This changes the decision owner, not the safety criteria, and does not retroactively certify missing 1.5 evidence.
+- **3-6:** both `spec_checkpoint: true` and `done_checkpoint: true`. Pause before implementation/physical fault injection and after results for human review of safety, disposable-media protections, ownership, actual retries, transmission/effect counts and unresolved gaps.
+- **2-4:** `done_checkpoint: true`, `spec_checkpoint: false`. Present the completed ABI contract/evidence for explicit human approval before releasing dependents.
 - **All others:** both checkpoint booleans are false. Required hardware, explicit acceptance criteria and the 3-2 sizing condition still apply; missing prerequisites or unsafe findings always stop work.
 
 Routine `invoke_dev_with` notes only point to the matching approved story and this gate companion; they contain no hidden requirements. A dispatcher must pass the SPEC and all mandatory companions to the implementing skill. No per-story implementation files or runtime state are generated by this package.

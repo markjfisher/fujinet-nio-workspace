@@ -31,16 +31,16 @@
 
 - id: "1-5"
   title: "Prove native broker ownership and recovery against existing retry callers"
-  description: "Prove real broker and retry-caller ownership and recovery safety under ambiguous completion, with mandatory human review. Covers SPEC.md CAP-3 and approved Story 1.5 in the epic companion."
-  spec_checkpoint: true
-  done_checkpoint: true
+  description: "Prove real broker and retry-caller ownership and recovery safety under ambiguous completion, with evidence-backed technical review. Escalate limitations or scope decisions to the user. Covers SPEC.md CAP-3 and approved Story 1.5 in the epic companion."
+  spec_checkpoint: false
+  done_checkpoint: false
   invoke_dev_with: "Use approved Story 1.5 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
 
 - id: "1-6"
   title: "Accept the canonical software packet contract for bridge design"
   description: "Obtain explicit acceptance of the canonical raw representation, packet boundaries, ownership and relevant failure behavior. Covers SPEC.md CAP-3, CAP-6 and approved Story 1.6 in the epic companion."
   spec_checkpoint: false
-  done_checkpoint: true
+  done_checkpoint: false
   invoke_dev_with: "Use approved Story 1.6 in ../../planning-artifacts/epics.md and check execution-gates.md before starting; retain its scope and verification requirements."
 
 - id: "1-7"

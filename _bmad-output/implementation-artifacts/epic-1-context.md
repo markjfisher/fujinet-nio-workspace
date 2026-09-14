@@ -45,6 +45,13 @@ Test endpoints and packet doubles are software harnesses, not proposed bridge pr
 
 ## Cross-Story Dependencies
 
-The initial sequence is independent fixtures, raw codec, framer composition, packet adapter, broker recovery, then software-contract acceptance (1.1–1.6). Story 1.5 requires human review before implementation and explicit acceptance afterward. Service parity, guest endpoint, broker binary, exchange-tool and media work converge at 1.14; each dispatch entry defines its exact prerequisites.
+The initial sequence is independent fixtures, raw codec, framer composition, packet adapter, broker recovery, then software-contract acceptance (1.1–1.6). Under the user's 2026-09-14 amendment, 1.5/1.6 require evidence-backed agent technical acceptance, not routine human checkpoints; unresolved limitations, scope decisions and meaningful tradeoffs go to the user. The evidence criteria remain unchanged. Service parity, guest endpoint, broker binary, exchange-tool and media work converge at 1.14; each dispatch entry defines its exact prerequisites.
 
 Epic 1 has no hardware-epic dependency. Bridge setup and feasibility may proceed independently, but hardware ABI approval requires accepted 1.6 plus positive physical feasibility evidence. Physical endpoint implementation additionally requires accepted 1.14. Passing codec fixtures alone does not release those gates.
+
+Current 2026-09-14 audit: 1.6 is held because 1.5's recorded tests do not
+establish the full both-caller ambiguity/remote-effect contract. Historical
+completion is preserved, but 1-8/1-10 and downstream work cannot use it as
+current safety acceptance. Consult the active execution-gates.md and 1.6
+decision record before dispatch; 1-7 and independent feasibility remain eligible
+subject to their own prerequisites.
