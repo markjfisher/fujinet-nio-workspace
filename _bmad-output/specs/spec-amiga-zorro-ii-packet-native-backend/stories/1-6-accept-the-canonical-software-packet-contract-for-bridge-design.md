@@ -2,12 +2,12 @@
 title: '1-6 Accept the canonical software packet contract for bridge design'
 type: 'feature'
 created: '2026-09-14'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '79f6f97f99378a7bf92383e0664e676ef15b91c6'
 review_loop_iteration: 0
 spec_checkpoint: false
 done_checkpoint: false
-contract_acceptance: held
+contract_acceptance: accepted
 context:
   - '{project-root}/AGENTS.md'
   - '{project-root}/docs/agent-test-policy.md'
@@ -65,7 +65,7 @@ Paths below are workspace-relative; subordinate filenames in a grouped entry use
 - [x] This story -- assemble the decision record: prerequisite links/approval provenance; workspace, firmware, driver and read-only library revisions; contract revision; claim-to-test matrix; limitations and unresolved findings; acceptance state; reviewer, date and explicit decision when supplied. Missing evidence means `held`, not `accepted`.
 - [x] `repos/fujinet-nio/docs/native-packet-contract.md` -- consolidate verified bytes, capacities, ownership and outcomes; reconcile stale statements about 1.5 with the audit's actual findings. Prepare pending/held references before approval, without claiming recovery that tests do not establish.
 - [x] This story -- obtain independent technical review, then record the completed contract/evidence verdict. No routine human plan or completion checkpoint is required. Hold acceptance for missing coverage and present the concrete follow-up for any needed scope decision.
-- [x] `backlog/amiga-faster-backends.md` and the native contract -- publish consistent gate/evidence links after the decision, marking acceptance only after approval. Record full commit IDs obtained from Git; use the resulting workspace commit containing this decision as the immutable acceptance-record revision for consumers. Published as a hold; no acceptance revision exists.
+- [x] `backlog/amiga-faster-backends.md` and the native contract -- publish consistent gate/evidence links after the decision, marking acceptance only after approval. Record full commit IDs obtained from Git; use the resulting workspace commit containing this decision as the immutable acceptance-record revision for consumers. The 2026-09-15 acceptance below supersedes the historical hold.
 
 **Acceptance Criteria:**
 - Given passing evidence for Stories 1.1–1.5, when the contract is reviewed, then the acceptance record identifies canonical packet bytes, explicit boundaries, bounded ownership, capacities, send/receive/reset outcomes and unknown-completion behavior, with every claim mapped to code and tests.
@@ -77,6 +77,7 @@ Paths below are workspace-relative; subordinate filenames in a grouped entry use
 
 - 2026-09-14: Readiness review found assumed retry coverage and implicit acceptance ordering. Added prerequisite evidence audit, both retry paths and fault/effect matrix, explicit completion approval, held-state handling and revision provenance. Preserve 1.5's historical completion; do not infer safety or approval from it. User authorized these story revisions and expressed uncertainty about 1.5 coverage.
 - 2026-09-14: User explicitly delegated software technical acceptance and requested 1.6 execution. Removed routine human checkpoints for 1.5/1.6 in all active governing documents; retained coverage requirements and escalation for limitations, scope changes and meaningful tradeoffs.
+- 2026-09-15: User instructed “Perform the fix,” authorizing the scoped F1–F3 follow-up and backend/test implementation previously held for scope. Execution is tracked in [retry-containment-follow-up.md](../retry-containment-follow-up.md). The historical hold below remains evidence; a new technical verdict will supersede it only after implementation and independent review.
 
 ## Design Notes
 
@@ -99,7 +100,138 @@ The commands above are planned baseline verification, not results. Record any ex
 
 The implementation agent owns this story's audit/results and the native contract and backlog documentation. The parent owns the already-edited governing SPEC, epics, execution gates, stories.yaml and cached epic context, final independent review and commits. Preserve those edits; do not commit or push. For a coverage hold, document the exact missing scenarios and owning files here, leave acceptance ungranted and notify the parent; do not expand into production fixes or new retry tests. A completed hold record is not completion of the acceptance story.
 
+## Technical acceptance record — 2026-09-15
+
+**Decision: accepted.** On 2026-09-15, Codex performed the technical acceptance
+under the user's delegation after independent code and contract review. The authorized
+[retry-containment follow-up](../retry-containment-follow-up.md) repairs F1 and
+adds executable backend-side containment for F2/F3. The previous day's hold
+below is retained as historical evidence, not a new requirement for human
+sign-off. The agent owns software technical acceptance under the user's
+delegation; physical safety and ABI checkpoints remain downstream.
+
+### Contract and evidence
+
+The prerequisite audit and claim-to-test matrix in the historical record remain
+the basis for canonical raw bytes, explicit packet boundaries, bounded storage,
+ownership and distinct send/receive/reset outcomes. The firmware gate reran on
+2026-09-15: 344 cases, 6,856 assertions, no skipped cases; automatic CTest 2/2
+(including Python), explicit host CTest 1/1. Firmware production code/tests are
+unchanged from `fd965f5ec8609bacead86b94a23f73093da98de2`.
+
+The driver follow-up closes the former six core fault rows as follows. Each
+integration family executes the actual disk retry implementation (both read
+and write) and actual `fn_raw_call`, through unchanged Amiga transport and the
+real broker worker. The backend guard, not the independently controlled peer,
+enforces quarantine. All function names below refer to
+`repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_packet_backend.c`.
+
+| Core obligation | Executable evidence and observed invariant |
+| --- | --- |
+| Definite pre-send rejection/unavailable/open failure | `test_before_send`: rejected attempt has zero transmissions/effects; recovery attempt sends once; exhausted rejection remains harmless. |
+| Delivered request, unknown completion | `test_fault_and_recovery` with `DELIVERY`: one transmission, pending remote work, zero initial effects; all caller retries are blocked. Independent late completion produces one effect. |
+| Effect occurred, reply missing or invalid | Same test with `LOST`, checksum, length, descriptor, truncation, oversize and identity faults: one transmission/effect; zero failed output length and no caller output copy. |
+| Close/open and local reset cannot erase uncertainty | Same test plus `test_reset_from_healthy`: broker lifecycle and failed/successful reset retain quarantine; retries do not send. |
+| Late same-device/command response cannot satisfy a later call | Independently scheduled old reply survives local operations; calls with different payload tags are blocked. Peer would return the old reply if the guard admitted a send. |
+| Only proven quiescence permits recovery | Failed proof leaves sends blocked; independently drained remote work/old delivery plus explicit recovery permits a fresh tagged reply. Availability of proof alone does not clear quarantine. |
+
+Supplemental ownership evidence: `test_aborts`, `test_queued_behind_unknown`,
+`test_independent_buffers` and guard boundary cases establish queued-abort
+zero-send behavior, active abort without rollback, caller-buffer preservation,
+serialized remote work and one local completion per request. The separate F1
+regression `test_retry_outputs_are_request_local_per_call` now consumes the
+intended second-call script entries and asserts both calls' attempts, diagnostic
+state and independent buffers. These supplement the six rows; the follow-up's
+eight-row matrix additionally names F1 and ownership.
+
+### Scope of acceptance
+
+Canonical raw packets retain the six-byte header, existing checksum/descriptors,
+U8 response status and opaque service payloads; no SLIP, ABI, link or correlation
+field is introduced. The C++ framer's unknown-completion latch remains locked
+across reset. The separate C backend guard has an explicit recovery operation
+whose callback must independently establish that no prior work or reply can
+remain. It starts quarantined and borrows exclusive bounded scratch storage
+for its lifetime, disjoint from exchange request/response buffers. It requires
+serialized ownership and bounded callback operations. Every local reset
+quarantines; neither reopening nor elapsed time grants recovery.
+
+This accepts containment of **unknown transport completion**, not universal
+exactly-once application effects. `test_known_completion_policy` records the
+unchanged raw caller's two sends/effects after a valid completed reply exceeds
+the application's reply capacity. An aborted but completed exchange can also
+be retried. Neither is unresolved transport completion. The backend sees its
+transport capacity, not the application buffer limit. Both policies remain
+unchanged as required by the approved epic. The guard preserves canonical U8
+status bytes; `fn_raw_call` exposes them unchanged, while existing service-specific
+mappings remain intact. F4 remains informational; universal
+permissive-parser equivalence is not a new gate.
+
+The component is portable production backend logic bound only in native tests
+and cross-compiled for 68000. It does not replace the deployed serial backend.
+Physical adapters must independently implement and validate the callback proof
+obligations. Guest integration, real-service/backing-storage parity and physical
+quiescence are the later stories' own gates. No guest or hardware pass is claimed.
+
+### Review and publication
+
+Three independent reviewers examined the complete implementation diff. Review
+patches strengthen malformed wider-field coverage, initialization/lifecycle
+proof checks, request-identity completion accounting, header dependencies and
+API argument handling. The parent inspected the final patches and accepted the
+passing verification. A separate contract review corrected scratch lifetime and
+status-layer wording; it confirmed that F4 and physical gates remain unchanged.
+No unresolved safety discrepancy remains within this software story's scope.
+
+Final verification after review patches, all exit 0:
+
+- Focused packet-backend, corrected retry and broker executables passed.
+- Full driver `amiga/tests make test`: all 11 native executable targets passed,
+  including shared Exec-stub consumers. The matrix includes 39 fault/recovery
+  sequences (13 faults across disk read, disk write and raw), 48 valid descriptor
+  cases, startup/pending-proof/lifecycle checks, per-request shared-port completion,
+  capacity boundaries and callback reentry.
+- New backend compiled with `m68k-amigaos-gcc -std=c99 -Wall -Wextra -Werror
+  -O2 -mcpu=68000 -msoft-float -Irepos/fujinet-nio-lib/include -c
+  repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_packet_backend.c
+  -o /tmp/fujinet_nio_packet_backend.o` after sourcing `scripts/env.sh`.
+- V-CXX passed as recorded above; automatic CTest includes 23 passing Python
+  tests. No firmware production/test changes followed that run.
+- No library sources changed; no all-target library or guest/hardware pass is
+  claimed. Exact driver commands and patch results are in the follow-up record.
+
+| Accepted evidence owner | Full Git revision |
+| --- | --- |
+| Driver backend, actual-caller integration tests and F1 correction | `e6f9686797f6bae256342d362795c4b3fc5b3da1` |
+| Reviewed firmware software packet contract | `cf2ab541c95d8769e67cb41541ca627db455e541` |
+| Firmware production code/tests retained and rerun | `fd965f5ec8609bacead86b94a23f73093da98de2` |
+| Unchanged library linked by integration target | `dac8bf66c4ec44841790e08021c1654379c21255` |
+| Workspace parent before this follow-up | `ff73b2a782d47ccfdd221ccdbc70ccbc14baa1a3` |
+
+The resulting workspace commit containing this accepted decision and both owner
+gitlinks is the immutable acceptance-record revision. Consumers must pin that
+commit and the firmware contract revision above; the parent/base revision is
+not the acceptance revision. The completed turn supplies the resulting full
+workspace hash rather than inventing a future self-reference in this document.
+
+This releases only the 1-5/1-6 software prerequisites. All other dependencies
+remain in `execution-gates.md`, including positive physical feasibility and
+human 2-4 ABI approval, accepted 1-14 before physical implementation, and both
+3-6 human checkpoints. No dependent story is declared done or hardware-ready.
+
+Final documentation validation selected before execution: source `scripts/env.sh`,
+run `python /tmp/story-1-6-final-doc-check.py` for local links/anchors, unchanged
+authorized frozen intent, all 25 dispatch entries, checkpoint/gate consistency,
+accepted state and exact owner commits; run workspace and touched-owner
+`git diff --check` plus staged whitespace checks before commits.
+Result: passed, exit 0; 30 local links/anchors, 25 dispatch entries, preserved
+checkpoints/frozen intent, accepted-state/gate consistency and exact owner
+revisions verified. Workspace and both touched-owner whitespace checks passed.
+
 ## Technical decision record — 2026-09-14
+
+This section preserves the original audit. Its present-tense hold statements
+describe 2026-09-14; the current decision is the 2026-09-15 record above.
 
 **Decision: held.** Codex implementation agent completed the prerequisite audit
 and withholds technical acceptance. Passing baseline tests establish the local
@@ -447,14 +579,23 @@ whitespace checks passed. No product source changed; no hardware work occurred.
 
 ## Suggested Review Order
 
-- Read the held verdict and distinguish passing baseline tests from missing safety evidence.
-  [1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md:102](1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#L102)
+- Start with the current decision and exact evidence revisions.
+  [1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md:103](1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#L103)
 
-- Check technical acceptance ownership and direct dependency holds.
-  [execution-gates.md:18](../execution-gates.md#L18)
+- Understand persistent quarantine and the adapter proof obligation.
+  [fujinet_nio_packet_backend.h:1](../../../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_packet_backend.h#L1)
 
-- Read the published software guarantees and recovery limits.
-  [native-packet-contract.md:1](../../../../repos/fujinet-nio/docs/native-packet-contract.md#L1)
+- Follow validation and the transitions that permit another transmission.
+  [fujinet_nio_packet_backend.c:1](../../../../repos/fujinet-nio-driver/amiga/nio.device/fujinet_nio_packet_backend.c#L1)
 
-- Inspect the existing misindexed script behind finding F1.
+- Read the accepted contract and its software scope.
+  [native-packet-contract.md:188](../../../../repos/fujinet-nio/docs/native-packet-contract.md#L188)
+
+- Inspect real caller fault/effect and request completion evidence.
+  [test_fujinet_nio_packet_backend.c:401](../../../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_packet_backend.c#L401)
+
+- Check the corrected second-call regression and independent buffers.
   [test_fujinet_nio_client_retry.c:330](../../../../repos/fujinet-nio-driver/amiga/tests/test_fujinet_nio_client_retry.c#L330)
+
+- Inspect the registered integration target and actual production sources.
+  [Makefile:122](../../../../repos/fujinet-nio-driver/amiga/tests/Makefile#L122)

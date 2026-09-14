@@ -67,7 +67,7 @@ The native software path passes real-service and Amiga guest parity without SLIP
 
 ## Open Questions
 
-- At 1.4–1.6: what minimum packet adapter and failure/reset contract safely handles existing retry callers without changing higher-layer semantics? An incompatibility blocks acceptance and requires scope review.
+- At 1.4–1.6: resolved at the software boundary by the [2026-09-15 acceptance record](stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-acceptance-record--2026-09-15): explicit packet outcomes, backend quarantine and independent quiescence proof contain ambiguous completion through unchanged callers. Known-completion application replay remains documented existing policy. Physical realization of the proof remains Epic 2 work; an incompatible later adapter still requires scope review.
 - At 1.9: which verified guest/host test facility will connect the real Amiga tool/backend to real core services?
 - At 2.1–2.4: which verified toolchain, PIO/link capabilities and evidence-backed physical ABI satisfy the accepted packet contract? These remain deliberately unresolved until their gates.
 - After 2.4: does 3.2 require smaller implementation slices? Runtime tuning and throughput claims remain dependent on measured hardware data.

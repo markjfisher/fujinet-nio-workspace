@@ -49,9 +49,10 @@ The initial sequence is independent fixtures, raw codec, framer composition, pac
 
 Epic 1 has no hardware-epic dependency. Bridge setup and feasibility may proceed independently, but hardware ABI approval requires accepted 1.6 plus positive physical feasibility evidence. Physical endpoint implementation additionally requires accepted 1.14. Passing codec fixtures alone does not release those gates.
 
-Current 2026-09-14 audit: 1.6 is held because 1.5's recorded tests do not
-establish the full both-caller ambiguity/remote-effect contract. Historical
-completion is preserved, but 1-8/1-10 and downstream work cannot use it as
-current safety acceptance. Consult the active execution-gates.md and 1.6
-decision record before dispatch; 1-7 and independent feasibility remain eligible
-subject to their own prerequisites.
+Current 2026-09-15 technical decision: the reviewed retry-containment follow-up
+closes F1–F3 and 1.6 is accepted. Both actual callers now exercise backend-side
+ambiguity containment with independently persistent peer effects and late replies.
+Historical 1.5 completion is preserved; its software prerequisite is supported
+by the revised evidence. Consult active execution-gates.md and 1.6's acceptance
+record before dispatch. Other prerequisites, physical evidence and explicit
+2.4/3.6 human checkpoints remain unchanged.

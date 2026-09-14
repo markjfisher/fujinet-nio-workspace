@@ -21,19 +21,21 @@ harness can validate a backend independently.
 
 ## Software contract gate
 
-Story 1.6 software contract acceptance is **held** (2026-09-14). The
-[decision and evidence record](../_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-decision-record--2026-09-14)
-maps Stories 1.1–1.5 to exact revisions and passing tests; the
+Story 1.6 software contract acceptance is **accepted** (2026-09-15). The
+[decision and evidence record](../_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-acceptance-record--2026-09-15)
+maps Stories 1.1–1.5 and the reviewed retry-containment follow-up to exact
+revisions and passing tests; the
 [native packet contract](../repos/fujinet-nio/docs/native-packet-contract.md)
-describes the verified software behavior and limits. Missing pre-send,
-post-delivery and post-effect evidence through both actual retry paths,
-including transmission/effect counts and late-response isolation across
-close/open, blocks acceptance. Historical 1.5 completion is preserved.
-Independent review confirms the published hold. The revised contract is at
-firmware revision `059cf18cf6ee39f3a65cc7a4e01ee77815507057`; the workspace
-commit containing the linked decision records its publication. There is no
-accepted revision for downstream consumers yet. The current execution gates
-also block direct 1.5 dependents 1-8/1-10 until the missing evidence is closed.
+describes the verified software behavior and limits. F1–F3 are closed:
+both actual retry callers establish pre-send, post-delivery and post-effect
+containment with independent transmission/effect counts and late-response
+isolation across close/open. Historical 1.5 completion is preserved.
+The reviewed driver is `e6f9686797f6bae256342d362795c4b3fc5b3da1`; the
+accepted firmware contract is `cf2ab541c95d8769e67cb41541ca627db455e541`.
+Pin the workspace commit containing the linked acceptance decision as well.
+This satisfies the 1.5/1.6 software prerequisites; every other story prerequisite
+still applies. Known-completion application replay remains documented existing
+policy; physical quiescence is not proven by these software tests.
 
 Story 2.4 requires accepted 1.6, positive relevant 2.2/2.3 feasibility evidence
 and explicit ABI approval. Setup/feasibility may proceed independently;
@@ -42,8 +44,8 @@ software checks establishes hardware readiness or closes the exit criteria.
 
 ## Work
 
-- [ ] Driver owner (`repos/fujinet-nio-driver`): complete the
-      [scoped retry-containment follow-up](../_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#scoped-follow-up-for-parentuser-decision).
+- [x] Driver owner (`repos/fujinet-nio-driver`): complete the
+      [scoped retry-containment follow-up](../_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/retry-containment-follow-up.md).
       Exit: resolve F1–F3 with both actual retry paths proving backend-enforced
       containment, transmission/effect counts and late-response isolation
       across close/open until independently established software quiescence.

@@ -15,14 +15,16 @@ For 1-6, require `contract_acceptance: accepted` and its cited technical review;
 `done_checkpoint: false` never bypasses this evidence check. The same coverage
 rule applies to 1-5 even though its historical implementation status is done.
 
-**Current hold, 2026-09-14:** the
-[1.6 technical audit](stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-decision-record--2026-09-14)
-finds 1-5's complete ambiguity/retry evidence insufficient. This blocks technical
-acceptance of 1-6 and dispatch of direct 1-5 dependents 1-8 and 1-10, plus their
-downstream consumers. Direct 1-6 dependents 1-9, 1-14 and 2-4 also remain blocked.
-Story 1-7 and independent 2-1/2-2/2-3 may proceed if their own prerequisites hold.
-Keep this disposition until a reviewed follow-up closes the named gaps; do not
-reinterpret the historical 1-5 completion label as current safety acceptance.
+**Current acceptance, 2026-09-15:** the
+[1.6 technical acceptance](stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-acceptance-record--2026-09-15)
+closes the prior F1–F3 hold through the reviewed retry-containment follow-up.
+Both actual callers now establish software backend containment under ambiguity.
+This satisfies the 1-5 and 1-6 software prerequisites; direct dependents
+1-8/1-10 and 1-9/1-14/2-4 still require every other prerequisite below.
+No downstream story is declared ready or done by this decision. Story 2-4 still
+needs positive 2-2/2-3 physical evidence and explicit human ABI approval;
+physical implementation still requires accepted 1-14. Historical 1-5 completion
+is preserved and supplemented by the exact revised evidence in this record.
 
 ## Required prerequisites
 
