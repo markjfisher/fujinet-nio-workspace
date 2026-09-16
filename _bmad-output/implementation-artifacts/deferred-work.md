@@ -79,3 +79,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-amiga-driver-protocol-helper-deduplication.md`
   summary: Add overflow and direct-call validation to the exchange file-list packet builder
   evidence: The pre-existing public builder accepts URI lengths whose complete packet would overflow 16-bit length arithmetic and silently truncates max_payload_bytes above 65535; this refactor exposed the boundary but did not change its contract.
+
+- source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-9-add-a-host-side-native-packet-test-endpoint-for-guest-integration.md`
+  summary: Use Amiga 8.3-safe record filenames if Story 1.10 mounts the directory on a filesystem2 volume
+  evidence: Host names `to-host.pkt`, `to-guest.pkt`, and `*.tmp` are fine on POSIX; they are not 8.3. Guest DOS on a mounted share may need shorter names.
