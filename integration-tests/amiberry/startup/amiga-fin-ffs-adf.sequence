@@ -7,9 +7,14 @@ C:Echo "FHOST RC=$RC" >>DH0:ffs-host.result
 C:FIN 0 ffs.adf >DH0:ffs-fin.result
 C:Echo "FIN RC=$RC" >>DH0:ffs-fin.result
 C:FMOUNT 0 DN0: RO >DH0:ffs-mount.result
-C:Echo "FMOUNT RC=$RC" >>DH0:ffs-mount.result
+If $RC EQ 0
+C:Echo "FMOUNT RC=0" >>DH0:ffs-mount.result
 C:Dir DN0: >DH0:ffs-dir.result
 C:Echo "DIR RC=$RC" >>DH0:ffs-dir.result
+Else
+C:Echo "FMOUNT FAILED" >>DH0:ffs-mount.result
+C:Echo "DIR SKIPPED" >DH0:ffs-dir.result
+EndIf
 C:Echo "RESULTS-BEGIN"
 C:Type DH0:ffs-load.result
 C:Type DH0:ffs-host.result

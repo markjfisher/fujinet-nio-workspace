@@ -30,8 +30,13 @@ def test_fumount_handler_teardown_and_busy(run_amiga_case):
     live_status = _status(results["fumount-live-status.result"])
     assert live_status[0] == 0
     assert live_status[2] == 1
-    assert "DEVICE name=DN0 type=0 task=00000000" in results["fumount-live-dos.result"]
-    assert "DEVICE name=DN1 type=0 task=00000000" in results["fumount-live-dos.result"]
+    dos_list = results["fumount-live-dos.result"]
+    # Successful FUMOUNT removes the DOS nodes so the resident can unload.
+    # Require a real listing before asserting absence.
+    assert "DEVICE name=DH0 type=0" in dos_list
+    assert "FIND name=DN0 flags=00000004 found=0" in dos_list
+    assert "DEVICE name=DN0 " not in dos_list
+    assert "DEVICE name=DN1 " not in dos_list
     assert "DEVICE name=fujinet-disk.device found=1 opencnt=0" in results[
         "fumount-live-opencnt.result"
     ]

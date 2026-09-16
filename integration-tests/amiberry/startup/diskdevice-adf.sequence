@@ -31,7 +31,15 @@ C:Echo "UPDATE-END rc=$RC"
 C:FUMOUNT DN2: >DH0:disk-fumount-rw.result
 C:Echo "FUMOUNT RW RC=$RC" >>DH0:disk-fumount-rw.result
 C:fujinet-mount 13 2 RW >DH0:disk-remount-rw.result
+; FUMOUNT removes the DOS node; this low-level tool only mounts the media.
+C:Mount DN2: FROM DEVS:DN2
+If $RC EQ 0
+C:Echo "DOS REMOUNT RW RC=0" >DH0:disk-dos-remount-rw.result
 C:Type DN2:PERSIST.TXT >DH0:disk-persist.result
+Else
+C:Echo "DOS REMOUNT RW FAILED" >DH0:disk-dos-remount-rw.result
+C:Echo "PERSIST TYPE SKIPPED" >DH0:disk-persist.result
+EndIf
 C:fujinet-mount --status 0 >DH0:disk-status-0.result
 C:fujinet-mount --status 1 >DH0:disk-status-1.result
 C:fujinet-mount --status 2 >DH0:disk-status-2.result
@@ -65,6 +73,7 @@ C:Type DH0:disk-copy-rw.result
 C:Type DH0:disk-update.result
 C:Type DH0:disk-fumount-rw.result
 C:Type DH0:disk-remount-rw.result
+C:Type DH0:disk-dos-remount-rw.result
 C:Type DH0:disk-persist.result
 C:Type DH0:disk-eject.result
 C:Type DH0:disk-status-0.result

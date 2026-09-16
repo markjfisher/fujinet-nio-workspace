@@ -5,11 +5,14 @@
 #   scripts/amiga-tests [--amiga-env ENV] [--amiga-machine MACHINE] [pytest-args...]
 #
 # Convenience wrapper around:
-#   uv run --project integration-tests/amiberry pytest --run-amiga \
+#   uv run --directory integration-tests/amiberry pytest --run-amiga \
 #     [--amiga-env ENV] [--amiga-machine MACHINE] [pytest-args...]
 #
 # If --amiga-env is not given, pytest uses its configured default.
 # Any additional arguments are forwarded to pytest verbatim.
+# Relative paths (test nodes and pytest options such as --junitxml) are
+# resolved from integration-tests/amiberry. Use absolute output paths when
+# a report should be written elsewhere.
 
 set -euo pipefail
 
@@ -18,6 +21,6 @@ SUITE="$ROOT/integration-tests/amiberry"
 
 source "$ROOT/scripts/env.sh"
 
-# Workspace root has no pyproject.toml. Without --project, uv 0.12+ looks
-# for a pytest binary on PATH and fails with "Failed to spawn: pytest".
-exec uv run --project "$SUITE" pytest --run-amiga "$@" "$SUITE"
+# Run inside the suite so relative test nodes resolve and pytest's testpaths
+# supplies the full suite when no node is named.
+exec uv run --directory "$SUITE" pytest --run-amiga "$@"

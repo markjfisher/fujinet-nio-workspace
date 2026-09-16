@@ -19,6 +19,7 @@ def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
     assert "Ejected DN2:" in results["disk-fumount-rw.result"]
     assert "FUMOUNT RW RC=0" in results["disk-fumount-rw.result"]
     assert "MOUNTED drive=2 slot=3 readonly=0" in results["disk-remount-rw.result"]
+    assert "DOS REMOUNT RW RC=0" in results["disk-dos-remount-rw.result"]
     assert "FUJINET WRITE PERSISTED" in results["disk-persist.result"]
     assert "STATUS drive=0 change=1 absent=0 protected=1" in results["disk-status-0.result"]
     assert "STATUS drive=1 change=1 absent=0 protected=1" in results["disk-status-1.result"]

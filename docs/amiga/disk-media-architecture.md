@@ -41,12 +41,15 @@ so normal use does not require a static MountList. Mounting another slot on an
 occupied unit replaces its media using the lifecycle appropriate to the old
 and new filesystems. `FUMOUNT drive` unmounts the unit: it retires the
 AmigaDOS filesystem handler (`ACTION_DIE`), then ejects the media, and removes
-the persisted mapping. If `ACTION_DIE` has already retired the handler but
+the persisted mapping and DOS device-list entry. A later `FMOUNT` recreates
+the absent node; a low-level `fujinet-mount` media operation alone does not.
+If `ACTION_DIE` has already retired the handler but
 `TD_EJECT` then fails, the unit is left in a partial state: `dol_Task` is
 null (a later `Dir`/`Type`/`DeviceProc` of that `DNx:` may start a new
 handler) while FujiNet media may still be present (`absent=0`). That is not
-rolled back; a later successful `FUMOUNT` of an inactive node retries eject
-only. `FMOUNTRESTORE` replays all valid saved mappings; it takes no arguments.
+rolled back; a later `FUMOUNT` of an inactive node skips handler retirement
+and retries eject before completing the mapping and DOS-entry removal.
+`FMOUNTRESTORE` replays all valid saved mappings; it takes no arguments.
 
 These commands operate on images already selected in FujiNet catalogue slots.
 They do not accept a host path directly, expose partitions, or turn an
@@ -310,8 +313,8 @@ MakeDosNode
 
 ## Persistent-Node Lifecycle
 
-Dynamic nodes are selected as session-lifetime objects. The proven lifecycle
-is:
+During media replacement, dynamic nodes retain their allocation and DOS-list
+identity. The handler-only retirement/restart lifecycle is:
 
 ```text
 active handler, dn_Task != 0
@@ -325,7 +328,11 @@ In the validated Amiberry test, `ACTION_DIE` returned `-1` and `IoErr()` was
 `0`. The return value alone is not treated as proof of retirement; retirement
 is established by read-only DOS-list observation of `dn_Task` becoming zero.
 
-`RemDosEntry()` and node destruction are not the normal media-transition path.
+Geometry-changing `FMOUNT` replacement reuses the node. Successful `FUMOUNT`
+unregisters it with `RemDosEntry()` so the resident device can be unloaded;
+this behavior was introduced in nio-core-apps commit
+`158e48ff36751e0af875827ff3da381ce106ec2c`. It does not free the node allocation.
+A subsequent `FMOUNT` follows the absent-node path.
 `RemDosEntry()` requires an exclusive `LDF_WRITE | LDF_DEVICES` lock and does
 not free the removed memory. `FreeDosEntry()` applies to `MakeDosEntry()`
 objects, not the allocation graph returned by `MakeDosNode()`. No public

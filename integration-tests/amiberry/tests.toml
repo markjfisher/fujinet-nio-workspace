@@ -125,6 +125,7 @@ results = [
   "disk-update.result",
   "disk-fumount-rw.result",
   "disk-remount-rw.result",
+  "disk-dos-remount-rw.result",
   "disk-persist.result",
   "disk-status-0.result",
   "disk-status-1.result",
