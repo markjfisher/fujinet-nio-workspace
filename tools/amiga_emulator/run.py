@@ -176,11 +176,13 @@ class AmigaRunner:
             require_file(self.fast_file_system)
         if self.serial_mode not in ("tcp", "pty"):
             raise SystemExit(f"Unknown Amiga serial mode: {self.serial_mode}")
+        skip_nio = os.environ.get("AMIBERRY_SKIP_NIO") == "1"
         if self.serial_mode == "pty":
             if self.external_nio:
                 raise SystemExit("--external-nio is only supported with --tcp")
-            require_file(self.nio_rs232_bin)
-        elif not self.external_nio:
+            if not skip_nio:
+                require_file(self.nio_rs232_bin)
+        elif not self.external_nio and not skip_nio:
             require_file(self.nio_bin)
         uae_config = os.environ.get("AMIBERRY_UAE_CONFIG", "")
         if uae_config:
@@ -248,6 +250,9 @@ class AmigaRunner:
         )
 
     def start_transport(self) -> str | None:
+        if os.environ.get("AMIBERRY_SKIP_NIO") == "1":
+            print("Skipping FujiNet NIO process (native-test directory harness)")
+            return None
         if self.serial_mode == "pty":
             for path in (self.amiga_pty, self.nio_pty):
                 path.unlink(missing_ok=True)
@@ -447,7 +452,8 @@ class AmigaRunner:
         except (FileNotFoundError, OSError):
             # IPC is optional in Amiberry builds; serial testing must still work.
             pass
-        if self.serial_mode == "tcp":
+        if (self.serial_mode == "tcp" and
+                os.environ.get("AMIBERRY_SKIP_NIO") != "1"):
             # Connecting here is not a harmless readiness check: Amiberry
             # treats every TCP connection as a serial session, so the probe
             # can reset the guest before the real socat bridge is attached.

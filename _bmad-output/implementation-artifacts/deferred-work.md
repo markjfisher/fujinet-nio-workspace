@@ -83,3 +83,11 @@
 - source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-9-add-a-host-side-native-packet-test-endpoint-for-guest-integration.md`
   summary: Use Amiga 8.3-safe record filenames if Story 1.10 mounts the directory on a filesystem2 volume
   evidence: Host names `to-host.pkt`, `to-guest.pkt`, and `*.tmp` are fine on POSIX; they are not 8.3. Guest DOS on a mounted share may need shorter names.
+
+- source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-10-build-an-amiga-native-test-broker-binary-using-the-host-endpoint.md`
+  summary: Failed native-test probe does not write a host-file failure marker, so a guest FAIL waits for the case timeout
+  evidence: `startup/nio-native-test.sequence` only writes `NATIVE:complete` via the probe on PASS; Failat 100 still types results and then sits.
+
+- source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-10-build-an-amiga-native-test-broker-binary-using-the-host-endpoint.md`
+  summary: Interactive `workbenches.yaml` NATIVE share is not the per-run E2E record directory
+  evidence: E2E overwrites `AMIBERRY_DIR_MOUNTS` with a temporary `native-test-records` path; the persistent `build/amiga-native-test` mount has no IDENTITY unless created by hand.

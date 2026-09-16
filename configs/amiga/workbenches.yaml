@@ -10,6 +10,13 @@ shares:
     path: ${NIO_WORKSPACE}/build/amiga-share
     writable: false
     sync: true
+  # Story 1.10 guest endpoint. E2E cases mount a per-run host directory as
+  # NATIVE: with filesystem2=rw; interactive sessions can opt in here.
+  NATIVE:
+    volume: NATIVE
+    path: ${NIO_WORKSPACE}/build/amiga-native-test
+    writable: true
+    sync: false
 
 profiles:
   # Interactive Workbench sessions — point harddrive at your own persistent VHD/HDF.

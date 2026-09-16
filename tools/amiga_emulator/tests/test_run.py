@@ -108,6 +108,44 @@ class AmigaRunnerTests(unittest.TestCase):
         override_position = command.index("cpu_model=68030")
         self.assertLess(config_position, override_position)
 
+    def test_skip_nio_pty_does_not_require_rs232_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "test.hdf"
+            rom = root / "kickstart.rom"
+            ffs = root / "FastFileSystem"
+            for path in (disk, rom, ffs):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+                "AMIBERRY_SKIP_NIO": "1",
+                "AMIBERRY_SERIAL_MODE": "pty",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--disk", str(disk), "--pty"]))
+                self.assertIsNone(runner.start_transport())
+                self.assertFalse((root / "run" / "amiga-serial").exists())
+
+    def test_skip_nio_does_not_require_fujibus_tcp_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            disk = root / "test.hdf"
+            rom = root / "kickstart.rom"
+            ffs = root / "FastFileSystem"
+            for path in (disk, rom, ffs):
+                path.write_bytes(b"test")
+            environment = {
+                "AMIGA_RUN_DIR": str(root / "run"),
+                "AMIBERRY_KICKSTART": str(rom),
+                "AMIBERRY_FAST_FILE_SYSTEM": str(ffs),
+                "AMIBERRY_SKIP_NIO": "1",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                runner = AmigaRunner(parse_args(["--disk", str(disk), "--tcp"]))
+                self.assertIsNone(runner.start_transport())
+
     def test_dir_mounts_emit_filesystem2_ro_setting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

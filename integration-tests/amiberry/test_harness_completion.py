@@ -1,10 +1,16 @@
+from pathlib import Path
+
 from conftest import (
     CompletionLogState,
     MonitorSnapshot,
     build_failure_report,
     checkpoint_progress,
     evaluate_monitor_state,
+    guest_reset_from_amiberry_log,
+    host_file_is_pass,
     machine_environment,
+    native_test_map_omits_serial_session_slip,
+    native_test_objects_omit_serial_session_slip,
     scan_completion_log_chunk,
 )
 
@@ -64,6 +70,38 @@ def test_failed_marker_is_not_treated_as_completion():
     )
     found, _ = scan_completion_log_chunk(chunk, "host:/one-row")
     assert found is False
+
+
+def test_guest_reset_before_marker_is_immediate_failure():
+    action, reason = evaluate_monitor_state(MonitorSnapshot(
+        completion_seen=False,
+        requester_seen=False,
+        runner_returncode=None,
+        now=10.0,
+        deadline=20.0,
+        guest_reset_seen=True,
+    ))
+    assert action == "failure"
+    assert reason == "guest_reset"
+
+
+def test_second_dh0_mount_is_a_guest_reset():
+    first = "Mounting uaehf.device:0 0 (0):\nFS: mounted HDF unit DH0\n"
+    assert guest_reset_from_amiberry_log(first) is False
+    assert guest_reset_from_amiberry_log(first + first) is True
+
+
+def test_guest_reset_beats_completion_marker():
+    action, reason = evaluate_monitor_state(MonitorSnapshot(
+        completion_seen=True,
+        requester_seen=False,
+        runner_returncode=None,
+        now=10.0,
+        deadline=20.0,
+        guest_reset_seen=True,
+    ))
+    assert action == "failure"
+    assert reason == "guest_reset"
 
 
 def test_requester_before_marker_is_immediate_failure():
@@ -210,3 +248,42 @@ def test_completion_log_partial_line_is_retained_until_newline():
     assert found is False
     found, _ = scan_completion_log_chunk(second, "host:/one-row", state)
     assert found is True
+
+
+def test_host_file_requires_pass_newline(tmp_path):
+    missing = tmp_path / "complete"
+    empty = tmp_path / "empty"
+    empty.write_text("", encoding="ascii")
+    leftover = tmp_path / "leftover"
+    leftover.write_text("PASS", encoding="ascii")
+    good = tmp_path / "good"
+    good.write_text("PASS\n", encoding="ascii")
+    assert host_file_is_pass(missing) is False
+    assert host_file_is_pass(empty) is False
+    assert host_file_is_pass(leftover) is False
+    assert host_file_is_pass(good) is True
+
+
+def test_native_test_makefile_omits_serial_session_slip():
+    makefile = (
+        Path(__file__).resolve().parents[2]
+        / "repos/fujinet-nio-driver/amiga/Makefile"
+    )
+    assert native_test_objects_omit_serial_session_slip(
+        makefile.read_text(encoding="utf-8")
+    )
+
+
+def test_native_test_map_scan_rejects_serial_session_slip_symbols():
+    assert native_test_map_omits_serial_session_slip(
+        " .text fujinet_nio_directory_backend\n"
+    )
+    assert not native_test_map_omits_serial_session_slip(
+        " .text fn_stream_session_open\n"
+    )
+    assert not native_test_map_omits_serial_session_slip(
+        " .text fn_slip_encode\n"
+    )
+    assert not native_test_map_omits_serial_session_slip(
+        " .text fujinet_nio_serial_backend_open\n"
+    )

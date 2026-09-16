@@ -884,6 +884,24 @@ results = [
 ]
 
 [[test]]
+name = "nio-native-test"
+project = "driver"
+app = "fujinet-nio-native-test-probe"
+nio_broker = true
+nio_native_test = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/nio-native-test.sequence"
+completion_mode = "host_file"
+completion_log = "complete"
+results = [
+  "nio-load.result",
+  "nio-native-test.result",
+  "nio-tool-rc.result",
+]
+
+[[test]]
 name = "nio-paula-serial"
 project = "driver"
 app = "fujinet-nio-exchange"

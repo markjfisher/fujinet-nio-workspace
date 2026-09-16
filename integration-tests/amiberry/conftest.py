@@ -29,7 +29,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / "integration-tests" / "amiberry"
 sys.path.insert(0, str(ROOT / "tools" / "build"))
-from nio_build.amiga_config import resolve_fast_file_system
+from nio_build.amiga_config import filesystem2_setting, resolve_fast_file_system
 DEFAULT_EVIDENCE_DIR = ROOT / "test-evidence"
 
 # Add tools/ to path so we can call amiga_emulator.ipc directly.
@@ -59,6 +59,7 @@ class MonitorSnapshot:
     debugger_mode: bool = False
     debugger_paused: bool = False
     capture_mode: bool = False
+    guest_reset_seen: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,46 @@ class CompletionLogState:
     current_marker_match: bool = False
 
 
+def guest_reset_from_amiberry_log(text: str) -> bool:
+    """A second DH0 HDF mount means Kickstart remounted after a Guru reset."""
+    return text.count("Mounting uaehf.device:0 0") > 1
+
+
+def host_file_is_pass(path: Path) -> bool:
+    try:
+        return path.is_file() and path.read_text(
+            encoding="ascii", errors="ignore"
+        ) == "PASS\n"
+    except OSError:
+        return False
+
+
+def native_test_objects_omit_serial_session_slip(makefile_text: str) -> bool:
+    start = makefile_text.find("NIO_NATIVE_TEST_OBJECTS")
+    end = makefile_text.find("SERIAL_OBJECTS", start)
+    if start < 0 or end < 0:
+        return False
+    block = makefile_text[start:end]
+    return (
+        "fujinet_nio_directory_backend" in block
+        and "fujinet_nio_packet_backend" in block
+        and "fujinet_nio_serial_backend" not in block
+        and "fn_session" not in block
+        and "fn_slip" not in block
+    )
+
+
+def native_test_map_omits_serial_session_slip(map_text: str) -> bool:
+    return (
+        "fn_stream_session" not in map_text
+        and "fn_slip_" not in map_text
+        and "fujinet_nio_serial_backend" not in map_text
+    )
+
+
 def evaluate_monitor_state(snapshot: MonitorSnapshot) -> tuple[str, str | None]:
+    if snapshot.guest_reset_seen and not snapshot.capture_mode:
+        return ("failure", "guest_reset")
     if snapshot.requester_seen and not snapshot.capture_mode:
         return ("failure", "requester")
     if snapshot.runner_returncode is not None:
@@ -368,6 +408,29 @@ def build_nio_binary(environment: dict[str, str]) -> None:
         env=environment,
         check=True,
     )
+
+
+def build_native_test_runner(environment: dict[str, str]) -> Path:
+    """Build the Story 1.9 host directory endpoint used by native-test guest cases."""
+    nio_root = ROOT / "repos" / "fujinet-nio"
+    binary = nio_root / "build" / "fujibus-pty-debug" / "fujinet-nio-native-test"
+    if not binary.is_file():
+        subprocess.run(
+            ["cmake", "--preset", "fujibus-pty-debug"],
+            cwd=nio_root,
+            env=environment,
+            check=True,
+        )
+    subprocess.run(
+        ["cmake", "--build", "--preset", "fujibus-pty-debug-build",
+         "--target", "fujinet-nio-native-test"],
+        cwd=nio_root,
+        env=environment,
+        check=True,
+    )
+    if not binary.is_file():
+        raise AssertionError(f"native-test host runner was not built: {binary}")
+    return binary
 
 
 def _patch_boot_block(image: Path) -> None:
@@ -731,16 +794,21 @@ def _kill_port_holders(port: int) -> None:
         pass  # lsof not available
 
 
+def _stop_process(proc: subprocess.Popen[object] | None,
+                  timeout: float = 5) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
 def _terminate_runner(runner: subprocess.Popen[object]) -> None:
     """Shut down the runner process, escalating to SIGKILL if needed."""
-    if runner.poll() is not None:
-        return
-    runner.terminate()
-    try:
-        runner.wait(timeout=8)
-    except subprocess.TimeoutExpired:
-        runner.kill()
-        runner.wait()
+    _stop_process(runner, timeout=8)
 
 
 # ---------------------------------------------------------------------------
@@ -757,13 +825,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
         ordered_results = list(case.get("results", []))
         completion_mode = case.get("completion_mode")
         completion_log = case.get("completion_log")
-        if completion_mode not in {"nio_marker", "expected_timeout"}:
+        if completion_mode not in {"nio_marker", "expected_timeout", "host_file"}:
             raise AssertionError(
                 f"Amiberry case '{name}' has invalid completion_mode: {completion_mode!r}"
             )
-        if completion_mode == "nio_marker" and not completion_log:
+        if completion_mode in {"nio_marker", "host_file"} and not completion_log:
             raise AssertionError(
-                f"Amiberry case '{name}' uses nio_marker but has no completion_log"
+                f"Amiberry case '{name}' uses {completion_mode} but has no completion_log"
             )
         if completion_mode == "expected_timeout" and completion_log:
             raise AssertionError(
@@ -774,8 +842,18 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 f"Amiberry case '{name}' sets nio_broker and driver; "
                 "isolated broker images must not install fujinet-disk.device"
             )
+        if completion_mode == "host_file" and not case.get("nio_native_test"):
+            raise AssertionError(
+                f"Amiberry case '{name}' uses host_file without nio_native_test"
+            )
+        if case.get("nio_native_test") and case.get("fujinet_serial"):
+            raise AssertionError(
+                f"Amiberry case '{name}' sets nio_native_test and fujinet_serial"
+            )
         driver_root = ROOT / "repos/fujinet-nio-driver"
         nio_device = driver_root / "build/amiga/fujinet-nio.device"
+        if case.get("nio_native_test"):
+            nio_device = driver_root / "build/amiga/fujinet-nio-native-test.device"
         resident_loader = driver_root / "build/amiga/fujinet-load-resident"
         resident_unloader = driver_root / "build/amiga/fujinet-unload-resident"
         if case.get("nio_broker"):
@@ -942,6 +1020,46 @@ def run_amiga_case(amiga_environment: dict[str, str],
         ):
             (run_dir / stale_name).unlink(missing_ok=True)
 
+        native_record_dir: Path | None = None
+        native_test_proc = None
+        if case.get("nio_native_test"):
+            native_runner = build_native_test_runner(amiga_environment)
+            native_record_dir = run_dir / "native-test-records"
+            native_record_dir.mkdir(parents=True, exist_ok=True)
+            native_log = run_dir / "fujinet-nio-native-test.log"
+            native_test_proc = subprocess.Popen(
+                [str(native_runner), "--dir", str(native_record_dir)],
+                cwd=ROOT,
+                env=amiga_environment,
+                stdout=native_log.open("w", encoding="utf-8"),
+                stderr=subprocess.STDOUT,
+            )
+            identity = native_record_dir / "IDENTITY"
+            identity_deadline = time.monotonic() + 10
+            while time.monotonic() < identity_deadline:
+                if identity.is_file() and identity.read_text(encoding="ascii", errors="ignore") == "native-test\n":
+                    break
+                if native_test_proc.poll() is not None:
+                    native_test_proc = None
+                    raise AssertionError(
+                        "fujinet-nio-native-test exited before writing IDENTITY"
+                    )
+                time.sleep(0.1)
+            else:
+                _stop_process(native_test_proc)
+                native_test_proc = None
+                raise AssertionError(
+                    "fujinet-nio-native-test did not write IDENTITY as native-test"
+                )
+            test_env["AMIBERRY_SKIP_NIO"] = "1"
+            test_env["AMIBERRY_DIR_MOUNTS"] = filesystem2_setting({
+                "writable": True,
+                "device": "DH1",
+                "volume": "NATIVE",
+                "path": str(native_record_dir),
+                "bootpri": 0,
+            })
+
         silent_peer = None
         if case.get("silent_peer"):
             silent_peer = subprocess.Popen(
@@ -1033,6 +1151,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
             boot_time = time.monotonic()
             activity_deadline = boot_time + activity_timeout
             completion_seen = False
+            host_file_pass_at: float | None = None
             if debugger_mode or capture_mode:
                 # The external controller owns the session duration; retain the
                 # normal deadline as a fallback after the controller finishes.
@@ -1058,6 +1177,22 @@ def run_amiga_case(amiga_environment: dict[str, str],
                         pass
 
                 # NIO log — check for any FujiBus traffic (evidence only).
+                if native_test_proc is not None and native_test_proc.poll() is not None:
+                    raise AssertionError(
+                        "fujinet-nio-native-test exited during the guest run"
+                    )
+
+                if (completion_mode == "host_file" and native_record_dir is not None
+                        and completion_log):
+                    marker_path = native_record_dir / completion_log
+                    if host_file_is_pass(marker_path):
+                        if host_file_pass_at is None:
+                            host_file_pass_at = now
+                        elif now - host_file_pass_at >= 0.6:
+                            completion_seen = True
+                    else:
+                        host_file_pass_at = None
+
                 if nio_log.is_file():
                     try:
                         current_nio_log_size = nio_log.stat().st_size
@@ -1145,6 +1280,9 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     debugger_mode=debugger_mode,
                     debugger_paused=debugger_paused,
                     capture_mode=capture_mode,
+                    guest_reset_seen=guest_reset_from_amiberry_log(
+                        amiberry_log_text
+                    ),
                 ))
                 if action == "success":
                     termination_reason = reason
@@ -1241,6 +1379,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
             if silent_peer is not None and silent_peer.poll() is None:
                 silent_peer.terminate()
                 silent_peer.wait(timeout=5)
+            _stop_process(native_test_proc)
             if readonly_catalog_dir is not None and readonly_catalog_dir.is_dir():
                 readonly_catalog_dir.chmod(0o755)
 
