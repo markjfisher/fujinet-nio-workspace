@@ -75,7 +75,7 @@ Build one raw request packet, then deliver `serialize()` through `SlipFramer` an
 ## Verification
 
 **Commands:**
-- `source /home/markf/dev/nio/fujinet-nio-workspace/scripts/env.sh && cd /home/markf/dev/nio/fujinet-nio-workspace/.kilo/worktrees/story-1-8-disk-parity/repos/fujinet-nio && ./build.sh -cp fujibus-pty-debug && ./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite='Disk serial*' && ./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-case='*Disk*'` -- expected: new parity suite and existing Disk* protocol cases pass. CTest `-R` cannot select doctest names (`fujinet-nio-tests` is the only C++ test).
+- `source /home/markf/dev/nio/fujinet-nio-workspace/scripts/env.sh && cd /home/markf/dev/nio/fujinet-nio-workspace/repos/fujinet-nio && ./build.sh -cp fujibus-pty-debug && ./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite='Disk serial*' && ./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-case='*Disk*'` -- expected: new parity suite and existing Disk* protocol cases pass. CTest `-R` cannot select doctest names (`fujinet-nio-tests` is the only C++ test).
 
 **Manual checks:**
 - Confirm no edits to `fake_fs.h`, file-list/clock tests, `native_serial_core_parity.h`, or broker/retry production. Confirm each matrix row has an executed test. Firmware `git diff --check` on touched files.
@@ -88,6 +88,8 @@ Focused run on 2026-09-16 (worktree firmware `da5b6fa4` plus new tests):
 
 - `--test-suite='Disk serial*'`: **6/6 cases, 126/126 assertions**, 0 failed.
 - `--test-case='*Disk*'`: **36/36 cases, 733/733 assertions**, 0 failed.
+
+Combined master land at firmware `337f5b3e` re-ran `file_clock_core_parity` (8/8), `Disk serial*` (6/6), and `ctest -R '^fujinet-nio-tests$'` (1/1).
 
 Matrix coverage that ran: read/write/flush parity (serial+native); write protection; out-of-range; failed request delivery; lost/ambiguous reply (`SendFailed` and `UnknownCompletion`); replay vs blocked second write. Firmware `git diff --check` passed. Touched files are only `tests/disk_serial_native_parity.h` and `tests/test_disk_serial_native_parity.cpp`.
 

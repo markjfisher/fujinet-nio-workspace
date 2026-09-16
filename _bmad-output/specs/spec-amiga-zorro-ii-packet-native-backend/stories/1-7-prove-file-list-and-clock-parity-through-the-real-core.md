@@ -102,7 +102,7 @@ Do not `sleep`. Do not share `g_list_directory_cache` keys.
 ## Verification
 
 **Commands:**
-- `source /home/markf/dev/nio/fujinet-nio-workspace/scripts/env.sh && cd /home/markf/dev/nio/fujinet-nio-workspace/.kilo/worktrees/fujinet-nio-1-7 && ./build.sh -cp fujibus-pty-debug` -- expected: POSIX debug preset builds, including globbed `tests/test_file_clock_core_parity.cpp`.
+- `source /home/markf/dev/nio/fujinet-nio-workspace/scripts/env.sh && cd /home/markf/dev/nio/fujinet-nio-workspace/repos/fujinet-nio && ./build.sh -cp fujibus-pty-debug` -- expected: POSIX debug preset builds, including globbed `tests/test_file_clock_core_parity.cpp`.
 - `./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=file_clock_core_parity` -- expected: 8/8 matrix cases pass (CTest `-R file_clock_core_parity` does not match; the registered test name is `fujinet-nio-tests`).
 - `ctest --test-dir build/fujibus-pty-debug -R '^fujinet-nio-tests$' --output-on-failure` -- expected: full C++ unit binary passes, including existing FileDevice/ClockDevice IORequest cases.
 
@@ -110,7 +110,7 @@ Do not `sleep`. Do not share `g_list_directory_cache` keys.
 - Confirm parity tests construct `FileDevice`/`ClockDevice`, not test doubles, and that serial and native stacks use different MemoryFileSystem names.
 - Confirm no `sleep`, no `clock_settime`, and no edits to `fake_fs.h`, disk tests, or production file/clock handlers unless Ask First fired.
 
-**Results (2026-09-16):** `file_clock_core_parity` 8 cases / 86 assertions passed. `ctest -R '^fujinet-nio-tests$'` 1/1 passed. Production `file_device.cpp` / `clock_device.cpp` / `fake_fs.h` / disk tests unchanged. `scripts/update_cmake_sources.py` not required (no new production `.cpp`).
+**Results (2026-09-16):** `file_clock_core_parity` 8 cases / 86 assertions passed. `ctest -R '^fujinet-nio-tests$'` 1/1 passed. Production `file_device.cpp` / `clock_device.cpp` / `fake_fs.h` / disk tests unchanged. `scripts/update_cmake_sources.py` not required (no new production `.cpp`). Combined master land at firmware `337f5b3e` re-ran `file_clock_core_parity` (8/8), `Disk serial*` (6/6), and `ctest -R '^fujinet-nio-tests$'` (1/1).
 
 ## Suggested Review Order
 
