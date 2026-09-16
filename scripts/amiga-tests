@@ -5,7 +5,8 @@
 #   scripts/amiga-tests [--amiga-env ENV] [--amiga-machine MACHINE] [pytest-args...]
 #
 # Convenience wrapper around:
-#   uv run pytest --run-amiga --amiga-env ENV [--amiga-machine MACHINE] [pytest-args...]
+#   uv run --project integration-tests/amiberry pytest --run-amiga \
+#     [--amiga-env ENV] [--amiga-machine MACHINE] [pytest-args...]
 #
 # If --amiga-env is not given, pytest uses its configured default.
 # Any additional arguments are forwarded to pytest verbatim.
@@ -13,7 +14,10 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SUITE="$ROOT/integration-tests/amiberry"
 
 source "$ROOT/scripts/env.sh"
 
-exec uv run pytest --run-amiga "$@" "$ROOT/integration-tests/amiberry"
+# Workspace root has no pyproject.toml. Without --project, uv 0.12+ looks
+# for a pytest binary on PATH and fails with "Failed to spawn: pytest".
+exec uv run --project "$SUITE" pytest --run-amiga "$@" "$SUITE"

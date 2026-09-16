@@ -151,7 +151,8 @@ Focused pytest (same harness):
 
 ```sh
 source scripts/env.sh && \
-  uv run pytest --run-amiga --amiga-env wb32 --amiga-machine a1200-030 -q --tb=no \
+  uv run --project integration-tests/amiberry pytest --run-amiga \
+  --amiga-env wb32 --amiga-machine a1200-030 -q --tb=no \
   integration-tests/amiberry/test_diskdevice_adf.py::test_hd_adf_mount_geometry_dir_and_type
 ```
 
