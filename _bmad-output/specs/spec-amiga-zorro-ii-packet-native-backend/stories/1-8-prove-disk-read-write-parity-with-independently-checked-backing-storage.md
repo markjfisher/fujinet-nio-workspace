@@ -2,8 +2,11 @@
 title: '1-8 Prove disk read/write parity with independently checked backing storage'
 type: feature
 created: '2026-09-16'
-status: in-progress
+status: done
 review_loop_iteration: 0
+review_fix_baseline_commit: 31711adf21071c3f98969fbd1dbd36814d0f4693
+review_fix_owner_baseline_commit: c55790c57f1e5954d51473817c592b8ad3c6b81f
+review_fix_owner_commit: f9a430cebee652cf7308100b20a96f0ce2e0b016
 baseline_commit: 8f2d4442aa960a419fd4e5dc60b83ed1d2a52eed
 owner_baseline_commit: da5b6fa415da6f8bcbf941485f6d537cf56bc279
 context:
@@ -129,9 +132,57 @@ Matrix coverage that ran: read/write/flush parity (serial+native); write protect
 
 ## Review Findings — 2026-09-17
 
-Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+Findings from the initial review of the delivered story. The checked items below were subsequently corrected and verified; the correction evidence follows.
 
-- [ ] [Review][Patch] Assert complete decoded disk responses against independent expectations — tests/test_disk_serial_native_parity.cpp:28–54 checks only selected bytes and does not compare complete serial/native replies. tests/disk_serial_native_parity.h:393 accepts a response with corrupt metadata and 254 of 256 sector bytes corrupted (confirmed by standalone probe). Check exact lengths, metadata, statuses and all sector bytes, including write/flush reply contents.
-- [ ] [Review][Patch] Count request transmissions separately from response attempts — tests/disk_serial_native_parity.h:310 injects requests through enqueue, while :331 records io.sendCalls after sending the service response. The post-write fault assertion therefore proves one response attempt, not the required one request transmission. Keep distinct request, reply and effect counters.
+- [x] [Review][Patch] Assert complete decoded disk responses against independent expectations — tests/test_disk_serial_native_parity.cpp:28–54 checks only selected bytes and does not compare complete serial/native replies. tests/disk_serial_native_parity.h:393 accepts a response with corrupt metadata and 254 of 256 sector bytes corrupted (confirmed by standalone probe). Check exact lengths, metadata, statuses and all sector bytes, including write/flush reply contents.
+- [x] [Review][Patch] Count request transmissions separately from response attempts — tests/disk_serial_native_parity.h:310 injects requests through enqueue, while :331 records io.sendCalls after sending the service response. The post-write fault assertion therefore proves one response attempt, not the required one request transmission. Keep distinct request, reply and effect counters.
 
 Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.
+
+
+### Review corrections — 2026-09-17
+
+Both patch findings are implemented. The success sequence now checks complete
+service and decoded responses against literal protocol metadata and independent
+seed/marker sector bytes: device, command, status, exact payload length, flags,
+reserved bytes, slot, geometry/LBA, transfer length, and every data byte. Complete
+serial/native decoded replies are also compared. Write/flush response bodies and
+empty service-error payloads are checked. Synthetic response IDs are intentionally
+excluded from wire parity because FujiBus does not carry them.
+
+Native requests now pass through a separate requester `NativeFramer` and
+`PacketIODouble.send`; only its accepted transmitted record reaches the service
+adapter. Request transmissions/acceptances and reply attempts/acceptances are
+separate from filesystem write effects. Unavailable requests record one failed
+request send, zero accepted requests, zero reply attempts and zero write effects.
+Post-write faults record one accepted request, one reply attempt and one write
+effect. Assertions check actual framer send statuses; actual adapter output,
+without a reply-fate condition, determines whether a reply can be decoded.
+
+Regression evidence:
+
+- Red: `source scripts/env.sh && cmake --build repos/fujinet-nio/build/fujibus-pty-debug -j4` followed by `repos/fujinet-nio/build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite='Disk serial*'` with the old helper and new corruption/request-count assertions: **7 cases, 2 failed; 267 failed assertions**. The corruption regression changes each metadata/data byte individually and appends excess data; the failed-send regression requires the missing request attempt.
+- Green: ran the exact Verification command above after corrections: PTY build and bundled CTest **3/3 passed**, `Disk serial*` **7/7 cases, 569/569 assertions**, `*Disk*` **36/36 cases, 737/737 assertions**. Regression also rejects wrong device, command, status and truncated payloads.
+- `git -C repos/fujinet-nio diff --check -- tests/disk_serial_native_parity.h tests/test_disk_serial_native_parity.cpp` passed. Only this story and its two owned parity files were edited for these corrections; no production/shared filesystem/retry changes. In-memory evidence does not establish physical persistence.
+
+### Combined corrective acceptance — 2026-09-17
+
+The corrective changes passed the combined review. Firmware revision: `f9a430cebee652cf7308100b20a96f0ce2e0b016`. All review findings for this story are closed.
+
+Final verification after all corrections (source workspace `scripts/env.sh` first):
+
+- `cmake --build repos/fujinet-nio/build/fujibus-pty-debug --target fujinet-nio-tests -j4` — passed; the target also builds the production application inspected by the isolation check.
+- `repos/fujinet-nio/build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=native_test_endpoint` — 15 cases / 184 assertions passed.
+- `ctest --test-dir repos/fujinet-nio/build/fujibus-pty-debug -V` — 3/3 passed: 374 C++ cases / 7695 assertions, production clock isolation, and 23 Python tests.
+- Workspace and firmware `git diff --check` — passed. No library, Amiga driver, application CLI, or production disk-handler changes.
+
+## Suggested Review Order — corrective changes
+
+- Measure actual request sends independently of replies.
+  [disk_serial_native_parity.h:315](../../../../repos/fujinet-nio/tests/disk_serial_native_parity.h#L315)
+
+- Check complete responses against independent protocol expectations.
+  [disk_serial_native_parity.h:416](../../../../repos/fujinet-nio/tests/disk_serial_native_parity.h#L416)
+
+- Prove every corrupted sector or metadata byte is rejected.
+  [test_disk_serial_native_parity.cpp:29](../../../../repos/fujinet-nio/tests/test_disk_serial_native_parity.cpp#L29)

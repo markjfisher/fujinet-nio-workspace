@@ -2,10 +2,13 @@
 title: '1-7 Prove file-list and clock parity through the real core'
 type: 'feature'
 created: '2026-09-16'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '8f2d4442aa960a419fd4e5dc60b83ed1d2a52eed'
 owner_baseline_commit: 'da5b6fa415da6f8bcbf941485f6d537cf56bc279'
 review_loop_iteration: 0
+review_fix_baseline_commit: 31711adf21071c3f98969fbd1dbd36814d0f4693
+review_fix_owner_baseline_commit: c55790c57f1e5954d51473817c592b8ad3c6b81f
+review_fix_owner_commit: f9a430cebee652cf7308100b20a96f0ce2e0b016
 spec_checkpoint: false
 done_checkpoint: false
 context:
@@ -138,8 +141,58 @@ Do not `sleep`. Do not share `g_list_directory_cache` keys.
 
 ## Review Findings — 2026-09-17
 
-Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+Findings from the initial review of the delivered story. The checked items below were subsequently corrected and verified; the correction evidence follows.
 
-- [ ] [Review][Patch] Keep the test clock override out of production builds — src/platform/posix/time.cpp:16–29 unconditionally compiles the freeze state, setter and runtime branch into the production POSIX library. Confirmed both symbols in the production fujinet-nio executable with nm -C. The story promises a POSIX-test-only override; isolate it at the test build/link boundary.
+- [x] [Review][Patch] Keep the test clock override out of production builds — src/platform/posix/time.cpp:16–29 unconditionally compiles the freeze state, setter and runtime branch into the production POSIX library. Confirmed both symbols in the production fujinet-nio executable with nm -C. The story promises a POSIX-test-only override; isolate it at the test build/link boundary.
 
 Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.
+
+
+### Review correction verification — 2026-09-17
+
+The POSIX clock freeze state, setter and branch are guarded by
+`FN_POSIX_TEST_CLOCK`, defined privately only on `fujinet-nio-tests`.
+The unit executable compiles its own instance of the production POSIX time
+source; the normal library, application and native runner compile without the
+override. No handler, ESP32 source, host-clock setter or disk test changed.
+
+Added CTest `posix-clock-test-isolation`: `nm -C` must find the freeze setter and
+state in the unit executable and neither symbol in the production archive,
+application (when enabled), or native runner. Red evidence: compiled the original
+`git show HEAD:src/platform/posix/time.cpp` into a temporary object and ran this
+check against it; it failed with `Test clock set_test_unix_time_seconds leaked
+into .../time.cpp.o`.
+
+Commands run after sourcing workspace `scripts/env.sh` in `repos/fujinet-nio`:
+
+- `./build.sh -cp fujibus-pty-debug` — passed; 366 C++ cases / 7186 assertions,
+  23 Python tests and the new isolation check.
+- `cmake --build build/fujibus-pty-debug` — passed after adding the optional
+  application check to the CTest arguments.
+- `./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=file_clock_core_parity`
+  — 8 cases / 86 assertions passed.
+- `ctest --test-dir build/fujibus-pty-debug --output-on-failure` — 3/3 passed,
+  including the symbol check against the production application as well as the
+  library and native runner. Review finding closed.
+
+### Combined corrective acceptance — 2026-09-17
+
+The corrective changes passed the combined review. Firmware revision: `f9a430cebee652cf7308100b20a96f0ce2e0b016`. All review findings for this story are closed.
+
+Final verification after all corrections (source workspace `scripts/env.sh` first):
+
+- `cmake --build repos/fujinet-nio/build/fujibus-pty-debug --target fujinet-nio-tests -j4` — passed; the target also builds the production application inspected by the isolation check.
+- `repos/fujinet-nio/build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=native_test_endpoint` — 15 cases / 184 assertions passed.
+- `ctest --test-dir repos/fujinet-nio/build/fujibus-pty-debug -V` — 3/3 passed: 374 C++ cases / 7695 assertions, production clock isolation, and 23 Python tests.
+- Workspace and firmware `git diff --check` — passed. No library, Amiga driver, application CLI, or production disk-handler changes.
+
+## Suggested Review Order — corrective changes
+
+- Test clock exists only in the unit-test build.
+  [time.cpp:8](../../../../repos/fujinet-nio/src/platform/posix/time.cpp#L8)
+
+- Link a separate clock instance and verify production binaries.
+  [CMakeLists.txt:34](../../../../repos/fujinet-nio/tests/CMakeLists.txt#L34)
+
+- Reject leaked clock symbols in production artifacts.
+  [check_clock_test_isolation.cmake:1](../../../../repos/fujinet-nio/tests/check_clock_test_isolation.cmake#L1)

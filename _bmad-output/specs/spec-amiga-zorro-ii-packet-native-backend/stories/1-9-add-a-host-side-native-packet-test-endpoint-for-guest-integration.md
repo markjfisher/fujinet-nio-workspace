@@ -2,8 +2,11 @@
 title: '1-9 Add a host-side native packet test endpoint for guest integration'
 type: 'feature'
 created: '2026-09-16'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
+review_fix_baseline_commit: 31711adf21071c3f98969fbd1dbd36814d0f4693
+review_fix_owner_baseline_commit: c55790c57f1e5954d51473817c592b8ad3c6b81f
+review_fix_owner_commit: f9a430cebee652cf7308100b20a96f0ce2e0b016
 baseline_commit: '06986c940adab46ac5977b59409a802e33d6ade5'
 owner_baseline_commit: '337f5b3e00f79bbd0aa2e74c67095abeb906b3e1'
 spec_checkpoint: false
@@ -131,9 +134,54 @@ Protocol (harness only): one directory; file `IDENTITY` contains `native-test\n`
 
 ## Review Findings — 2026-09-17
 
-Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+Findings from the initial review of the delivered story. The checked items below were subsequently corrected and verified; the correction evidence follows.
 
-- [ ] [Review][Patch] Contain unresolved client exchanges across timeout — tests/native_test_records.h:87–118 has no outstanding-exchange state; wait_record timeout permits another send as soon as the host consumed the prior request file. A standalone adapter probe confirmed a second request is accepted before the first reply, and a late old reply is accepted after local reset/new send. Add client ownership/containment and delayed-response coverage; local file cleanup alone is not remote quiescence.
-- [ ] [Review][Patch] Require fresh runner readiness on directory reuse — tests/native_test_records.h:239–247 accepts any existing IDENTITY before checking the child, while tests/native_test_runner.cpp:181 leaves IDENTITY after shutdown. Restart can report ready before constructor cleanup, which can discard a newly submitted request. Establish readiness from the current launch and test restart in the same directory.
+- [x] [Review][Patch] Contain unresolved client exchanges across timeout — tests/native_test_records.h:87–118 has no outstanding-exchange state; wait_record timeout permits another send as soon as the host consumed the prior request file. A standalone adapter probe confirmed a second request is accepted before the first reply, and a late old reply is accepted after local reset/new send. Add client ownership/containment and delayed-response coverage; local file cleanup alone is not remote quiescence.
+- [x] [Review][Patch] Require fresh runner readiness on directory reuse — tests/native_test_records.h:239–247 accepts any existing IDENTITY before checking the child, while tests/native_test_runner.cpp:181 leaves IDENTITY after shutdown. Restart can report ready before constructor cleanup, which can discard a newly submitted request. Establish readiness from the current launch and test restart in the same directory.
 
 Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.
+
+
+### Review correction evidence — 2026-09-17
+
+- The host client retains ownership after the request file is consumed; a second
+  send reports `Backpressure`. Timeout or abandoned receive latches lifetime
+  quarantine (`UnknownCompletion`) for sends and receives, including after
+  local adapter reset. Clients are noncopyable. No remote recovery is inferred.
+- Launch removes old readiness before fork; readiness requires the exact token
+  and a live child from this launch. Runner signal handlers precede publication,
+  and orderly shutdown removes `IDENTITY`. Reuse requires exclusive directory
+  ownership and termination/reaping of the previous runner.
+- Red: added delayed-peer/reset, stale-identity/failed-exec and same-directory
+  restart regressions; unpatched endpoint suite failed 3/11 cases (9 assertions).
+- Green: `source scripts/env.sh && cd repos/fujinet-nio && ./build.sh -cp fujibus-pty-debug`
+  passed all three registered tests, including Python. Focused
+  `./build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=native_test_endpoint`
+  passed 11/11 cases, 154 assertions; the specified focused CTest passed 1/1.
+- Limits: a fresh client against a still-running uncertain peer is unsupported;
+  local file cleanup never proves remote quiescence. No guest, serial, service,
+  packet ABI, or production retry changes were made for these corrections.
+
+### Combined corrective acceptance — 2026-09-17
+
+The corrective changes passed the combined review. Firmware revision: `f9a430cebee652cf7308100b20a96f0ce2e0b016`. All review findings for this story are closed.
+
+Final verification after all corrections (source workspace `scripts/env.sh` first):
+
+- `cmake --build repos/fujinet-nio/build/fujibus-pty-debug --target fujinet-nio-tests -j4` — passed; the target also builds the production application inspected by the isolation check.
+- `repos/fujinet-nio/build/fujibus-pty-debug/tests/fujinet-nio-tests --test-suite=native_test_endpoint` — 15 cases / 184 assertions passed.
+- `ctest --test-dir repos/fujinet-nio/build/fujibus-pty-debug -V` — 3/3 passed: 374 C++ cases / 7695 assertions, production clock isolation, and 23 Python tests.
+- Workspace and firmware `git diff --check` — passed. No library, Amiga driver, application CLI, or production disk-handler changes.
+
+Combined review also added regressions for the separate in-process exchange deadline, accepted-request receive failure, incorrect identity from a live child, and failed startup record cleanup. The runner checks the adapter initialization result before publishing identity; it does not retry failed cleanup. The client exposes local cleanup without exposing raw send/receive around its ownership guard. A valid delayed reply is used in the timeout test.
+
+## Suggested Review Order — corrective changes
+
+- Retain exchange ownership and quarantine after uncertainty.
+  [native_test_records.h:91](../../../../repos/fujinet-nio/tests/native_test_records.h#L91)
+
+- Publish readiness only after successful startup cleanup.
+  [native_test_runner.cpp:143](../../../../repos/fujinet-nio/tests/native_test_runner.cpp#L143)
+
+- Exercise timeout, late reply, receive failure and launch lifecycle.
+  [test_native_test_endpoint.cpp:392](../../../../repos/fujinet-nio/tests/test_native_test_endpoint.cpp#L392)
