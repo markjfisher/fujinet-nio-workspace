@@ -59,6 +59,8 @@ Amiga users need a future Zorro-II connection through an RP2350B bridge to ESP32
 
 - Story 2.2 uses an independent RP2040 PIO generator and Core2350B DUT with separate USB consoles, common GND and 3.3 V synthetic signals. Reuse the 2.1 build/test skeleton and shared APIO sources; verify the RP2040 loader compatibility rather than assuming upstream hardware support. Progress from four-bit capture to wider/control/pressure/read/release/reset tests, then instrumented real-bus validation. The adopted experiment companion defines staged gates and evidence. USB functional results, epio and loopback cannot establish Zorro timing feasibility. No ESP project or bridge-link protocol belongs to 2.2.
 
+- Story 2.2 experiments must be independently repeatable and inspectable through checked-in per-experiment source/configuration, instructions and staged starters. Separate generator equipment validation from C0–C10 DUT/bus cases; retain C0. Interactive build/load/run/analyse workflows explain actions, wait for BOOTSEL and verified identity/re-enumeration, and require explicit user start before signals. Use documented one-time access prerequisites, not agent-private scripts or repeated ad hoc sudo fixes. Preserve failure evidence; unimplemented cases refuse execution.
+
 ## Non-goals
 
 - No code implementation, hardware ordering or fabricated readiness evidence as part of creating this package.

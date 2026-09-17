@@ -121,7 +121,7 @@ Final-image physical checks passed: two full bursts; partial command across DTR 
 - Start with the user procedure and observed waveform contract.
   [rp2040-generator.md:1](../../repos/fujinet-nio/bridges/rp2350-zorro/docs/rp2040-generator.md#L1)
 - Inspect shared PIO instructions/configuration and bounded USB session handling.
-  [stimulus_program.c:1](../../repos/fujinet-nio/bridges/rp2350-zorro/lab/rp2040/stimulus_program.c#L1)
+  [stimulus_program.c:1](../../repos/fujinet-nio/bridges/rp2350-zorro/tests/feasibility/generator-check/src/stimulus_program.c#L1)
   [stimulus_control.c:1](../../repos/fujinet-nio/bridges/rp2350-zorro/lab/rp2040/stimulus_control.c#L1)
 - Compare physical evidence with native coverage and explicit measurement limits.
   [report.md:1](../../repos/fujinet-nio/bridges/rp2350-zorro/docs/feasibility/results/2026-09-17-generator/report.md#L1)

@@ -734,13 +734,21 @@ So that unsupported timing or PIO assumptions are discovered before ABI commitme
 
 **Objective / scope:** Establish RP2350B Zorro-facing feasibility incrementally using the Story 2.1 project. A separate RP2040 generates independent PIO stimulus at 3.3 V; the Core2350B captures/responds and both report over USB. Begin with the existing four-bit /AS program, progress to representative bus operations, then validate on the actual bus when the passive breakout, A500/Zorro-II adapter and appropriate buffering/instrumentation are available. This is laboratory bus probing, not FujiBus integration or the RP2350-to-ESP link (2.3).
 
-**Required experiment companion:** [Story 2.2 experiment plan and implementation breakdown](../../repos/fujinet-nio/bridges/rp2350-zorro/docs/story-2-2-experiment-plan.md). Its W0/W1 wiring profiles, C0–C10 cases, E0–E7 work packages, planned targets/commands and evidence rules are mandatory input. Proposed commands are not yet implemented.
+**Required experiment companion:** [Story 2.2 experiment plan and implementation breakdown](../../repos/fujinet-nio/bridges/rp2350-zorro/docs/story-2-2-experiment-plan.md). Its W0/W1 wiring profiles, C0–C10 cases, E0–E7 work packages, planned targets/commands and evidence rules are mandatory input. The experiment index distinguishes available starters from future commands; availability never implies a passed hardware gate.
 
 **Likely files/modules:** Existing `repos/fujinet-nio/bridges/rp2350-zorro/` CMake/bootstrap, shared APIO sources, `src/feasibility/`, `lab/rp2040/`, `tests/feasibility/` and owning bridge documentation. Add discoverable workspace build/run wrappers with focused tests. RP2040 firmware is test equipment, not product firmware. Temporary lab wiring and later protective buffering are in scope; production electrical/pin-mapping/routing redesign is not.
 
 **Dependencies:** 2.1. No dependency on Epic 1. **Hardware required:** Stage-specific: available Core2350B, TZT Pico-style RP2040 USB-C/40-pin board, breadboard/leads and common GND for the 3.3 V bench; available eight-channel USB logic analyzer, HANMATEK DOS1102 oscilloscope and simple multimeter (instrument settings/capabilities to verify); real host/adapter/breakout and reviewed buffering for actual-bus validation. Verify the clone's header map and flash/SDK configuration. ESP32-S3 is not used. **Requirements:** FR13, FR14. **Verification:** V-HW, shared-source epio tests and reproducible independent builds.
 
 **Acceptance Criteria:**
+
+**Given** an implemented experiment and the documented one-time host prerequisites
+**When** the user invokes its checked-in starter from its experiment folder
+**Then** the user can inspect its source/configuration and independently build, load, run or analyse it, or follow a visible interactive full workflow
+**And** the workflow gives BOOTSEL instructions, waits for the verified intended board, handles re-enumeration, and waits for explicit user start before output
+**And** fresh results preserve commands, firmware identity, logs, raw captures and expected/observed verdicts; permission or acquisition failures cannot silently pass
+**And** C0–C10 each have explicit scope/status; unimplemented cases refuse execution. Generator bring-up lives separately and does not complete C1. Agent-private temporary scripts and repeated ad hoc sudo fixes are not an acceptable experiment interface.
+
 
 **Given** the Story 2.1 skeleton and identified boards
 **When** the experiment targets are implemented
