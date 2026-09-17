@@ -62,6 +62,35 @@ class RP2350TaskTests(unittest.TestCase):
             self.assertEqual(call.kwargs, {"cwd": self.bridge, "extra_env": {"PICO_TOOLCHAIN_PATH": str(compiler)}})
         self.assertNotIn("PICO_TOOLCHAIN_PATH", self.ctx.env)
 
+    def test_generator_build_uses_own_cache_and_never_loads_hardware(self):
+        compiler = self.root / "generator-compiler" / "arm-none-eabi-gcc"
+        compiler.parent.mkdir()
+        compiler.touch()
+        compiler.chmod(0o755)
+        cache = self.bridge / "build/stimulus-rp2040/CMakeCache.txt"
+        cache.parent.mkdir(parents=True)
+        cache.write_text(f"CMAKE_C_COMPILER:FILEPATH={compiler}\n")
+        with redirect_stdout(StringIO()):
+            self.tasks["rp2040-stimulus"].action(self.build)
+        self.assertEqual(self.commands(), [
+            ["python3", "scripts/bootstrap.py", "--mode", "stimulus"],
+            ["cmake", "--preset", "stimulus-rp2040"],
+            ["cmake", "--build", "--preset", "stimulus-rp2040"],
+        ])
+        self.assertTrue(all(call.kwargs == {"cwd": self.bridge, "extra_env": {}}
+                            for call in self.build.runner.run.call_args_list))
+
+    def test_generator_explain_is_discoverable_and_does_not_build(self):
+        with patch.object(BuildContext, "create", return_value=self.ctx), patch.object(Runner, "run") as run:
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(cli.main(["--list"]), 0)
+                self.assertEqual(cli.main(["--explain", "rp2040-stimulus"]), 0)
+            self.assertIn("rp2040-stimulus", output.getvalue())
+            self.assertIn("PICO_TOOLCHAIN_PATH", output.getvalue())
+            self.assertIn("feasibility_stimulus", output.getvalue())
+            run.assert_not_called()
+
     def test_explicit_toolchain_and_sdk_are_preserved(self):
         compiler = self.root / "chosen-compiler" / "bin"
         compiler.mkdir(parents=True)

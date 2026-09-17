@@ -113,6 +113,26 @@ class Build:
             self.runner.run(f"rp2350-{preset}-test", ["ctest", "--preset", preset], cwd=bridge)
 
     def rp2350_firmware(self) -> None:
+        self.bridge_firmware("rp2350-firmware", "firmware", "firmware", "bridge_capture")
+
+    def rp2040_stimulus(self) -> None:
+        self.bridge_firmware("rp2040-stimulus", "stimulus", "stimulus-rp2040", "feasibility_stimulus")
+
+    def rp2040_stimulus_help(self) -> str:
+        bridge = self.p("FUJINET_NIO") / "bridges" / "rp2350-zorro"
+        return (
+            "scripts/build.sh rp2040-stimulus   Build the RP2040 W0 laboratory generator.\n"
+            "Build only: no USB loading, flashing or signal generation.\n"
+            "Uses pinned Pico SDK/apio and an independent stimulus-rp2040 cache.\n"
+            "Compiler: PICO_TOOLCHAIN_PATH, arm-none-eabi-gcc on PATH, cached compiler,\n"
+            "or workspace build/toolchains/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin.\n"
+            "PICO_SDK_PATH overrides must match the bridge's clean pinned SDK.\n"
+            "Run scripts/build.sh rp2350-pio-tests for native waveform/control tests.\n"
+            f"Artifacts: {bridge / 'build/stimulus-rp2040'}/feasibility_stimulus.{{elf,uf2}}\n"
+            f"Load/run/capture instructions: {bridge / 'docs/rp2040-generator.md'}"
+        )
+
+    def bridge_firmware(self, task: str, mode: str, preset: str, artifact: str) -> None:
         bridge = self.p("FUJINET_NIO") / "bridges" / "rp2350-zorro"
         self.runner.require_dir(bridge)
         env = {}
@@ -130,7 +150,7 @@ class Build:
                 raise SystemExit(f"No executable arm-none-eabi-gcc in PICO_TOOLCHAIN_PATH: {directory}")
         elif not shutil.which("arm-none-eabi-gcc", path=self.ctx.env.get("PATH", "")):
             # CMake retains toolchain selection across invocations without exports.
-            cache = bridge / "build" / "firmware" / "CMakeCache.txt"
+            cache = bridge / "build" / preset / "CMakeCache.txt"
             cached_compiler = None
             if cache.is_file():
                 for line in cache.read_text().splitlines():
@@ -143,15 +163,15 @@ class Build:
                 env["PICO_TOOLCHAIN_PATH"] = str(local_compiler)
             else:
                 raise SystemExit(
-                    "RP2350B firmware needs arm-none-eabi-gcc on PATH or PICO_TOOLCHAIN_PATH "
+                    "Bridge firmware needs arm-none-eabi-gcc on PATH or PICO_TOOLCHAIN_PATH "
                     "set to its toolchain directory (for example in local/config.env). "
-                    "Run scripts/build.sh --explain rp2350-firmware for details."
+                    f"Run scripts/build.sh --explain {task} for details."
                 )
-        self.runner.run("rp2350-firmware-dependencies", ["python3", "scripts/bootstrap.py", "--mode", "firmware"], cwd=bridge, extra_env=env)
-        self.runner.run("rp2350-firmware-configure", ["cmake", "--preset", "firmware"], cwd=bridge, extra_env=env)
-        self.runner.run("rp2350-firmware-build", ["cmake", "--build", "--preset", "firmware"], cwd=bridge, extra_env=env)
-        print(f"RP2350B artifacts: {bridge / 'build' / 'firmware' / 'bridge_capture.elf'}")
-        print(f"                  {bridge / 'build' / 'firmware' / 'bridge_capture.uf2'}")
+        self.runner.run(f"{task}-dependencies", ["python3", "scripts/bootstrap.py", "--mode", mode], cwd=bridge, extra_env=env)
+        self.runner.run(f"{task}-configure", ["cmake", "--preset", preset], cwd=bridge, extra_env=env)
+        self.runner.run(f"{task}-build", ["cmake", "--build", "--preset", preset], cwd=bridge, extra_env=env)
+        print(f"Artifacts: {bridge / 'build' / preset / (artifact + '.elf')}")
+        print(f"           {bridge / 'build' / preset / (artifact + '.uf2')}")
 
     def workflow_rp2350(self) -> None:
         self.rp2350_pio_tests()
@@ -1012,6 +1032,7 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("atari", "Build all Atari-facing libraries, apps, boot disk, and emulator-side FujiNet", Build.workflow_atari, workflow=True),
         t("linux", "Build host/Linux FujiNet presets and library", Build.workflow_linux, workflow=True),
         t("amiga", "Build Amiga-facing library and nio-apps test apps", Build.workflow_amiga, workflow=True),
+        t("rp2040-stimulus", "Build RP2040 W0 PIO laboratory generator (no flashing)", Build.rp2040_stimulus, help_text=Build.rp2040_stimulus_help),
         t("rp2350", "Test PIO and build the RP2350B Zorro bridge skeleton", Build.workflow_rp2350, workflow=True, help_text=Build.rp2350_help),
         t("rp2350-pio-tests", "Build/run native epio PIO tests (Debug + Release; no hardware)", Build.rp2350_pio_tests, help_text=Build.rp2350_help),
         t("rp2350-firmware", "Bootstrap/build RP2350B bridge ELF and UF2 (Pico SDK)", Build.rp2350_firmware, help_text=Build.rp2350_help),
