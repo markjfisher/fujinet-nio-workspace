@@ -738,7 +738,7 @@ So that unsupported timing or PIO assumptions are discovered before ABI commitme
 
 **Likely files/modules:** Existing `repos/fujinet-nio/bridges/rp2350-zorro/` CMake/bootstrap, shared APIO sources, `src/feasibility/`, `lab/rp2040/`, `tests/feasibility/` and owning bridge documentation. Add discoverable workspace build/run wrappers with focused tests. RP2040 firmware is test equipment, not product firmware. Temporary lab wiring and later protective buffering are in scope; production electrical/pin-mapping/routing redesign is not.
 
-**Dependencies:** 2.1. No dependency on Epic 1. **Hardware required:** Stage-specific: available Core2350B, TZT Pico-style RP2040 USB-C/40-pin board, breadboard/leads and common GND for the 3.3 V bench; available oscilloscope for later measured timing/release (specifications to verify); real host/adapter/breakout and reviewed buffering for actual-bus validation. Verify the clone's header map and flash/SDK configuration. ESP32-S3 is not used. **Requirements:** FR13, FR14. **Verification:** V-HW, shared-source epio tests and reproducible independent builds.
+**Dependencies:** 2.1. No dependency on Epic 1. **Hardware required:** Stage-specific: available Core2350B, TZT Pico-style RP2040 USB-C/40-pin board, breadboard/leads and common GND for the 3.3 V bench; available eight-channel USB logic analyzer, HANMATEK DOS1102 oscilloscope and simple multimeter (instrument settings/capabilities to verify); real host/adapter/breakout and reviewed buffering for actual-bus validation. Verify the clone's header map and flash/SDK configuration. ESP32-S3 is not used. **Requirements:** FR13, FR14. **Verification:** V-HW, shared-source epio tests and reproducible independent builds.
 
 **Acceptance Criteria:**
 
