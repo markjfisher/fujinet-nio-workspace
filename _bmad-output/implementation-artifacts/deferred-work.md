@@ -91,3 +91,7 @@
 - source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/1-10-build-an-amiga-native-test-broker-binary-using-the-host-endpoint.md`
   summary: Interactive `workbenches.yaml` NATIVE share is not the per-run E2E record directory
   evidence: E2E overwrites `AMIBERRY_DIR_MOUNTS` with a temporary `native-test-records` path; the persistent `build/amiga-native-test` mount has no IDENTITY unless created by hand.
+
+- source_spec: `_bmad-output/specs/spec-amiga-zorro-ii-packet-native-backend/stories/2-1-create-an-isolated-reproducible-bridge-project-skeleton.md`
+  summary: Reconcile the firmware source generator/templates with checked-in POSIX/ESP build-profile selection.
+  evidence: At fujinet-nio baseline 2365fbce15391ae445f38962909ab8c8f172d84e, scripts/update_cmake_sources.py changes CMakeLists_posix.cmake and src/CMakeLists.txt without any bridge changes. Story 2.1 generated both files from baseline-only and bridge-added temporary trees and verified byte-identical outputs; original checked-in lists were preserved. Exact hashes are in the story verification record.
