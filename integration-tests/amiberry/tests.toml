@@ -920,3 +920,35 @@ results = [
   "nio-exchange.result",
   "nio-tool-rc.result",
 ]
+
+[[test]]
+name = "nio-native-exchange"
+project = "driver"
+app = "fujinet-nio-exchange"
+nio_broker = true
+nio_native_test = true
+timeout = 75
+activity_timeout = 60
+no_activity_timeout = 30
+startup = "startup/nio-native-exchange.sequence"
+completion_mode = "host_file"
+completion_log = "complete"
+results = [
+  "bad-cold.result",
+  "bad-baud.result",
+  "bad-serial-device.result",
+  "bad-serial-unit.result",
+  "bad-host-get.result",
+  "bad-disk.result",
+  "bad-provocation.result",
+  "bad-slot.result",
+  "bad-lba-zero.result",
+  "bad-bad-number.result",
+  "bad-incomplete-list.result",
+  "bad-unknown.result",
+  "bad-missing.result",
+  "nio-seed.result",
+  "nio-load.result",
+  "nio-clock.result",
+  "nio-list.result",
+]

@@ -1,0 +1,37 @@
+C:Assign T: RAM:
+C:Failat 100
+C:fujinet-nio-exchange --installed-backend native --type clock --backend cold >DH0:bad-cold.result
+C:Echo "RC=$RC" >>DH0:bad-cold.result
+C:fujinet-nio-exchange --type clock --backend warm --baud 38400 --installed-backend native >DH0:bad-baud.result
+C:Echo "RC=$RC" >>DH0:bad-baud.result
+C:fujinet-nio-exchange --type clock --backend warm --serial-device serial.device --installed-backend native >DH0:bad-serial-device.result
+C:Echo "RC=$RC" >>DH0:bad-serial-device.result
+C:fujinet-nio-exchange --type clock --backend warm --serial-unit 0 --installed-backend native >DH0:bad-serial-unit.result
+C:Echo "RC=$RC" >>DH0:bad-serial-unit.result
+C:fujinet-nio-exchange --installed-backend native --type host-get --backend warm >DH0:bad-host-get.result
+C:Echo "RC=$RC" >>DH0:bad-host-get.result
+C:fujinet-nio-exchange --installed-backend native --type disk-read --backend cold --provocation --baud 38400 --slot 1 --lba 0 >DH0:bad-disk.result
+C:Echo "RC=$RC" >>DH0:bad-disk.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --provocation >DH0:bad-provocation.result
+C:Echo "RC=$RC" >>DH0:bad-provocation.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --slot 1 >DH0:bad-slot.result
+C:Echo "RC=$RC" >>DH0:bad-slot.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --lba 0 >DH0:bad-lba-zero.result
+C:Echo "RC=$RC" >>DH0:bad-lba-zero.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --trials -1 >DH0:bad-bad-number.result
+C:Echo "RC=$RC" >>DH0:bad-bad-number.result
+C:fujinet-nio-exchange --installed-backend native --type file-list --backend warm --size 128 >DH0:bad-incomplete-list.result
+C:Echo "RC=$RC" >>DH0:bad-incomplete-list.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --unknown x >DH0:bad-unknown.result
+C:Echo "RC=$RC" >>DH0:bad-unknown.result
+C:fujinet-nio-exchange --installed-backend native --type clock --backend warm --trials >DH0:bad-missing.result
+C:Echo "RC=$RC" >>DH0:bad-missing.result
+C:Echo "seed" >NATIVE:host-fs/native-exchange.txt
+C:Echo "SEED RC=$RC" >DH0:nio-seed.result
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device
+C:Echo "LOAD RC=$RC" >DH0:nio-load.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type clock --trials 2 >DH0:nio-clock.result
+C:Echo "RC=$RC" >>DH0:nio-clock.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type file-list --uri host:/ --size 128 --trials 2 >DH0:nio-list.result
+C:Echo "RC=$RC" >>DH0:nio-list.result
+C:Echo "PASS" >NATIVE:complete

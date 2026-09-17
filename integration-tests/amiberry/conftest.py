@@ -413,7 +413,7 @@ def build_nio_binary(environment: dict[str, str]) -> None:
 def build_native_test_runner(environment: dict[str, str]) -> Path:
     """Build the Story 1.9 host directory endpoint used by native-test guest cases."""
     nio_root = ROOT / "repos" / "fujinet-nio"
-    binary = nio_root / "build" / "fujibus-pty-debug" / "fujinet-nio-native-test"
+    binary = nio_root / "build" / "fujibus-pty-debug" / "tests" / "fujinet-nio-native-test"
     if not binary.is_file():
         subprocess.run(
             ["cmake", "--preset", "fujibus-pty-debug"],
