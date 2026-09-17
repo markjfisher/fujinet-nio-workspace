@@ -2,7 +2,7 @@
 title: '1-7 Prove file-list and clock parity through the real core'
 type: 'feature'
 created: '2026-09-16'
-status: 'done'
+status: 'in-progress'
 baseline_commit: '8f2d4442aa960a419fd4e5dc60b83ed1d2a52eed'
 owner_baseline_commit: 'da5b6fa415da6f8bcbf941485f6d537cf56bc279'
 review_loop_iteration: 0
@@ -135,3 +135,11 @@ Do not `sleep`. Do not share `g_list_directory_cache` keys.
 - Distinct `host-serial` / `host-native` URIs, independent name/type/size checks, and error-path parity.
   [`test_file_clock_core_parity.cpp:49`](../../../../repos/fujinet-nio/tests/test_file_clock_core_parity.cpp#L49)
 
+
+## Review Findings — 2026-09-17
+
+Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+
+- [ ] [Review][Patch] Keep the test clock override out of production builds — src/platform/posix/time.cpp:16–29 unconditionally compiles the freeze state, setter and runtime branch into the production POSIX library. Confirmed both symbols in the production fujinet-nio executable with nm -C. The story promises a POSIX-test-only override; isolate it at the test build/link boundary.
+
+Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.

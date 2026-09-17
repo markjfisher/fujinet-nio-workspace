@@ -2,7 +2,7 @@
 title: '1-9 Add a host-side native packet test endpoint for guest integration'
 type: 'feature'
 created: '2026-09-16'
-status: 'done'
+status: 'in-progress'
 review_loop_iteration: 0
 baseline_commit: '06986c940adab46ac5977b59409a802e33d6ade5'
 owner_baseline_commit: '337f5b3e00f79bbd0aa2e74c67095abeb906b3e1'
@@ -128,3 +128,12 @@ Protocol (harness only): one directory; file `IDENTITY` contains `native-test\n`
 
 - Process-level identity, listing payload, stale discard, oversized, cleanup, no fallback
   [`test_native_test_endpoint.cpp:89`](../../../../repos/fujinet-nio/tests/test_native_test_endpoint.cpp#L89)
+
+## Review Findings — 2026-09-17
+
+Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+
+- [ ] [Review][Patch] Contain unresolved client exchanges across timeout — tests/native_test_records.h:87–118 has no outstanding-exchange state; wait_record timeout permits another send as soon as the host consumed the prior request file. A standalone adapter probe confirmed a second request is accepted before the first reply, and a late old reply is accepted after local reset/new send. Add client ownership/containment and delayed-response coverage; local file cleanup alone is not remote quiescence.
+- [ ] [Review][Patch] Require fresh runner readiness on directory reuse — tests/native_test_records.h:239–247 accepts any existing IDENTITY before checking the child, while tests/native_test_runner.cpp:181 leaves IDENTITY after shutdown. Restart can report ready before constructor cleanup, which can discard a newly submitted request. Establish readiness from the current launch and test restart in the same directory.
+
+Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.

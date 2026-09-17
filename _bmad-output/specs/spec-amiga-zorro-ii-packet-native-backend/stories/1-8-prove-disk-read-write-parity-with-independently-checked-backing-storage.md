@@ -2,7 +2,7 @@
 title: '1-8 Prove disk read/write parity with independently checked backing storage'
 type: feature
 created: '2026-09-16'
-status: done
+status: in-progress
 review_loop_iteration: 0
 baseline_commit: 8f2d4442aa960a419fd4e5dc60b83ed1d2a52eed
 owner_baseline_commit: da5b6fa415da6f8bcbf941485f6d537cf56bc279
@@ -126,3 +126,12 @@ Matrix coverage that ran: read/write/flush parity (serial+native); write protect
 
 - Unique markers plus effect counts expose a second write versus a blocked replay
   [`test_disk_serial_native_parity.cpp:184`](../../../../repos/fujinet-nio/tests/test_disk_serial_native_parity.cpp#L184)
+
+## Review Findings — 2026-09-17
+
+Review of the delivered story against its requirements; implementation is unchanged. These findings reopen acceptance pending correction.
+
+- [ ] [Review][Patch] Assert complete decoded disk responses against independent expectations — tests/test_disk_serial_native_parity.cpp:28–54 checks only selected bytes and does not compare complete serial/native replies. tests/disk_serial_native_parity.h:393 accepts a response with corrupt metadata and 254 of 256 sector bytes corrupted (confirmed by standalone probe). Check exact lengths, metadata, statuses and all sector bytes, including write/flush reply contents.
+- [ ] [Review][Patch] Count request transmissions separately from response attempts — tests/disk_serial_native_parity.h:310 injects requests through enqueue, while :331 records io.sendCalls after sending the service response. The post-write fault assertion therefore proves one response attempt, not the required one request transmission. Keep distinct request, reply and effect counters.
+
+Verification: fresh `./build.sh -cp fujibus-pty-debug` passed (366 C++ cases, 7186 assertions; 23 Python tests); native Amiga driver `make test` passed. Passing existing tests does not close the gaps above.
