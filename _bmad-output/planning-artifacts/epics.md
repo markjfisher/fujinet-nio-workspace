@@ -162,9 +162,13 @@ The **C++ extension** is `IFramer` under the existing `FujiBusTransport : ITrans
 
 #### Recommended repository placement
 
-Use **`repos/fujinet-nio/bridges/rp2350-zorro/`** (proposed, not created) for the bridge's standalone build, README, bounded transport firmware, feasibility tests, and later PIO assets. Keep durable design notes in `repos/fujinet-nio/docs/` and cross-repository scope/acceptance in this workspace's BMAD/backlog locations. Amiga code stays in `repos/fujinet-nio-driver/amiga/nio.device/`; the ESP link adapter stays in `repos/fujinet-nio/src/platform/esp32/` with its matching platform header.
+Use **`repos/fujinet-nio/bridges/rp2350-zorro/`** (proposed, not created) for the bridge's standalone build, README, bounded transport firmware, feasibility tests, and apio C program sources. Keep durable design notes in `repos/fujinet-nio/docs/` and cross-repository scope/acceptance in this workspace's BMAD/backlog locations. Amiga code stays in `repos/fujinet-nio-driver/amiga/nio.device/`; the ESP link adapter stays in `repos/fujinet-nio/src/platform/esp32/` with its matching platform header.
 
-Reason: `repos/fujinet-nio/CMakeLists.txt` chooses ESP-IDF or POSIX, `src/CMakeLists.txt` is generated, and `scripts/update_cmake_sources.py`, `collect_cpp_files`/ESP filtering, recursively collect `src/` while excluding POSIX sources from ESP. A new `src/platform/rp2350/` would need build filtering before it was safe. An independent bridge directory avoids adding Pico SDK dependencies to existing builds. Pin the SDK/toolchain only in the future skeleton story after checking available supported tools; no version is invented here. Do not link the complete ESP firmware into RP2350 or copy protocol constants unnecessarily. Any shared C-friendly transport-only definitions should be extracted only when an actual consumer needs them; shared test vectors can establish compatibility without a new shared production-header project.
+Reason: `repos/fujinet-nio/CMakeLists.txt` chooses ESP-IDF or POSIX, `src/CMakeLists.txt` is generated, and `scripts/update_cmake_sources.py`, `collect_cpp_files`/ESP filtering, recursively collect `src/` while excluding POSIX sources from ESP. A new `src/platform/rp2350/` would need build filtering before it was safe. An independent bridge directory avoids adding Pico SDK dependencies to existing builds. Story 2.1 pins compatible epio/apio dependencies and verifies the Pico SDK/toolchain and RP2350B target before recording their versions. Do not link the complete ESP firmware into RP2350 or copy protocol constants unnecessarily. Any shared C-friendly transport-only definitions should be extracted only when an actual consumer needs them; shared test vectors can establish compatibility without a new shared production-header project.
+
+Naming decision (2026-09-17): retain `bridges/rp2350-zorro/`. `bridges` identifies the component role, `rp2350` the MCU family, and `zorro` the bus; RP2350B and Zorro-II specificity belongs in its README/target configuration. A generic `platform/rp2350` would imply integration into the main firmware platform selector. A new repository or a deeper family/bus hierarchy adds no demonstrated value for one bridge. `core2350-test` remains the experimental reference, not the production owner.
+
+PIO policy (2026-09-17): all bridge hardware/PIO work uses test-first epio tests and shared apio C implementations as specified in Story 2.1. No `.pio` text programs or pioasm generation workflow. This applies to feasibility probes (2.2/2.3) and production bridge work (3.2); native emulation never replaces their physical evidence gates.
 
 #### Pre-hardware test strategy and implementation verification
 
@@ -250,7 +254,7 @@ Bridge developers obtain an isolated, reproducible project starting point and de
 
 **Dependencies:** Project setup and RP2350/Zorro hardware/PIO feasibility work may begin independently and run in parallel with Epic 1; they do not require Epic 1 completion. Hardware packet ABI finalization and approval, however, must wait until Epic 1 has established the accepted canonical raw FujiBus packet representation, packet-boundary semantics, ownership rules, and relevant failure behavior. Positive feasibility evidence alone is insufficient for ABI sign-off. This dependency is on acceptance of that complete software contract, not on completion of unrelated remaining Epic 1 tooling/parity work. Any discrepancy between feasibility constraints and the accepted contract requires explicit resolution before ABI approval, not silent changes to FujiBus semantics.
 
-**Hardware required:** Not for repository placement, dependency boundaries, or a compile-only skeleton. Suitable RP2350B/Zorro test hardware and instrumentation are required for physical timing/PIO/ownership evidence. A successful build or simulation alone does not meet that gate. A fully working production card is not a prerequisite for a feasibility experiment, but the evidence must state exactly which bus conditions were exercised.
+**Hardware required:** Not for repository placement, dependency boundaries, or native epio tests and a cross-built skeleton. Suitable RP2350B/Zorro test hardware and instrumentation are required for physical timing/PIO/ownership evidence. A successful build or simulation alone does not meet that gate. A fully working production card is not a prerequisite for a feasibility experiment, but the evidence must state exactly which bus conditions were exercised.
 
 **Implementation notes and likely owners:**
 
@@ -666,7 +670,7 @@ So that pre-hardware completion means more than host mocks passing.
 
 ## Epic 2: Bridge developers can make an evidence-backed feasibility and ABI decision
 
-Deliver an isolated bridge project and independently useful feasibility evidence. Stories 2.1–2.3 can proceed alongside Epic 1. Story 2.4 cannot approve the ABI before Story 1.6 acceptance. No register map, mailbox layout, PIO program, firmware concurrency model, or ESP link protocol is specified by the planning stories below.
+Deliver an isolated bridge project and independently useful feasibility evidence. Stories 2.1–2.3 can proceed alongside Epic 1. Story 2.4 cannot approve the ABI before Story 1.6 acceptance. No production register map, mailbox layout, PIO allocation/program, firmware concurrency model, or ESP link protocol is specified below; Story 2.1 selects the PIO authoring/test workflow and a synthetic smoke-test scope only.
 
 ### Story 2.1: Create an isolated, reproducible bridge project skeleton
 
@@ -674,25 +678,53 @@ As a bridge developer,
 I want a standalone RP2350B build and clear ownership boundaries,
 So that feasibility work can begin without disturbing existing firmware builds.
 
-**Objective / scope:** Create the proposed `bridges/rp2350-zorro/` project, minimal compile/link target, dependency setup documentation and test layout. Pin tooling from verified available SDK support during implementation. Keep external firmware repositories optional references only.
+**Objective / scope:** Create `repos/fujinet-nio/bridges/rp2350-zorro/` as an independently buildable RP2350B firmware skeleton and native PIO test project. Install/bootstrap pinned dependencies and integrate Pico SDK into the firmware CMake build. Establish a test-first epio/apio workflow with a small working PIO smoke program shared by the firmware and host tests. The skeleton is not a functioning Zorro bridge and defines no production bus/link ABI.
 
-**Likely files/modules:** Proposed `repos/fujinet-nio/bridges/rp2350-zorro/{CMakeLists.txt,README.md,src/,tests/}` and a link from firmware docs. No existing root build selector or service library needs restructuring.
+**Likely files/modules:** `repos/fujinet-nio/bridges/rp2350-zorro/{CMakeLists.txt,CMakePresets.json,README.md,cmake/,src/,tests/}`, dependency bootstrap/version metadata, ignored dependency/build directories, and a link from firmware docs. Keep PIO implementations as C source under `src/`; do not create a `.pio` asset tree. No existing root build selector or service library needs restructuring.
 
-**Dependencies:** None; independent of Epic 1. **Hardware required:** No. **Requirements:** FR11, FR12, FR13. **Verification:** New isolated configure/build command recorded in the README; existing source-generation/build-isolation check and V-CXX as appropriate.
+**Dependencies:** None; independent of Epic 1. `repos/core2350-test` is a development reference, not a build/runtime prerequisite. **Hardware required:** No. **Requirements:** FR11, FR12, FR13. **Verification:** V-PIO below, an existing source-generation/build-isolation check, and V-CXX if existing firmware build wiring changes.
+
+**Build and dependency contract:**
+
+- Provide separate native-host and RP2350 cross-compilation configurations with distinct build directories. Host tests must run without Pico SDK, an ARM compiler, an ESP-IDF installation, or connected hardware. Firmware must build without building/running the epio emulator or requiring the host test archive.
+- Pin epio and apio to compatible explicit release tags and record resolved revisions. The inspected starting pair is `epio v0.2.1` / `apio v0.3.0`; use upstream's visible version-variable/tag-clone approach, not moving `main`. A dependency version change must update or reject an existing stale checkout rather than silently reuse it. Build native `libepio` from source and use the same apio revision for tests and firmware, with compatible compile definitions/ABI options.
+- Install/bootstrap a pinned Pico SDK release with its required submodules and document prerequisites and the verified cross-compiler version. Support a documented `PICO_SDK_PATH` override, validate it, import the SDK before firmware `project()`, then call `pico_sdk_init()`. Record the actual RP2350 platform and RP2350B board/package selection; do not treat a default RP2040 or a Pico 2/RP2350A build as RP2350B verification. Exact SDK/toolchain/board choices are resolved and recorded during implementation.
+- Bootstrap from a clean checkout with no dependency on prebuilt archives or absolute paths from `core2350-test`. Record dependency locations, versions, update procedure and commands in the bridge README. Report missing/mismatched dependencies clearly. Keep dependency caches and generated outputs out of source control.
+
+**PIO development contract (also binding on later hardware/PIO stories):**
+
+- Write a failing deterministic epio behavioral test before adding/changing PIO behavior, then implement with apio C macros and demonstrate green. Host tests compile the same program/configuration source as firmware with `APIO_EMULATION=1`; firmware uses apio's real-hardware mode. Do not maintain a separate mock program or hand-copied instruction array.
+- Never author or consume `.pio` text programs for this bridge; no `pico_generate_pio_header` or `pioasm` generation workflow. Tests and implementation use epio/apio throughout. Use `repos/core2350-test/capture_program.c`, `tests/test_capture.c` and `tests/CMakeLists.txt` as structural references, not assumed-correct production bus logic. Its top-level CMake still refers to `.pio` files; those rules are explicitly excluded.
+- Keep SDK/peripheral access outside host-executed PIO code or behind explicit stubs. Exercise a bounded synthetic GPIO capture/handshake program with independent expected FIFO data, IRQ state and instruction-cycle assertions. Cover idle/no capture, asserted strobe/capture, held strobe/no duplicate, release/rearm and a second distinct sample. Record red/green evidence and keep assertions active in every supported host test configuration.
+- Emulator results establish modeled PIO behavior only. Record relevant epio limitations and retain instrumented physical checks for timing, synchronization, DMA/peripheral interactions and electrical behavior in Stories 2.2/2.3; no invented Zorro pin mapping or ABI enters the smoke program.
 
 **Acceptance Criteria:**
 
-**Given** the documented toolchain
-**When** the bridge target builds independently
-**Then** the output is explicitly a nonfunctional skeleton
-**And** existing POSIX/ESP source lists and builds do not acquire Pico SDK or bridge sources.
+**Given** a clean checkout and the documented host prerequisites
+**When** dependency bootstrap, native configure/build and CTest run without Pico SDK or an ARM toolchain
+**Then** the epio tests build from source, are discovered by CTest and pass against the shared apio program
+**And** a deliberate behavioral fault makes the relevant test fail (record the failing test before the implementation/fix).
 
-**Given** protocol dependency review
-**When** the project is inspected
-**Then** it references existing definitions/fixtures rather than duplicating the service stack
-**And** it contains no speculative physical packet ABI or required external FujiNet firmware checkout.
+**Given** the documented pinned SDK and cross-toolchain
+**When** the separate RP2350B firmware configure/build runs
+**Then** it compiles/links the same apio program into an ELF and UF2 skeleton artifact without linking host emulation
+**And** the README identifies the exact target and states that hardware behavior remains unvalidated.
 
-**Risks/unknowns:** SDK/board support and generator interactions. Compile success is not PIO feasibility or hardware support.
+**Given** fresh and already-bootstrapped dependency directories
+**When** setup is repeated or a configured dependency version differs
+**Then** setup is reproducible and idempotent, and mismatches are updated explicitly or rejected with actionable instructions
+**And** both builds are independent of `repos/core2350-test` and existing POSIX/ESP source lists acquire no SDK, emulator or bridge sources.
+
+**Given** the bridge source and build rules
+**When** the PIO and protocol dependency checks run
+**Then** no `.pio` sources or PIO text-generation rules are present, and host/firmware compile the same apio implementation
+**And** existing protocol definitions/fixtures are reused where needed without duplicating services, inventing a physical packet ABI or requiring an external FujiNet firmware checkout.
+
+**V-PIO — implementation verification:** After sourcing the workspace environment, the bridge README must provide exact copy/paste commands for dependency bootstrap; native CMake configure/build and `ctest --output-on-failure --no-tests=error`; separate RP2350B firmware CMake configure/build; and a source/build-rule guard against `.pio`/`pioasm` use in first-party bridge code. Run them from fresh build directories, verify the ELF/UF2 outputs, record compiler/dependency revisions and red/green evidence, and check generated POSIX/ESP source lists remain unchanged. Test bootstrap repetition and stale-pin rejection/update. SDK installation alone or a compile-only pass does not complete this story. These commands are implementation deliverables, not claims of execution in this planning update.
+
+**References:** [epio versioning and apio compatibility](https://github.com/piersfinlayson/epio#versioning), [epio library build](https://github.com/piersfinlayson/epio/blob/main/BUILD.md), [Pico SDK CMake setup](https://github.com/raspberrypi/pico-sdk#quick-start-your-own-project), and the local reference files above (reviewed 2026-09-17).
+
+**Risks/unknowns:** Verified SDK/toolchain and RP2350B board selection, apio host/firmware configuration parity, upstream emulator limitations and generator isolation. Passing host tests and producing firmware artifacts do not establish physical PIO feasibility or hardware support.
 
 ### Story 2.2: Establish RP2350B/Zorro bus and PIO feasibility evidence
 
@@ -810,7 +842,7 @@ So that Amiga requests and ESP replies cross the board without service translati
 
 **Objective / scope:** Implement only the agreed bus/link mechanics, packet buffering, ownership, backpressure and reset rules. Use ABI/link test peers to validate independently of the production ESP adapter. Firmware task/core/PIO structure follows feasibility and ABI decisions, not assumptions in this story.
 
-**Likely files/modules:** Proposed `repos/fujinet-nio/bridges/rp2350-zorro/src/`, any justified PIO assets and focused tests/docs.
+**Likely files/modules:** Proposed `repos/fujinet-nio/bridges/rp2350-zorro/src/`, shared apio C program sources and focused epio tests/docs under the Story 2.1 PIO contract.
 
 **Dependencies:** 1.14, 2.4. **Hardware required:** Yes. **Requirements:** FR5, FR9, FR11, FR14. **Verification:** Standalone bridge tests/build plus V-HW.
 

@@ -30,7 +30,7 @@ Amiga users need a future Zorro-II connection through an RP2350B bridge to ESP32
   - **success:** Real core handlers, the actual Amiga exchange tool and resident driver pass file-list, clock, disposable-media disk read/write, catalogue and media-lifecycle checks against independent storage/time expectations without serial controls on the native path (1.7–1.14).
 - **CAP-5**
   - **intent:** Bridge developers can independently establish a reproducible project and decision-grade physical feasibility evidence.
-  - **success:** The isolated RP2350B skeleton builds without affecting POSIX/ESP targets; instrumented Zorro/PIO and bridge-to-ESP experiments report measured capabilities, reset limitations and explicit proceed/hold conclusions, not hardware claims from mocks (2.1–2.3).
+  - **success:** The isolated RP2350B skeleton cross-builds and its shared PIO implementation passes independent native behavioral tests from reproducible dependency setup without affecting POSIX/ESP targets; instrumented Zorro/PIO and bridge-to-ESP experiments report measured capabilities, reset limitations and explicit proceed/hold conclusions, not hardware claims from mocks (2.1–2.3).
 - **CAP-6**
   - **intent:** Endpoint implementers can agree a hardware packet ABI grounded in accepted software semantics and physical evidence.
   - **success:** Explicit 2.4 approval cites accepted 1.6 raw representation, packet boundaries, ownership and relevant failure behavior plus positive relevant 2.2/2.3 evidence; missing or conflicting evidence withholds approval.
@@ -53,6 +53,8 @@ Amiga users need a future Zorro-II connection through an RP2350B bridge to ESP32
 - Story 3.2 may be subdivided after ABI design; preserve its acceptance criteria, traceability and downstream dependencies. All required replacement slices must be accepted before 3.4.
 - Use production-code-driven mocks, independent wire fixtures, controlled time/faults and disposable write media. Do not claim real-service parity from canned replies or hardware validity from a host/guest mock. Follow each owner's cheapest sufficient verification; actual library edits require complete `make check`.
 - Keep the bridge project isolated from existing firmware build source collection and reuse established protocol/fixture locations. Do not assume the external legacy FujiNet firmware repository is a workspace dependency.
+
+- Bridge hardware/PIO development is test-first with epio tests of shared apio C program/configuration sources; no `.pio` text programs or pioasm generation workflow. Story 2.1 requires independent native tests and a Pico SDK RP2350B firmware build, compatible pinned dependencies and a clean bootstrap; its adopted epic contract defines acceptance and verification. This policy also applies to later feasibility and production PIO work.
 
 ## Non-goals
 
