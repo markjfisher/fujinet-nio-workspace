@@ -952,3 +952,40 @@ results = [
   "nio-clock.result",
   "nio-list.result",
 ]
+
+[[test]]
+name = "nio-native-disk"
+project = "driver"
+app = "fujinet-nio-exchange"
+nio_broker = true
+nio_native_test = true
+driver = true
+native_disk_fixture = true
+timeout = 100
+activity_timeout = 80
+no_activity_timeout = 40
+startup = "startup/nio-native-disk.sequence"
+completion_mode = "host_file"
+completion_log = "complete"
+results = [
+  "bad-no-uri.result",
+  "bad-no-declaration.result",
+  "bad-no-intent.result",
+  "bad-negative-slot.result",
+  "bad-negative-lba.result",
+  "bad-slot.result",
+  "bad-no-lba.result",
+  "bad-overflow.result",
+  "bad-serial.result",
+  "bad-provocation.result",
+  "nio-load.result",
+  "disk-load.result",
+  "disk-read.result",
+  "occupied-local.result",
+  "disk-unload.result",
+  "disk-reload.result",
+  "occupied-remote.result",
+  "missing-fixture.result",
+  "bounds.result",
+  "disk-write.result",
+]

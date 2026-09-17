@@ -1,0 +1,43 @@
+C:Assign T: RAM:
+C:Failat 100
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --disposable-fixture --write-intent >DH0:bad-no-uri.result
+C:Echo "RC=$RC" >>DH0:bad-no-uri.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --write-intent >DH0:bad-no-declaration.result
+C:Echo "RC=$RC" >>DH0:bad-no-declaration.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --disposable-fixture >DH0:bad-no-intent.result
+C:Echo "RC=$RC" >>DH0:bad-no-intent.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 9 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:bad-slot.result
+C:Echo "RC=$RC" >>DH0:bad-slot.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:bad-no-lba.result
+C:Echo "RC=$RC" >>DH0:bad-no-lba.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 8388608 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:bad-overflow.result
+C:Echo "RC=$RC" >>DH0:bad-overflow.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent --baud 9600 >DH0:bad-serial.result
+C:Echo "RC=$RC" >>DH0:bad-serial.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent --provocation >DH0:bad-provocation.result
+C:Echo "RC=$RC" >>DH0:bad-provocation.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot -4294967295 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:bad-negative-slot.result
+C:Echo "RC=$RC" >>DH0:bad-negative-slot.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba -4294967279 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:bad-negative-lba.result
+C:Echo "RC=$RC" >>DH0:bad-negative-lba.result
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device >DH0:nio-load.result
+C:Echo "RC=$RC" >>DH0:nio-load.result
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device >DH0:disk-load.result
+C:Echo "RC=$RC" >>DH0:disk-load.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-read --slot 1 --lba 17 --fixture-uri host:/read.adf --disposable-fixture --trials 2 >DH0:disk-read.result
+C:Echo "RC=$RC" >>DH0:disk-read.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 1 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:occupied-local.result
+C:Echo "RC=$RC" >>DH0:occupied-local.result
+C:fujinet-unload-resident fujinet-disk.device >DH0:disk-unload.result
+C:Echo "RC=$RC" >>DH0:disk-unload.result
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device >DH0:disk-reload.result
+C:Echo "RC=$RC" >>DH0:disk-reload.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 1 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent >DH0:occupied-remote.result
+C:Echo "RC=$RC" >>DH0:occupied-remote.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 3 --lba 17 --fixture-uri host:/missing.adf --disposable-fixture --write-intent >DH0:missing-fixture.result
+C:Echo "RC=$RC" >>DH0:missing-fixture.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 2 --lba 1760 --fixture-uri host:/bounds.adf --disposable-fixture --write-intent >DH0:bounds.result
+C:Echo "RC=$RC" >>DH0:bounds.result
+C:fujinet-nio-exchange --installed-backend native --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent --trials 3 >DH0:disk-write.result
+C:Echo "RC=$RC" >>DH0:disk-write.result
+C:Echo "PASS" >NATIVE:complete

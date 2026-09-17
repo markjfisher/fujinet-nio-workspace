@@ -91,3 +91,64 @@ def test_native_exchange_tool_read_only(run_amiga_case, amiga_evidence_root):
             assert payload[12:12 + len(filename)] == filename
             assert int.from_bytes(payload[12 + len(filename):20 + len(filename)], "little") == 5
             assert len(payload) == 10 + entry_length
+
+
+def test_native_exchange_tool_disk(run_amiga_case, amiga_evidence_root):
+    results = run_amiga_case("nio-native-disk")
+    for name, text in results.items():
+        if name.startswith("bad-"):
+            assert "RC=10" in text.splitlines(), (name, text)
+            assert "ordinary" not in text
+    for name in ("nio-load", "disk-load", "disk-unload", "disk-reload"):
+        assert "RC=0" in results[f"{name}.result"].splitlines()
+    for name, trials in (("disk-read", 2), ("disk-write", 3)):
+        text = results[f"{name}.result"]
+        assert "RC=0" in text.splitlines(), text
+        assert f"ORDINARY PASS completed_trials={trials} failure=none" in text
+        assert "FIXTURE LEFT MOUNTED" in text
+        assert "result=0 cause=0 native=0 status=0" in text
+        assert "io_Error=0 io_Actual=512" in text
+        for serial in ("GET_BAUD", "SET_BAUD", "GET_SERIAL", "SET_SERIAL", "pacing="):
+            assert serial not in text
+    for name, failure in (("occupied-local", "local-slot-occupied"),
+                          ("occupied-remote", "remote-slot-occupied"),
+                          ("missing-fixture", "mount"),
+                          ("bounds", "geometry-bounds")):
+        text = results[f"{name}.result"]
+        assert "RC=20" in text.splitlines(), text
+        assert f"failure={failure}" in text
+        assert "ordinary op=write " not in text
+        assert ("FIXTURE LEFT MOUNTED" in text) == (name == "bounds")
+    assert "ordinary op=local-state slot=1 lba=17 io_Error=0 io_Actual=1" in results["occupied-remote.result"]
+    run = amiga_evidence_root / "nio-native-disk"
+    host = run / "native-test-records" / "host-fs"
+    read_bytes = (run / "read-original.adf").read_bytes()[17 * 512:18 * 512]
+    expected_digest = 2166136261
+    for value in read_bytes:
+        expected_digest = ((expected_digest ^ value) * 16777619) & 0xffffffff
+    actual_digests = re.findall(r"ordinary read trial=(\d+) checksum_fnv1a32=([0-9a-f]{8})", results["disk-read.result"])
+    assert actual_digests == [(str(trial), f"{expected_digest:08x}") for trial in (1, 2)]
+    assert "FIXTURE STATE UNKNOWN" in results["missing-fixture.result"]
+    for fixture in ("read", "bounds"):
+        assert (host / f"{fixture}.adf").read_bytes() == (run / f"{fixture}-original.adf").read_bytes()
+    expected = bytearray((run / "write-original.adf").read_bytes())
+    # Third (zero-based trial 2) pattern, independently specified here.
+    expected[17 * 512:18 * 512] = bytes(
+        ((i ^ 0x5a) ^ (2 >> ((i % 4) * 8))) & 255 for i in range(512)
+    )
+    assert (host / "write.adf").read_bytes() == expected
+    assert sorted(p.name for p in host.iterdir()) == ["bounds.adf", "fujinet-runtime-mounts.tsv", "read.adf", "write.adf"]
+    log = (run / "fujinet-nio-native-test.log").read_text()
+    requests = re.findall(r"fujibus: receive: .*dev=(0x[0-9A-Fa-f]+) cmd=(0x[0-9A-Fa-f]+)", log)
+    # Real host handler calls, not tool summaries: exactly three writes; no replay.
+    disk = [(int(dev, 16), int(cmd, 16)) for dev, cmd in requests]
+    assert all(dev == 0xfc for dev, _ in disk), disk
+    assert sum(cmd == 4 for _, cmd in disk) == 3
+    assert sum(cmd == 0x0e for _, cmd in disk) == 5  # two writable mounts + three trials
+    commands = [cmd for _, cmd in disk]
+    first_write = commands.index(4)
+    assert commands[first_write:] == [4, 0x0e, 3] * 3
+    assert sum(cmd == 3 for _, cmd in disk) == 5
+    assert sum(cmd == 1 for _, cmd in disk) == 4
+    assert not any(cmd == 2 for _, cmd in disk)  # no raw unmount/eject
+    assert (run / "native-test-records" / "complete").read_text() == "PASS\n"

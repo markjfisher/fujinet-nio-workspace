@@ -837,7 +837,10 @@ def run_amiga_case(amiga_environment: dict[str, str],
             raise AssertionError(
                 f"Amiberry case '{name}' uses expected_timeout but declares completion_log"
             )
-        if case.get("nio_broker") and case.get("driver"):
+        native_disk = bool(case.get("native_disk_fixture"))
+        if native_disk and not (case.get("nio_broker") and case.get("nio_native_test") and case.get("driver")):
+            raise AssertionError("native_disk_fixture requires native broker and driver")
+        if case.get("nio_broker") and case.get("driver") and not native_disk:
             raise AssertionError(
                 f"Amiberry case '{name}' sets nio_broker and driver; "
                 "isolated broker images must not install fujinet-disk.device"
@@ -957,6 +960,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 "--resident-loader", resident_loader,
                 "--resident-unloader", resident_unloader,
             ])
+            if native_disk:
+                build_cmd.extend(["--devs-file", driver_root / "build/amiga/fujinet-disk.device"])
             if case.get("fujinet_serial"):
                 serial_device = driver_root / "build/amiga/fujinet-serial.device"
                 if not serial_device.is_file():
@@ -1025,7 +1030,21 @@ def run_amiga_case(amiga_environment: dict[str, str],
         if case.get("nio_native_test"):
             native_runner = build_native_test_runner(amiga_environment)
             native_record_dir = run_dir / "native-test-records"
+            shutil.rmtree(native_record_dir, ignore_errors=True)
             native_record_dir.mkdir(parents=True, exist_ok=True)
+            if native_disk:
+                native_host = native_record_dir / "host-fs"
+                native_host.mkdir()
+                # Originals stay outside the service's host root.
+                for fixture in ("read", "write", "bounds"):
+                    original = run_dir / f"{fixture}-original.adf"
+                    create_standard_adf(amiga_environment, original,
+                                        volume_name=f"NIO{fixture.upper()}")
+                    # Seed the tested sector independently; keep a valid ADF header.
+                    seeded = bytearray(original.read_bytes())
+                    seeded[17 * 512:18 * 512] = bytes((i * 7 + 31) & 255 for i in range(512))
+                    original.write_bytes(seeded)
+                    shutil.copyfile(original, native_host / f"{fixture}.adf")
             native_log = run_dir / "fujinet-nio-native-test.log"
             native_test_proc = subprocess.Popen(
                 [str(native_runner), "--dir", str(native_record_dir)],
