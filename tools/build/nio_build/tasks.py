@@ -103,6 +103,82 @@ class Build:
         self.runner.require_dir(self.p("FUJINET_NIO"))
         self.runner.run("fujinet-atari-fujibus-netsio-build", ["./build.sh", "-cp", "atari-fujibus-netsio-debug"], cwd=self.p("FUJINET_NIO"))
 
+    def rp2350_pio_tests(self) -> None:
+        bridge = self.p("FUJINET_NIO") / "bridges" / "rp2350-zorro"
+        self.runner.require_dir(bridge)
+        self.runner.run("rp2350-host-dependencies", ["python3", "scripts/bootstrap.py", "--mode", "host"], cwd=bridge)
+        for preset in ("host", "host-release"):
+            self.runner.run(f"rp2350-{preset}-configure", ["cmake", "--preset", preset], cwd=bridge)
+            self.runner.run(f"rp2350-{preset}-build", ["cmake", "--build", "--preset", preset], cwd=bridge)
+            self.runner.run(f"rp2350-{preset}-test", ["ctest", "--preset", preset], cwd=bridge)
+
+    def rp2350_firmware(self) -> None:
+        bridge = self.p("FUJINET_NIO") / "bridges" / "rp2350-zorro"
+        self.runner.require_dir(bridge)
+        env = {}
+        local_compiler = self.ctx.root / "build" / "toolchains" / "arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi" / "bin"
+
+        def executable(path: Path) -> bool:
+            return path.is_file() and os.access(path, os.X_OK)
+
+        configured_toolchain = self.ctx.env.get("PICO_TOOLCHAIN_PATH")
+        if configured_toolchain:
+            directory = Path(configured_toolchain)
+            if not any(executable(candidate) for candidate in (
+                directory / "arm-none-eabi-gcc", directory / "bin" / "arm-none-eabi-gcc",
+            )):
+                raise SystemExit(f"No executable arm-none-eabi-gcc in PICO_TOOLCHAIN_PATH: {directory}")
+        elif not shutil.which("arm-none-eabi-gcc", path=self.ctx.env.get("PATH", "")):
+            # CMake retains toolchain selection across invocations without exports.
+            cache = bridge / "build" / "firmware" / "CMakeCache.txt"
+            cached_compiler = None
+            if cache.is_file():
+                for line in cache.read_text().splitlines():
+                    if line.startswith("CMAKE_C_COMPILER:") and "=" in line:
+                        cached_compiler = Path(line.split("=", 1)[1])
+                        break
+            if cached_compiler is not None and executable(cached_compiler):
+                pass
+            elif executable(local_compiler / "arm-none-eabi-gcc"):
+                env["PICO_TOOLCHAIN_PATH"] = str(local_compiler)
+            else:
+                raise SystemExit(
+                    "RP2350B firmware needs arm-none-eabi-gcc on PATH or PICO_TOOLCHAIN_PATH "
+                    "set to its toolchain directory (for example in local/config.env). "
+                    "Run scripts/build.sh --explain rp2350-firmware for details."
+                )
+        self.runner.run("rp2350-firmware-dependencies", ["python3", "scripts/bootstrap.py", "--mode", "firmware"], cwd=bridge, extra_env=env)
+        self.runner.run("rp2350-firmware-configure", ["cmake", "--preset", "firmware"], cwd=bridge, extra_env=env)
+        self.runner.run("rp2350-firmware-build", ["cmake", "--build", "--preset", "firmware"], cwd=bridge, extra_env=env)
+        print(f"RP2350B artifacts: {bridge / 'build' / 'firmware' / 'bridge_capture.elf'}")
+        print(f"                  {bridge / 'build' / 'firmware' / 'bridge_capture.uf2'}")
+
+    def workflow_rp2350(self) -> None:
+        self.rp2350_pio_tests()
+        self.rp2350_firmware()
+
+    def rp2350_help(self) -> str:
+        bridge = self.p("FUJINET_NIO") / "bridges" / "rp2350-zorro"
+        return (
+            "scripts/build.sh rp2350             Run PIO tests, then build RP2350B firmware.\n"
+            "scripts/build.sh rp2350-pio-tests   Build/run native epio Debug and Release tests; no SDK/ARM compiler.\n"
+            "scripts/build.sh rp2350-firmware    Build waveshare_core2350b / rp2350-arm-s ELF and UF2.\n\n"
+            "Prerequisites: Git, Python 3, CMake >=3.21, Ninja, native C compiler; firmware also needs native C++.\n"
+            "Dependencies are bootstrapped from pinned sources (first use needs network access).\n"
+            "Firmware uses PICO_SDK_PATH when set, otherwise the bridge's local pinned SDK.\n"
+            "An SDK override must match the exact pinned revision, be clean and include required submodules.\n"
+            "Compiler: explicit PICO_TOOLCHAIN_PATH or arm-none-eabi-gcc on PATH; existing CMake cache\n"
+            "choices are retained. Without those, use the workspace-local\n"
+            "build/toolchains/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin installation.\n"
+            "Overrides in local/config.env must be exported, for example:\n"
+            "  export PICO_TOOLCHAIN_PATH=/path/to/arm-toolchain/bin\n"
+            "  export PICO_SDK_PATH=/path/to/pinned-pico-sdk\n"
+            "CMake retains prior SDK/compiler choices; clear\n"
+            "the bridge's build/firmware directory when changing them. No flashing is performed.\n"
+            f"Artifacts: {bridge / 'build' / 'firmware'}/bridge_capture.{{elf,uf2}}\n"
+            f"Compiler installation instructions: {bridge / 'README.md'}"
+        )
+
     def lib_linux(self) -> None:
         self.run_make("lib-linux", "FUJINET_NIO_LIB", "linux")
 
@@ -936,6 +1012,9 @@ def build_tasks(build: Build) -> dict[str, Task]:
         t("atari", "Build all Atari-facing libraries, apps, boot disk, and emulator-side FujiNet", Build.workflow_atari, workflow=True),
         t("linux", "Build host/Linux FujiNet presets and library", Build.workflow_linux, workflow=True),
         t("amiga", "Build Amiga-facing library and nio-apps test apps", Build.workflow_amiga, workflow=True),
+        t("rp2350", "Test PIO and build the RP2350B Zorro bridge skeleton", Build.workflow_rp2350, workflow=True, help_text=Build.rp2350_help),
+        t("rp2350-pio-tests", "Build/run native epio PIO tests (Debug + Release; no hardware)", Build.rp2350_pio_tests, help_text=Build.rp2350_help),
+        t("rp2350-firmware", "Bootstrap/build RP2350B bridge ELF and UF2 (Pico SDK)", Build.rp2350_firmware, help_text=Build.rp2350_help),
         t("altirra", "Configure/build AltirraSDL with the workspace preset", Build.altirra),
         t("fujinet", "Build/test fujinet-nio TCP, PTY, and RS-232 presets", lambda b: (b.fujinet_tcp(), b.fujinet_pty(), b.fujinet_rs232())),
         t("fujinet-tcp", "Build/test fujinet-nio TCP debug and release", Build.fujinet_tcp),
