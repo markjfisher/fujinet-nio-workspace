@@ -69,6 +69,21 @@ class CompletionLogState:
     current_marker_match: bool = False
 
 
+@dataclass
+class SecondBootMonitor:
+    offset: int
+    state: CompletionLogState = CompletionLogState()
+
+    def poll(self, text: str, marker: str, *, peer_exited: bool, guest_log: str):
+        if peer_exited:
+            return False, "native peer exited"
+        if guest_reset_from_amiberry_log(guest_log):
+            return False, "guest reset"
+        found, self.state = scan_completion_log_chunk(text[self.offset:], marker, self.state)
+        self.offset = len(text)
+        return found, None
+
+
 def guest_reset_from_amiberry_log(text: str) -> bool:
     """A second DH0 HDF mount means Kickstart remounted after a Guru reset."""
     return text.count("Mounting uaehf.device:0 0") > 1
@@ -820,8 +835,14 @@ def run_amiga_case(amiga_environment: dict[str, str],
                    amiga_cases: dict[str, dict],
                    amiga_machine: dict[str, Any],
                    amiga_evidence_root: Path) -> Any:
-    def run(name: str) -> dict[str, str]:
-        case = amiga_cases[name]
+    def run(name: str, *, installation: str | None = None) -> dict[str, str]:
+        case = dict(amiga_cases[name])
+        if installation not in {None, "serial", "native"}:
+            raise ValueError(f"Unknown installation: {installation}")
+        if installation == "native":
+            case["nio_native_test"] = True
+        elif installation == "serial":
+            case["nio_native_test"] = False
         ordered_results = list(case.get("results", []))
         completion_mode = case.get("completion_mode")
         completion_log = case.get("completion_log")
@@ -838,9 +859,11 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 f"Amiberry case '{name}' uses expected_timeout but declares completion_log"
             )
         native_disk = bool(case.get("native_disk_fixture"))
+        ordinary_disk = bool(case.get("ordinary_disk_fixture"))
+        broker_disk = native_disk or ordinary_disk
         if native_disk and not (case.get("nio_broker") and case.get("nio_native_test") and case.get("driver")):
             raise AssertionError("native_disk_fixture requires native broker and driver")
-        if case.get("nio_broker") and case.get("driver") and not native_disk:
+        if case.get("nio_broker") and case.get("driver") and not broker_disk:
             raise AssertionError(
                 f"Amiberry case '{name}' sets nio_broker and driver; "
                 "isolated broker images must not install fujinet-disk.device"
@@ -875,10 +898,13 @@ def run_amiga_case(amiga_environment: dict[str, str],
         if not app.is_file():
             raise AssertionError(f"Amiga test application was not built: {app}")
 
-        run_dir = amiga_evidence_root / name
+        run_dir = amiga_evidence_root / (f"{name}-{installation}" if installation else name)
         run_dir.mkdir(parents=True, exist_ok=True)
         readonly_catalog_dir = None
-        host_root = run_dir / "fujinet-data"
+        if case.get("nio_native_test"):
+            shutil.rmtree(run_dir / "native-test-records", ignore_errors=True)
+        host_root = (run_dir / "native-test-records" / "host-fs"
+                     if case.get("nio_native_test") else run_dir / "fujinet-data")
         stale_catalog_dir = host_root / "FujiNet" / "app-store" / "v1" / "config-nio"
         if stale_catalog_dir.is_dir():
             stale_catalog_dir.chmod(0o755)
@@ -937,8 +963,29 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 check=True,
             )
 
+        if broker_disk:
+            native_host = host_root
+            native_host.mkdir(exist_ok=True)
+            # Originals stay outside the service's host root.
+            for fixture in (("fault", "resident") if case.get("native_fault") else ("read", "write", "bounds")):
+                original = run_dir / f"{fixture}-original.adf"
+                create_standard_adf(amiga_environment, original,
+                                    volume_name=f"NIO{fixture.upper()}")
+                # Seed the tested sector independently; keep a valid ADF header.
+                seeded = bytearray(original.read_bytes())
+                seeded[17 * 512:18 * 512] = bytes((i * 7 + 31) & 255 for i in range(512))
+                original.write_bytes(seeded)
+                shutil.copyfile(original, native_host / f"{fixture}.adf")
+        if case.get("tool_parity"):
+            (host_root / "listing").mkdir()
+            (host_root / "listing/parity.txt").write_bytes(b"parity\n")
+
         image = run_dir / f"amiga-{name}.hdf"
         startup = SUITE / case["startup"]
+        if case.get("tool_parity"):
+            text = startup.read_text().replace("@INSTALLATION@", installation or "serial")
+            startup = run_dir / "tool-parity.sequence"
+            startup.write_text(text)
         base_hdf = amiga_environment["AMIGA_ENV_BASE_HDF"]
         build_cmd = [
             str(ROOT / "scripts/build-amiga-test-disk"),
@@ -960,7 +1007,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 "--resident-loader", resident_loader,
                 "--resident-unloader", resident_unloader,
             ])
-            if native_disk:
+            if broker_disk:
                 build_cmd.extend(["--devs-file", driver_root / "build/amiga/fujinet-disk.device"])
             if case.get("fujinet_serial"):
                 serial_device = driver_root / "build/amiga/fujinet-serial.device"
@@ -1030,21 +1077,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
         if case.get("nio_native_test"):
             native_runner = build_native_test_runner(amiga_environment)
             native_record_dir = run_dir / "native-test-records"
-            shutil.rmtree(native_record_dir, ignore_errors=True)
             native_record_dir.mkdir(parents=True, exist_ok=True)
-            if native_disk:
-                native_host = native_record_dir / "host-fs"
-                native_host.mkdir()
-                # Originals stay outside the service's host root.
-                for fixture in ("read", "write", "bounds"):
-                    original = run_dir / f"{fixture}-original.adf"
-                    create_standard_adf(amiga_environment, original,
-                                        volume_name=f"NIO{fixture.upper()}")
-                    # Seed the tested sector independently; keep a valid ADF header.
-                    seeded = bytearray(original.read_bytes())
-                    seeded[17 * 512:18 * 512] = bytes((i * 7 + 31) & 255 for i in range(512))
-                    original.write_bytes(seeded)
-                    shutil.copyfile(original, native_host / f"{fixture}.adf")
             native_log = run_dir / "fujinet-nio-native-test.log"
             native_test_proc = subprocess.Popen(
                 [str(native_runner), "--dir", str(native_record_dir)],
@@ -1148,7 +1181,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
             # Fast-fail: if screen shows no movement at all for
             # `no_activity_timeout` s after boot, something is badly stuck.
             # ---------------------------------------------------------------
-            nio_log = run_dir / "fujinet-nio.log"
+            nio_log = run_dir / ("fujinet-nio-native-test.log" if case.get("nio_native_test") else "fujinet-nio.log")
             shots_dir = run_dir / "screenshots"
             shots_dir.mkdir(exist_ok=True)
             monitor_trace = run_dir / "completion-monitor.trace"
@@ -1365,20 +1398,21 @@ def run_amiga_case(amiga_environment: dict[str, str],
                 subprocess.run(second_build_cmd, cwd=ROOT, env=amiga_environment, check=True)
                 for stale_name in ("amiberry.sock.path", "amiberry.log", "fujinet-nio.log", "bridge.log"):
                     (run_dir / stale_name).unlink(missing_ok=True)
+                second_log = run_dir / ("fujinet-nio-native-test.log" if case.get("nio_native_test") else "fujinet-nio.log")
+                second_offset = len(read_log_text(second_log)) if case.get("nio_native_test") else 0
                 second_runner = subprocess.Popen(runner_args, cwd=ROOT, env=test_env)
                 second_deadline = time.monotonic() + activity_timeout
                 second_marker = False
-                second_offset = 0
+                second_monitor = SecondBootMonitor(second_offset)
+                second_failure = None
                 while time.monotonic() < second_deadline:
-                    second_log = run_dir / "fujinet-nio.log"
-                    if second_log.is_file():
-                        second_text = read_log_text(second_log)
-                        second_marker, _ = scan_completion_log_chunk(
-                            second_text[second_offset:], completion_log, CompletionLogState()
-                        )
-                        second_offset = len(second_text)
-                        if second_marker:
-                            break
+                    second_marker, second_failure = second_monitor.poll(
+                        read_log_text(second_log), completion_log,
+                        peer_exited=native_test_proc is not None and native_test_proc.poll() is not None,
+                        guest_log=read_log_text(run_dir / "amiberry.log"),
+                    )
+                    if second_failure or second_marker:
+                        break
                     if second_runner.poll() is not None:
                         break
                     time.sleep(0.2)
@@ -1387,8 +1421,8 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     second_socket = Path(second_socket_file.read_text(encoding="utf-8").strip())
                     _ipc_quit(second_socket)
                 _terminate_runner(second_runner)
-                if not second_marker:
-                    raise AssertionError("Amiberry second run did not reach its completion marker")
+                if second_failure or not second_marker:
+                    raise AssertionError(f"Amiberry second run failed: {second_failure or 'completion marker missing'}")
 
         finally:
             # Always ensure Amiberry and the runner are gone.
@@ -1440,7 +1474,7 @@ def run_amiga_case(amiga_environment: dict[str, str],
                     text=True,
                 )
                 results[result_name] = destination.read_text(encoding="latin-1")
-        mappings = run_dir / "fujinet-data" / "FujiNet" / "app-store" / "v1" / "config-nio" / "mappings.bin"
+        mappings = host_root / "FujiNet" / "app-store" / "v1" / "config-nio" / "mappings.bin"
         if mappings.is_file():
             results["_mappings"] = mappings.read_bytes().hex()
         return results

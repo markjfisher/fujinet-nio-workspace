@@ -1,0 +1,13 @@
+C:Assign T: RAM:
+C:FailAt 100
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:fujinet-nio-exchange --installed-backend @INSTALLATION@ --backend warm --type clock --trials 2 >DH0:parity-clock.result
+C:Echo "RC=$RC" >>DH0:parity-clock.result
+C:fujinet-nio-exchange --installed-backend @INSTALLATION@ --backend warm --type file-list --uri host:/listing/ --size 128 --trials 2 >DH0:parity-list.result
+C:Echo "RC=$RC" >>DH0:parity-list.result
+C:fujinet-nio-exchange --installed-backend @INSTALLATION@ --backend warm --type disk-read --slot 1 --lba 17 --fixture-uri host:/read.adf --disposable-fixture --trials 2 >DH0:parity-read.result
+C:Echo "RC=$RC" >>DH0:parity-read.result
+C:fujinet-nio-exchange --installed-backend @INSTALLATION@ --backend warm --type disk-write --slot 8 --lba 17 --fixture-uri host:/write.adf --disposable-fixture --write-intent --trials 3 >DH0:parity-write.result
+C:Echo "RC=$RC" >>DH0:parity-write.result
+C:fujinet-nio-exchange --installed-backend @INSTALLATION@ --backend warm --type file-list --uri host:/amiga-e2e-complete/nio-tool-parity --size 128 >NIL:

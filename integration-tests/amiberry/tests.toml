@@ -989,3 +989,50 @@ results = [
   "bounds.result",
   "disk-write.result",
 ]
+
+[[test]]
+name = "nio-native-fault-hold"
+project = "driver"
+app = "fujinet-nio-native-fault-probe"
+nio_broker = true
+nio_native_test = true
+driver = true
+native_disk_fixture = true
+native_fault = true
+timeout = 100
+activity_timeout = 80
+startup = "startup/nio-native-fault-hold.sequence"
+completion_mode = "host_file"
+completion_log = "complete"
+results = ["nio-fault.result"]
+
+[[test]]
+name = "nio-native-fault-drop"
+project = "driver"
+app = "fujinet-nio-native-fault-probe"
+nio_broker = true
+nio_native_test = true
+driver = true
+native_disk_fixture = true
+native_fault = true
+timeout = 100
+activity_timeout = 80
+startup = "startup/nio-native-fault-drop.sequence"
+completion_mode = "host_file"
+completion_log = "complete"
+results = ["nio-fault.result"]
+
+[[test]]
+name = "nio-tool-parity"
+project = "driver"
+app = "fujinet-nio-exchange"
+nio_broker = true
+driver = true
+ordinary_disk_fixture = true
+tool_parity = true
+timeout = 100
+activity_timeout = 80
+startup = "startup/nio-tool-parity.sequence"
+completion_mode = "nio_marker"
+completion_log = "host:/amiga-e2e-complete/nio-tool-parity"
+results = ["parity-clock.result", "parity-list.result", "parity-read.result", "parity-write.result"]

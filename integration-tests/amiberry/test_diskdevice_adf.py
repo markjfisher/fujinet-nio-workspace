@@ -1,5 +1,7 @@
-def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case):
-    results = run_amiga_case("diskdevice-adf")
+import pytest
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_standard_adf_mount_info_read_dir_and_type(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-adf", installation=installation)
 
     assert "MOUNTED drive=0 slot=1 readonly=1 sectorSize=512 sectorCount=1760" in results["disk-mount.result"]
     assert "EXEC BOUNDARY PASS commands=5 notifications=4 remove=1 queue=1 multi=2 cause=3" in results["disk-exec-boundary.result"]
@@ -102,8 +104,9 @@ def test_hd_adf_mount_geometry_dir_and_type(run_amiga_case):
     assert "STATUS drive=0 change=7 absent=0 protected=1" in results["hd-status.result"]
 
 
-def test_catalog_inspection_preserves_live_dd_handler(run_amiga_case):
-    results = run_amiga_case("diskdevice-inspect-catalog")
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_catalog_inspection_preserves_live_dd_handler(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-inspect-catalog", installation=installation)
     assert "Mounted slot 11 on DN0:" in results["inspect-mount.result"]
     assert "DIR RC=0" in results["inspect-pre-dir.result"]
     assert "KNOWN.TXT" in results["inspect-pre-dir.result"].upper()

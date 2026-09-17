@@ -26,6 +26,13 @@ needs positive 2-2/2-3 physical evidence and explicit human ABI approval;
 physical implementation still requires accepted 1-14. Historical 1-5 completion
 is preserved and supplemented by the exact revised evidence in this record.
 
+**Software guest acceptance, 2026-09-17:** the
+[1.14 technical acceptance](stories/1-14-accept-end-to-end-native-guest-parity-and-fault-isolation.md#technical-acceptance--2026-09-17)
+records passing serial/native guest media and real-service parity, actual queued
+and retrying caller containment, and the explicitly approved test-only
+peer-acknowledged recovery repair. This satisfies the 1.14 prerequisite only;
+2.4 approval, physical evidence and all other hardware gates remain required.
+
 ## Required prerequisites
 
 | Dispatch ID | Accepted prerequisites | Evidence/environment gate | Capability |

@@ -1,3 +1,4 @@
+import pytest
 import re
 
 
@@ -10,8 +11,9 @@ def _status(result):
     return tuple(int(value) for value in match.groups())
 
 
-def test_fmount_fumount_standard_adf(run_amiga_case):
-    results = run_amiga_case("diskdevice-fmount")
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_fmount_fumount_standard_adf(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-fmount", installation=installation)
 
     assert "LOAD RC=0" in results["fmount-load.result"]
     assert "FMOUNT RC=0" in results["fmount-mount.result"]
@@ -70,8 +72,9 @@ def test_fmount_fumount_standard_adf(run_amiga_case):
     assert results["_mappings"] == "0100000000010d00000000000000000000"
 
 
-def test_hd_stage8_replacement_and_writable_durability(run_amiga_case):
-    results = run_amiga_case("diskdevice-hd-stage8")
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_hd_stage8_replacement_and_writable_durability(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-hd-stage8", installation=installation)
 
     a_status = _status(results["hd-stage8-a-status.result"])
     b_status = _status(results["hd-stage8-b-status.result"])

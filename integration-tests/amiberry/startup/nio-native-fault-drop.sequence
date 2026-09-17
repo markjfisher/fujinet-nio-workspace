@@ -1,0 +1,6 @@
+C:Assign T: RAM:
+C:FailAt 100
+C:fujinet-load-resident DEVS:fujinet-nio.device fujinet-nio.device
+C:fujinet-load-resident DEVS:fujinet-disk.device fujinet-disk.device
+C:fujinet-nio-native-fault-probe drop >DH0:nio-fault.result
+C:Echo "RC=$RC" >>DH0:nio-fault.result

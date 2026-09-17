@@ -1,5 +1,7 @@
-def test_fmount_fumount_persisted_dd_hd_restore(run_amiga_case):
-    results = run_amiga_case("diskdevice-fmount-restore")
+import pytest
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_fmount_fumount_persisted_dd_hd_restore(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-fmount-restore", installation=installation)
 
     assert "DD FMOUNT RC=0" in results["restore-dd-mount.result"]
     assert "KNOWN.TXT" in results["restore-dd-before-dir.result"].upper()
@@ -34,8 +36,9 @@ def test_fmount_fumount_persisted_dd_hd_restore(run_amiga_case):
     assert results["_mappings"] == "01" + "00" * 16
 
 
-def test_invalid_persisted_mapping_fails_without_creating_node(run_amiga_case):
-    results = run_amiga_case("diskdevice-fmount-restore-invalid")
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_invalid_persisted_mapping_fails_without_creating_node(run_amiga_case, installation):
+    results = run_amiga_case("diskdevice-fmount-restore-invalid", installation=installation)
 
     assert "FMOUNTRESTORE unit=0 slot=99 rc=" in results["restore-invalid.result"]
     assert "RESTORE INVALID RC=0" not in results["restore-invalid.result"]

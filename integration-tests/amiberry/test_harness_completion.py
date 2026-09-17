@@ -2,6 +2,7 @@ from pathlib import Path
 
 from conftest import (
     CompletionLogState,
+    SecondBootMonitor,
     MonitorSnapshot,
     build_failure_report,
     checkpoint_progress,
@@ -287,3 +288,27 @@ def test_native_test_map_scan_rejects_serial_session_slip_symbols():
     assert not native_test_map_omits_serial_session_slip(
         " .text fujinet_nio_serial_backend_open\n"
     )
+
+
+def test_second_boot_ignores_old_marker_and_retains_split_new_marker():
+    marker = "host:/one-row"
+    complete = (
+        "fujibus: receive: id=1 dev=0xFE cmd=0x02 params=0 payload=20\n"
+        "fujibus:   0000: 68 6f 73 74 3a 2f 6f 6e 65 2d 72 6f 77 00 00 00 |host:/one-row...|\n"
+        "fujibus: send: dev=0xFE status=0 cmd=0x02 payload=0\n"
+    )
+    monitor = SecondBootMonitor(len(complete))
+    assert monitor.poll(complete, marker, peer_exited=False, guest_log="") == (False, None)
+    split = complete.index("send:") + 3
+    assert monitor.poll(complete + complete[:split], marker, peer_exited=False, guest_log="") == (False, None)
+    assert monitor.poll(complete * 2, marker, peer_exited=False, guest_log="") == (True, None)
+
+
+def test_second_boot_failure_precedes_even_a_valid_marker():
+    for peer, log, reason in (
+        (True, "", "native peer exited"),
+        (False, "Mounting uaehf.device:0 0\n" * 2, "guest reset"),
+    ):
+        monitor = SecondBootMonitor(0, CompletionLogState(current_marker_match=True))
+        assert monitor.poll("fujibus: send: dev=0xFE status=0 cmd=0x02 payload=0\n",
+                            "host:/one-row", peer_exited=peer, guest_log=log) == (False, reason)

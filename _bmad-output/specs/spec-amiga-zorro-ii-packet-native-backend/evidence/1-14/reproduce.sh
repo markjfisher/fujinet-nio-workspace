@@ -5,6 +5,14 @@ probe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 export NIO_WORKSPACE=$(git -C "$probe_dir" rev-parse --show-toplevel)
 source "$NIO_WORKSPACE/scripts/env.sh"
 cd "$NIO_WORKSPACE"
+# This preserved diagnostic embeds the pre-repair test helpers. Refuse to
+# silently compile it against a different adapter and mislabel the result.
+probe_baseline=1c37a6abe08556b57888bef8dcde4efd8ba6d564
+if [[ $(git -C repos/fujinet-nio-driver rev-parse HEAD) != "$probe_baseline" ]] ||
+   ! git -C repos/fujinet-nio-driver diff --quiet "$probe_baseline" -- amiga; then
+  echo "Historical reproducer requires clean driver revision $probe_baseline (use an isolated checkout)." >&2
+  exit 2
+fi
 probe_build=$(mktemp -d /tmp/story114-late-reply.XXXXXX)
 trap 'rm -rf "$probe_build"' EXIT
 cc -std=c99 -Wall -Wextra -Werror -pedantic -Wno-unused-function \

@@ -1,0 +1,162 @@
+{
+  "hold": {
+    "evidence_directory": "test-evidence/amiberry-20260917-134016/nio-native-fault-hold",
+    "requests": [
+      [
+        "0xFC",
+        "0x01"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ],
+      [
+        "0xFC",
+        "0x01"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x05"
+      ],
+      [
+        "0xFC",
+        "0x06"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ]
+    ],
+    "images": {
+      "fault": {
+        "original_sha256": "9e3ef5e40eba0f9c992cdb6287a0a443ec2214957c5463bc6820ee71dfda6802",
+        "actual_sha256": "7bee80f69d5a0564a64c1a1384a4d14e1b8847257ceae9d4a810b8634fa9358c",
+        "expected_sha256": "7bee80f69d5a0564a64c1a1384a4d14e1b8847257ceae9d4a810b8634fa9358c",
+        "changed_sectors": [
+          17,
+          18
+        ]
+      },
+      "resident": {
+        "original_sha256": "feffd8d5bbca5fdc34229322b0573b5c14c032b6129e6bdb0327864b18b870ec",
+        "actual_sha256": "110be86dcfb4842a31b372c1cc3c09e91a5b3491eac243e4657df3243400143d",
+        "expected_sha256": "110be86dcfb4842a31b372c1cc3c09e91a5b3491eac243e4657df3243400143d",
+        "changed_sectors": [
+          17
+        ]
+      }
+    }
+  },
+  "drop": {
+    "evidence_directory": "test-evidence/amiberry-20260917-134016/nio-native-fault-drop",
+    "requests": [
+      [
+        "0xFC",
+        "0x01"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ],
+      [
+        "0xFC",
+        "0x01"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x05"
+      ],
+      [
+        "0xFC",
+        "0x06"
+      ],
+      [
+        "0xFC",
+        "0x04"
+      ],
+      [
+        "0xFC",
+        "0x0E"
+      ],
+      [
+        "0xFC",
+        "0x03"
+      ]
+    ],
+    "images": {
+      "fault": {
+        "original_sha256": "8648483f177f61e2066169e0ac9103de08bfba9e997f515a53d1a962da86e6a6",
+        "actual_sha256": "401808b79e1db6a8ae4c5b4c0e44cd612c5b200b0da7937b8b33865fe69ea182",
+        "expected_sha256": "401808b79e1db6a8ae4c5b4c0e44cd612c5b200b0da7937b8b33865fe69ea182",
+        "changed_sectors": [
+          17,
+          18
+        ]
+      },
+      "resident": {
+        "original_sha256": "93c514f4902bb7fa115a56167eb27f64a9c7410f434baedd6ddac36238e03d35",
+        "actual_sha256": "cf53e06eeb14120a85c0fdab7ea3ce2a245a546ba7b8c3ecee03fb3714a6157b",
+        "expected_sha256": "cf53e06eeb14120a85c0fdab7ea3ce2a245a546ba7b8c3ecee03fb3714a6157b",
+        "changed_sectors": [
+          17
+        ]
+      }
+    }
+  }
+}

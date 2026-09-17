@@ -1,0 +1,8 @@
+QUEUED completions=2 isolated=1
+RETRY rc=16 length=0
+RECOVERY first-write-only=1
+FRESH same-command-lba18=1
+RESIDENT retries=3 error=20 actual=0 isolated=1
+RESIDENT recovered=1
+PASS native-fault
+RC=0

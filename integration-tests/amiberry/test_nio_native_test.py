@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 import re
 import time
@@ -152,3 +153,85 @@ def test_native_exchange_tool_disk(run_amiga_case, amiga_evidence_root):
     assert sum(cmd == 1 for _, cmd in disk) == 4
     assert not any(cmd == 2 for _, cmd in disk)  # no raw unmount/eject
     assert (run / "native-test-records" / "complete").read_text() == "PASS\n"
+
+
+@pytest.mark.parametrize("fault", ["hold", "drop"])
+def test_native_fault_isolation(run_amiga_case, amiga_evidence_root, fault):
+    name = f"nio-native-fault-{fault}"
+    results = run_amiga_case(name)
+    if fault == "hold":
+        assert "LATE actual-reply-visible=1" in results["nio-fault.result"]
+    assert "QUEUED completions=2 isolated=1" in results["nio-fault.result"]
+    assert "RETRY rc=16 length=0" in results["nio-fault.result"]
+    assert "RECOVERY first-write-only=1" in results["nio-fault.result"]
+    assert "FRESH same-command-lba18=1" in results["nio-fault.result"]
+    assert re.search(r"RESIDENT retries=\d+ error=-?\d+ actual=0 isolated=1", results["nio-fault.result"])
+    assert "RESIDENT recovered=1" in results["nio-fault.result"]
+    assert "PASS native-fault" in results["nio-fault.result"]
+    run = amiga_evidence_root / name
+    expected = bytearray((run / "fault-original.adf").read_bytes())
+    expected[17 * 512:18 * 512] = bytes((i + 0x31) & 255 for i in range(512))
+    expected[18 * 512:19 * 512] = bytes((i + 0x71) & 255 for i in range(512))
+    records = run / "native-test-records"
+    assert (records / "host-fs/fault.adf").read_bytes() == expected
+    log = (run / "fujinet-nio-native-test.log").read_text()
+    requests = re.findall(r"fujibus: receive: .*dev=(0x[0-9A-Fa-f]+) cmd=(0x[0-9A-Fa-f]+)", log)
+    assert requests[:7] == [("0xFC", "0x01"), ("0xFC", "0x04"), ("0xFC", "0x0E"), ("0xFC", "0x03"), ("0xFC", "0x04"), ("0xFC", "0x0E"), ("0xFC", "0x03")]
+    assert requests[7:].count(("0xFC", "0x04")) == 1  # actual resident retry loop sent once
+    resident = bytearray((run / "resident-original.adf").read_bytes())
+    resident[17 * 512:18 * 512] = bytes((i + 0x91) & 255 for i in range(512))
+    assert (records / "host-fs/resident.adf").read_bytes() == resident
+    assert f"native-test actual reply {fault}" in log
+    assert "native-test barrier drained" in log
+    assert not (records / "AMBIGUOUS").exists()
+    assert not (records / "RECOVER").exists()
+
+
+@pytest.mark.parametrize("installation", ["serial", "native"])
+def test_exchange_tool_installation_parity(run_amiga_case, amiga_evidence_root, installation):
+    started = int(time.time())
+    results = run_amiga_case("nio-tool-parity", installation=installation)
+    finished = int(time.time())
+    for name, text in results.items():
+        assert "RC=0" in text.splitlines(), (name, text)
+    for kind, response_length in (("clock", 19), ("list", 45)):
+        text = results[f"parity-{kind}.result"]
+        assert f"installed_backend={installation} lifecycle=warm" in text
+        trials = [line for line in text.splitlines() if line.startswith("req_len=")]
+        assert len(trials) == 2
+        for trial in trials:
+            assert f"resp_len={response_length} " in trial
+            assert "result=0 cause=0 native=0 status=0" in trial
+    for kind, trials in (("read", 2), ("write", 3)):
+        assert f"ORDINARY PASS completed_trials={trials} failure=none" in results[f"parity-{kind}.result"]
+    run = amiga_evidence_root / f"nio-tool-parity-{installation}"
+    host = run / ("native-test-records/host-fs" if installation == "native" else "fujinet-data")
+    seed = (run / "read-original.adf").read_bytes()
+    assert (host / "read.adf").read_bytes() == seed
+    assert (host / "bounds.adf").read_bytes() == (run / "bounds-original.adf").read_bytes()
+    digest = 2166136261
+    for value in seed[17 * 512:18 * 512]:
+        digest = ((digest ^ value) * 16777619) & 0xffffffff
+    assert re.findall(r"ordinary read trial=(\d+) checksum_fnv1a32=([0-9a-f]{8})", results["parity-read.result"]) == [(str(i), f"{digest:08x}") for i in (1, 2)]
+    expected = bytearray((run / "write-original.adf").read_bytes())
+    expected[17 * 512:18 * 512] = bytes(((i ^ 0x5a) ^ (2 >> ((i % 4) * 8))) & 255 for i in range(512))
+    assert (host / "write.adf").read_bytes() == expected
+    log = (run / ("fujinet-nio-native-test.log" if installation == "native" else "fujinet-nio.log")).read_text()
+    assert len(re.findall(r"fujibus: receive: .*dev=0xFC cmd=0x04", log)) == 3
+    # Independent real-service clock payload oracle, not parity equality alone.
+    dumps = re.findall(r"fujibus: send: dev=0x45 status=0 cmd=0x01 payload=12(.*?)(?=fujibus: receive:|\Z)", log, re.S)
+    assert len(dumps) >= 2
+    for dump in dumps:
+        data = bytes.fromhex(" ".join(re.findall(r"fujibus:   [0-9a-f]{4}: ([0-9a-f ]+)\|", dump)))[:12]
+        assert data[:4] == b"\x01\0\0\0"
+        assert started <= int.from_bytes(data[4:], "little") <= finished
+    assert (host / "listing/parity.txt").read_bytes() == b"parity\n"
+
+    lists = re.findall(r"fujibus: send: dev=0xFE status=0 cmd=0x02 payload=38(.*?)(?=fujibus: receive:|\Z)", log, re.S)
+    assert len(lists) == 2
+    for dump in lists:
+        data = bytes.fromhex(" ".join(re.findall(r"fujibus:   [0-9a-f]{4}: ([0-9a-f ]+)\|", dump)))[:38]
+        assert data[:12] == bytes([1, 0, 0, 0, 0, 0, 1, 0, 28, 0, 0, 10])
+        assert data[12:22] == b"parity.txt"
+        assert int.from_bytes(data[22:30], "little") == 7
+        assert len(data) == 38
