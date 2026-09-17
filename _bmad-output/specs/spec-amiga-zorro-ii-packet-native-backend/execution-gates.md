@@ -52,7 +52,7 @@ peer-acknowledged recovery repair. This satisfies the 1.14 prerequisite only;
 | 1-13 | 1-7, 1-8 | Host media/catalogue lifecycle parity | CAP-4 |
 | 1-14 | 1-6, 1-10, 1-11, 1-12, 1-13 | Actual guest/resident-driver and real-core acceptance | CAP-3, CAP-4 |
 | 2-1 | None | Verified standalone toolchain/build; no hardware needed | CAP-5 |
-| 2-2 | 2-1 | Suitable RP2350B/Zorro hardware and instruments | CAP-5 |
+| 2-2 | 2-1 | Independent RP2040/Core2350B 3.3 V bench first; instruments and buffered actual-host fixture for timing/real-bus evidence | CAP-5 |
 | 2-3 | 2-1 | RP2350B/ESP32-S3 link hardware and instruments; independent of 2-2 | CAP-5 |
 | 2-4 | 1-6, 2-2, 2-3 | Accepted software contract, positive relevant feasibility and explicit ABI agreement | CAP-6 |
 | 3-1 | 1-14, 2-4 | Suitable Zorro hardware and ABI-conforming access fixture | CAP-3, CAP-7 |
@@ -62,6 +62,10 @@ peer-acknowledged recovery repair. This satisfies the 1.14 prerequisite only;
 | 3-5 | 3-4 | Physical media/catalogue acceptance | CAP-8 |
 | 3-6 | 3-4 | Human review before fault injection and after physical evidence | CAP-3, CAP-8 |
 | 3-7 | 3-5, 3-6 | Accepted physical parity/recovery plus actual measurements/install validation | CAP-8 |
+
+## Story 2.2 staged hardware gate
+
+Read the mandatory [experiment plan](../../../repos/fujinet-nio/bridges/rp2350-zorro/docs/story-2-2-experiment-plan.md) before dispatch. Host tests and target implementation may proceed before later hardware arrives. Initial independent RP2040/Core2350B capture uses USB diagnostics; externally measured timing and release require adequate instruments. The available TZT RP2040 clone needs verified pinout/flash configuration, and the available scope needs identified capabilities. Real-bus work additionally requires the passive breakout, A500 adapter/host and reviewed buffering. Missing equipment blocks its dependent experiments only. Separate partial bench progress from the positive relevant real-bus evidence required by 2-4; synthetic success cannot release that gate. No ESP project or final physical ABI is part of 2-2. E0–E7 are work packages within the existing dispatch ID, not new stories.
 
 ## Technical acceptance and human checkpoints
 

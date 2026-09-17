@@ -3,6 +3,7 @@ id: SPEC-amiga-zorro-ii-packet-native-backend
 companions:
   - ../../planning-artifacts/epics.md
   - execution-gates.md
+  - ../../../repos/fujinet-nio/bridges/rp2350-zorro/docs/story-2-2-experiment-plan.md
 sources: []
 ---
 
@@ -56,10 +57,12 @@ Amiga users need a future Zorro-II connection through an RP2350B bridge to ESP32
 
 - Bridge hardware/PIO development is test-first with epio tests of shared apio C program/configuration sources; no `.pio` text programs or pioasm generation workflow. Story 2.1 requires independent native tests and a Pico SDK RP2350B firmware build, compatible pinned dependencies and a clean bootstrap; its adopted epic contract defines acceptance and verification. This policy also applies to later feasibility and production PIO work.
 
+- Story 2.2 uses an independent RP2040 PIO generator and Core2350B DUT with separate USB consoles, common GND and 3.3 V synthetic signals. Reuse the 2.1 build/test skeleton and shared APIO sources; verify the RP2040 loader compatibility rather than assuming upstream hardware support. Progress from four-bit capture to wider/control/pressure/read/release/reset tests, then instrumented real-bus validation. The adopted experiment companion defines staged gates and evidence. USB functional results, epio and loopback cannot establish Zorro timing feasibility. No ESP project or bridge-link protocol belongs to 2.2.
+
 ## Non-goals
 
 - No code implementation, hardware ordering or fabricated readiness evidence as part of creating this package.
-- No electrical, pin-mapping or routing changes; no HDF/RDB expansion or reopening accepted broker/media work without a demonstrated regression or separate scope decision.
+- No production electrical, pin-mapping or routing redesign; Story 2.2 temporary lab wiring and protective buffering are authorized within its documented fixture gates; no HDF/RDB expansion or reopening accepted broker/media work without a demonstrated regression or separate scope decision.
 - No premature register map, mailbox layout, RP2350 task/core/PIO architecture, bridge-to-ESP protocol, queue depth, timing value or numerical performance target.
 - No new plugin/runtime-backend framework, duplicate service stack or automatic physical failover.
 
@@ -72,4 +75,5 @@ The native software path passes real-service and Amiga guest parity without SLIP
 - At 1.4–1.6: resolved at the software boundary by the [2026-09-15 acceptance record](stories/1-6-accept-the-canonical-software-packet-contract-for-bridge-design.md#technical-acceptance-record--2026-09-15): explicit packet outcomes, backend quarantine and independent quiescence proof contain ambiguous completion through unchanged callers. Known-completion application replay remains documented existing policy. Physical realization of the proof remains Epic 2 work; an incompatible later adapter still requires scope review.
 - At 1.9: which verified guest/host test facility will connect the real Amiga tool/backend to real core services?
 - At 2.1–2.4: which verified toolchain, PIO/link capabilities and evidence-backed physical ABI satisfy the accepted packet contract? These remain deliberately unresolved until their gates.
+- At 2.2: verify the TZT Pico-style RP2040 clone header map/flash configuration, APIO loader seam and available oscilloscope specifications. USB diagnostics suffice for initial functional tests; timing/release and later actual-bus evidence retain their measurement gates.
 - After 2.4: does 3.2 require smaller implementation slices? Runtime tuning and throughput claims remain dependent on measured hardware data.

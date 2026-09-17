@@ -31,7 +31,7 @@ Planning-only input for a future Amiga Zorro-II packet-native backend, using an 
 
 The user's detailed planning request and `backlog/amiga-faster-backends.md` supply feature requirements; no separate feature PRD was supplied. Existing broker architecture supplies the brownfield constraints. Completed specs are historical evidence, not instructions to repeat completed work. Sources under `_bmad-output/archive/` are excluded. Actual code takes precedence where a historical description no longer matches implementation; discrepancies below must be resolved explicitly, not silently interpreted as implemented capabilities.
 
-No code, electrical design, routing, pin mapping, or hardware ABI changes are authorized by this planning task.
+This planning artifact does not itself implement code or approve a hardware ABI. The Story 2.2 user amendment authorizes temporary lab fixture wiring and protective buffering; production electrical design, routing and pin mapping remain outside its scope.
 
 User corrections (2026-09-11) take precedence over inherited architecture constraints for this feature: preserve observable ordering and ownership initially without permanently mandating a single-worker FIFO implementation; allow future internal queueing, but prohibit multiple remotely in-flight exchanges until a future design adds safe correlation. A Zorro installation uses only its Zorro backend, with no assumed serial backend, runtime fallback, or automatic physical transport failover. Serial remains a separate-deployment compatibility/test baseline only.
 
@@ -73,7 +73,7 @@ FR16: Decompose the confirmed design into small, dependency-ordered, independent
 
 ### NonFunctional Requirements
 
-NFR1: No changes to FujiBus semantics or electrical mapping/routing; no speculative hardware ABI or bridge-link protocol disguised as a software prerequisite.
+NFR1: No changes to FujiBus semantics or production electrical mapping/routing; temporary Story 2.2 laboratory fixtures follow its experiment gates; no speculative hardware ABI or bridge-link protocol disguised as a software prerequisite.
 
 NFR2: Minimize new abstractions and cross-repository changes. The existing Amiga backend contract is the default seam; the existing C++ transport/framer split is retained and corrected only where required for native packets.
 
@@ -265,7 +265,7 @@ Bridge developers obtain an isolated, reproducible project starting point and de
 
 **Epic acceptance boundary:** Project setup and the feasibility verdict are independently reviewable outcomes: the bridge project builds without disturbing existing targets, and hardware/PIO evidence states its limitations. A positive feasibility verdict may be recorded while Epic 1 is still underway, but it does not approve the ABI. ABI finalization/sign-off requires both positive feasibility evidence and a cited acceptance record from Epic 1 covering the canonical raw FujiBus packet representation, packet-boundary semantics, ownership rules, and relevant failure behavior. The agreed ABI must satisfy that contract, serialized remote execution, and safe reset/recovery. Until both prerequisites and explicit ABI approval exist, Epic 3 remains blocked. A feasibility hold records unresolved conditions and cannot be treated as acceptance of an ABI or production implementation.
 
-**Risks/unknowns:** PIO resources and response timing, electrical/bus access constraints, supported transfer sizes, packet storage, the RP2350-to-ESP transport, reset across both endpoints, toolchain placement, and instrumentation availability. This epic cannot alter electrical routing or pin mapping under the current scope; any required hardware change needs separate authority.
+**Risks/unknowns:** PIO resources and response timing, electrical/bus access constraints, supported transfer sizes, packet storage, the RP2350-to-ESP transport, reset across both endpoints, toolchain placement, and instrumentation availability. This epic cannot redesign production electrical routing or pin mapping under the current scope. Story 2.2 permits temporary lab wiring and protective buffering; a required production hardware redesign needs separate authority.
 
 ### Epic 3: Amiga users can operate a validated Zorro-only FujiNet installation
 
@@ -732,25 +732,44 @@ As a hardware/firmware developer,
 I want measured bus-facing feasibility results,
 So that unsupported timing or PIO assumptions are discovered before ABI commitment.
 
-**Objective / scope:** Implement a bounded experimental bus-access/PIO test using the existing hardware design and authoritative bus requirements. Record resources, tested conditions, observed timing and limitations. Experiments are disposable probes, not a production firmware architecture.
+**Objective / scope:** Establish RP2350B Zorro-facing feasibility incrementally using the Story 2.1 project. A separate RP2040 generates independent PIO stimulus at 3.3 V; the Core2350B captures/responds and both report over USB. Begin with the existing four-bit /AS program, progress to representative bus operations, then validate on the actual bus when the passive breakout, A500/Zorro-II adapter and appropriate buffering/instrumentation are available. This is laboratory bus probing, not FujiBus integration or the RP2350-to-ESP link (2.3).
 
-**Likely files/modules:** Proposed bridge `tests/feasibility/` and evidence under owning firmware docs; existing hardware documentation is read-only input. No electrical mapping/routing changes.
+**Required experiment companion:** [Story 2.2 experiment plan and implementation breakdown](../../repos/fujinet-nio/bridges/rp2350-zorro/docs/story-2-2-experiment-plan.md). Its W0/W1 wiring profiles, C0–C10 cases, E0–E7 work packages, planned targets/commands and evidence rules are mandatory input. Proposed commands are not yet implemented.
 
-**Dependencies:** 2.1. No dependency on Epic 1. **Hardware required:** Yes: suitable RP2350B/Zorro fixtures and instrumentation. **Requirements:** FR13, FR14. **Verification:** V-HW with a reviewed experiment procedure and captured measurements.
+**Likely files/modules:** Existing `repos/fujinet-nio/bridges/rp2350-zorro/` CMake/bootstrap, shared APIO sources, `src/feasibility/`, `lab/rp2040/`, `tests/feasibility/` and owning bridge documentation. Add discoverable workspace build/run wrappers with focused tests. RP2040 firmware is test equipment, not product firmware. Temporary lab wiring and later protective buffering are in scope; production electrical/pin-mapping/routing redesign is not.
+
+**Dependencies:** 2.1. No dependency on Epic 1. **Hardware required:** Stage-specific: available Core2350B, TZT Pico-style RP2040 USB-C/40-pin board, breadboard/leads and common GND for the 3.3 V bench; available oscilloscope for later measured timing/release (specifications to verify); real host/adapter/breakout and reviewed buffering for actual-bus validation. Verify the clone's header map and flash/SDK configuration. ESP32-S3 is not used. **Requirements:** FR13, FR14. **Verification:** V-HW, shared-source epio tests and reproducible independent builds.
 
 **Acceptance Criteria:**
 
-**Given** identified board/pin mapping and bus requirements
-**When** the experiment runs under documented conditions
-**Then** evidence states which access/timing obligations are met or unmet
-**And** resource/clock assumptions are measured or explicitly unverified.
+**Given** the Story 2.1 skeleton and identified boards
+**When** the experiment targets are implemented
+**Then** existing builds/tests remain independent and the same DUT APIO source runs under epio and on RP2350B
+**And** new representable behavior has failing-then-passing epio evidence; model gaps have explicit physical test oracles, never fabricated emulator coverage
+**And** the RP2040 APIO instruction-builder/SDK-loader seam is verified before use because pinned apio hardware initialization is RP2350-specific; no `.pio` text or pioasm exception is introduced.
 
-**Given** the results
+**Given** independent RP2040 stimulus and the documented W0 fixture
+**When** patterns, held-active /AS, data changes during assertion, repeated assertions and shorter pulses/gaps run
+**Then** expected versus observed words/counts and losses establish the behavior and limits of the existing four-bit capture
+**And** USB diagnostics provide functional evidence without claiming externally measured timing.
+
+**Given** W0 evidence and the reviewed wider fixture
+**When** data/control groups, R/W/strobes, FIFO pressure, reads, direction/release and reset/recovery are exercised
+**Then** independent expectations, bounded fault handling, resource budgets and external measurements expose supported conditions and failures
+**And** blocking FIFO behavior is not mistaken for lossless capture, synthetic selection is not full address-decode proof, and provisional acknowledgement is not a final register/mailbox ABI.
+
+**Given** identified authoritative bus requirements and the later actual-host fixture
+**When** representative real-bus accesses run through reviewed buffering with adequate instrumentation
+**Then** the report maps applicable requirements to traces, observed bounds, measurement uncertainty and margins
+**And** preserves wiring, firmware revisions/hashes, run commands, expected/observed results, failures and untested conditions.
+
+**Given** the complete or partial results
 **When** feasibility is reviewed
-**Then** a proceed/hold conclusion and remaining experiments are recorded
-**And** no ABI is approved merely because the probe works. A required hardware redesign is escalated outside this scope.
+**Then** software verification, physical bench functionality, bench timing characterization and real-bus proceed/hold are reported separately
+**And** missing relevant real-bus evidence keeps the 2.4 prerequisite on hold; epio, loopback or synthetic success alone never establishes Zorro timing feasibility
+**And** no ESP project, bridge-to-ESP protocol or final mailbox/register ABI is created. Required production hardware redesign is escalated outside this scope.
 
-**Risks/unknowns:** Instrument availability, representative bus load, synchronization and PIO resource limits. Do not extrapolate untested timing conditions into production guarantees.
+**Risks/unknowns:** Clone pinout/flash configuration, APIO stimulus portability, scope bandwidth/channels, breadboard signal quality, representative bus loading, input synchronization, output release and PIO resources. Missing later equipment blocks only dependent experiments, not host implementation or initial USB-observed bench work. No untested timing condition becomes a production guarantee.
 
 ### Story 2.3: Establish bridge-to-ESP transfer and reset feasibility
 
