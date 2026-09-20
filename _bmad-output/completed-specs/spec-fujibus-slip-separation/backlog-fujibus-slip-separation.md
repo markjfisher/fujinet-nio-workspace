@@ -12,7 +12,7 @@ isolation.
 ## Background and motivation
 
 The architecture docs (`docs/architecture.md`, `docs/driver_architecture.md`,
-`docs/amiga-floppy-channel.md`) are explicit and consistent: FujiBus is the
+`docs/amiga/amiga-floppy-channel.md`) are explicit and consistent: FujiBus is the
 logical packet protocol; SLIP is one framing mechanism used to carry FujiBus
 over byte-stream channels. They are intentionally distinct concepts and must
 not be used interchangeably.
@@ -36,7 +36,7 @@ plugging a different framer under a shared FujiBus parser.
 The intended future channels explicitly call for this separation:
 
 - Amiga Zorro — parallel, packet-native; no SLIP
-- Amiga floppy/Pico — `docs/amiga-floppy-channel.md` explicitly states "the
+- Amiga floppy/Pico — `docs/amiga/amiga-floppy-channel.md` explicitly states "the
   integrated design will not use SLIP between Pico and ESP32"
 - USB CDC on existing hardware — could reuse packet-native FujiBus once framing
   is decoupled
@@ -176,7 +176,7 @@ by this refactor; it is on the Amiga side of the broker, not the ESP side.
 
 - `docs/driver_architecture.md` §"Channel framing and transport" — the
   intended interface contract for channel adapters
-- `docs/amiga-floppy-channel.md` §"Why the integrated channel will not use
+- `docs/amiga/amiga-floppy-channel.md` §"Why the integrated channel will not use
   SLIP" — the explicit rationale for packet-native framing
 - `docs/architecture.md` §"FujiBus & SLIP Protocol Layer" — the layer
   separation intent
