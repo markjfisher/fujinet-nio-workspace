@@ -331,9 +331,9 @@ without replaying uncertain operations or affecting another client.
 execute against production NetworkDevice over native `$7F`, including correct
 bytes and exactly-once commit, and installer, error, recovery and RAM gates
 pass. The permanent allocation, including code, data, BSS, buffers, zero page
-and retained workspace, is at most 3,072 bytes. Embedded-adapter BASIC
-acceptance remains an explicit outstanding verification item; NetSIO results do
-not establish physical SIO reset detection or electrical behavior.
+and retained workspace, is at most 3,072 bytes. MyDOS BASIC READ/PUT/POST acceptance is verified through the embedded AltirraSDL
+adapter as well as NetSIO. Neither virtual result establishes physical SIO
+reset detection or electrical behavior.
 
 **Follow-on compatibility targets:** Atari DOS 2.0S and 2.5, SpartaDOS and
 SpartaDOS X, using the same resident module with DOS-appropriate installation.

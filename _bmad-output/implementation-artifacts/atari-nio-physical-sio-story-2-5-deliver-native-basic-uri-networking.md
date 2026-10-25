@@ -49,8 +49,8 @@ ownership and allow subsequent OPEN. Genuine BASIC READ/PUT/POST acceptance and
 recovery evidence are required; virtual evidence is not physical proof.
 
 Follow-on targets are Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X, reusing
-the resident module with DOS-appropriate installation. Their compatibility and
-the embedded-adapter BASIC lifecycle remain unverified. Future `config://`
+the resident module with DOS-appropriate installation. Their compatibility remains unverified. The embedded-adapter BASIC lifecycle
+is verified as recorded below. Future `config://`
 access to files from the original configuration/boot disk after a DOS is
 selected is a deferred idea, not a current feature or requirement.
 </frozen-after-approval>
@@ -60,8 +60,8 @@ selected is a deferred idea, not a current feature or requirement.
 **In progress.** The user has removed configuration-ATR installation from this
 story; the earlier closure review below is historical. Genuine OS warm-start
 persistence remains an unmet acceptance criterion. Embedded-adapter BASIC
-acceptance and physical SIO reset detection are explicitly outstanding and
-must not be inferred from NetSIO results.
+acceptance is now independently verified below; physical SIO reset detection
+remains outstanding and must not be inferred from virtual results.
 
 | Requirement | Current evidence and status |
 | --- | --- |
@@ -72,7 +72,7 @@ must not be inferred from NetSIO results.
 | Reset session reclamation, no flush or commit | **Verified for NetSIO host-reset event:** `test-evidence/atari-sio-reclaim-reset-final-20261025-105524-kwa8m3j9/` and owner-isolation tests. Physical SIO host-reset detection remains **unverified**. |
 | Genuine OS warm-start resident persistence | **Outstanding.** The observed manual reset took the OS cold path (`WARMST=0`), so equal resident bytes resulted from reinstallation; it cannot establish warm persistence. See `test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`. |
 | Cold boot reinstalls | **Verified in the NetSIO reset acceptance:** explicit cold boot restores deliberately altered resident code via MyDOS startup. |
-| Embedded-adapter BASIC acceptance | **Outstanding verification:** no Story 2.5 BASIC lifecycle on that adapter is established by the Story 2.4 public-API test. |
+| Embedded-adapter BASIC acceptance | **Verified:** genuine MyDOS BASIC READ, PUT and POST through the embedded production NetworkDevice; see the embedded acceptance evidence below. |
 
 Other DOS compatibility targets and `config://` are follow-on work, not
 Story 2.5 closure requirements. No additional test has been run as part of
@@ -1789,3 +1789,56 @@ cleared it along with DOSINI. Thus this MyDOS control already has the disk
 boot flag required for a warm-start DOSINI call. Evidence:
 `test-evidence/atari-sio-bootq-observe-20261025-1135/netsio/reset-owner-watch.json`.
 The interactive snapshots now also record BOOTQ, COLDST, CARTCK and PUPBT.
+
+
+### Embedded AltirraSDL BASIC READ/PUT/POST acceptance
+
+The existing embedded public-API acceptance fixture now also recognizes the
+resident BASIC fixture URIs and validates their complete bodies, flags and
+terminal commits through the production NetworkDevice. The runner reuses the
+same MyDOS ATR, installer, BASIC LOAD/RUN driver, retained-memory checks and
+NetworkDevice trace assertions as NetSIO. MyDOS D1 is mounted directly in
+Altirra; native `$7f` networking passes through the embedded adapter and
+production frontend, routing and NetworkDevice. No handler, production
+network semantics or config ATR was changed. The AltirraSDL test-fixture
+commit is `90188fd16fd9242f874ff620902c20732189afb9`.
+
+- READ: `test-evidence/atari-sio-embedded-basic-read-20261025-115849-4nj_z1nz/`
+  records `NE`, EOF 136 and one CLOSE.
+- PUT: `test-evidence/atari-sio-embedded-basic-put-20261025-115930-b99rr25k/`
+  checks exact `BCD,$9b` and 127 `A` bytes plus `$9b`, with one zero-length
+  commit and one CLOSE for each body.
+- POST: `test-evidence/atari-sio-embedded-basic-post-20261025-115932-w3kcr6rx/`
+  checks method 2, flag `$04`, exact `POST,$9b`, one zero-length commit,
+  response `N` and one CLOSE.
+
+All three record exact tokenized program loading, keyboard input, screens, CPU
+state and production service logs. They retain N: HATABS table `$24bb`, MEMLO
+`$2806`, MEMTOP `$9c1f`, and identical resident CODE SHA-256
+`ed245f701963caa69564be9735e796cae5f09b30a044914ddcebdd474ac1e3c6` across
+BASIC execution. Permanent RAM remains 2,360 bytes. The same guest results and
+body/commit observations were previously verified through NetSIO (see the
+reclamation runs above). Fresh NetSIO READ, PUT and POST regressions also
+passed at `test-evidence/atari-sio-embedded-increment-netsio-read-20261025-120021-naq_xrvc/`,
+`test-evidence/atari-sio-embedded-increment-netsio-put-20261025-120048-_qsc2nn8/`
+and `test-evidence/atari-sio-embedded-increment-netsio-post-20261025-120116-3s_8sm5v/`.
+Direct D1 mounting in the embedded runs does not claim NetSIO disk coverage.
+
+After `source scripts/env.sh`, verification:
+
+```sh
+cmake --build repos/AltirraSDL/build/linux-debug --target AltirraSDL -j6
+ctest --test-dir repos/AltirraSDL/build/linux-debug -R '^altirra-fujinet-nio-sio$' --output-on-failure
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --public-api-clock-altirra-embedded --timeout 40 --evidence-dir test-evidence/atari-sio-embedded-public-regression --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --embedded-basic --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-basic-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --embedded-basic --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-basic-put --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --embedded-basic --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-basic-post --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-increment-netsio-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-increment-netsio-put --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-embedded-increment-netsio-post --json
+```
+
+Story 2.5 remains in progress; this increment does not establish genuine OS
+warm-start persistence or physical SIO reset detection.
