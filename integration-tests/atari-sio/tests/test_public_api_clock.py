@@ -12,6 +12,14 @@ import run_boot_acceptance as boot_runner
 
 
 class PublicApiClockTests(unittest.TestCase):
+    def test_mydos_trace_requires_sd_boot_and_observed_status_aux(self):
+        trace = '\n'.join(('31 52 01 00 84', '31 52 02 00 85',
+                           '31 52 03 00 86', '31 53 28 00 AC', 'DATA_BLOCK[128]'))
+        self.assertEqual(len(boot_runner.verify_mydos_trace(trace)['mydos_sd_commands']), 4)
+        for line in trace.splitlines():
+            with self.assertRaises(RuntimeError):
+                boot_runner.verify_mydos_trace(trace.replace(line, ''))
+
     def test_guest_uses_public_apis_without_sio_framing(self):
         source = (WORKSPACE / "repos/nio-core-apps/apps/platform/atari/fnaccept.c").read_text()
         for forbidden in ("SIOV", "ddevic", "dcomnd", "dstats", "0x7f"):

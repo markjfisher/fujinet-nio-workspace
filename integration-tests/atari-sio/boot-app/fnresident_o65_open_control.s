@@ -41,6 +41,15 @@ _main:
         ; loader before calling the published HATABS entry.
         jsr $3f00
 
+        ; Lowest 16 bytes of the 256-byte resident C stack must survive
+        ; OPEN's bounded URI copy and the nested public-library exchange.
+        ldx #15
+        lda #$d7
+guard_stack:
+        sta $3d8a,x
+        dex
+        bpl guard_stack
+
         ldx #0
 fill_zp:
         txa
@@ -84,6 +93,8 @@ fill_zp:
         ldx #$30
         jsr call_open
         sty RESULT+4
+        lda uri_b+14
+        sta RESULT+14
 
         ; Two resident ownership records are the cc65 public-library limit.
         jsr setup_iocb_40
@@ -204,7 +215,9 @@ setup_bad_mode:
         rts
 
 uri_a:   .byte "N1:fixture://a", 0
-uri_b:   .byte "N1:fixture://b", 0
+; CIO/BASIC supplies ATASCII EOL, not NUL. Bytes after EOL must not
+; become part of the URI; the peer still expects exactly fixture://b.
+uri_b:   .byte "N1:fixture://b", $9b, $14, "ignored", 0
 uri_c:   .byte "N1:fixture://c", 0
 bad_name:.byte "D1:fixture://bad", 0
 

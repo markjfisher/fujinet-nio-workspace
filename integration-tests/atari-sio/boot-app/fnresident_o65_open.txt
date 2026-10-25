@@ -19,3 +19,6 @@ assert #0x068a = 0x00 $$all caller cc65 zero-page bytes were restored$$
 assert #0x068b = 0x5a $$OPEN preserves caller A$$
 assert #0x068c = 0x20 $$OPEN preserves caller X IOCB offset$$
 assert #0x068d = 0xff $$OPEN returns with the caller CPU stack depth$$
+assert #0x068e = 0x9b $$OPEN leaves the caller ATASCII filename terminator intact$$
+assert #0x3d8a = 0xd7 $$OPEN retains resident C stack bottom canary$$
+assert #0x3d99 = 0xd7 $$OPEN retains sixteen bytes of resident C stack margin$$

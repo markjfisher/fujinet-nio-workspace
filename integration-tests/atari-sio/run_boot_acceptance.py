@@ -1325,6 +1325,18 @@ def first_read_trace(hub_log):
                      'after_ms': round((seconds(checksum['time']) - t0) * 1000, 3)},
     }
 
+def verify_mydos_trace(hub_log):
+    """MyDOS SD boot commands; the fixture inspector proves file execution."""
+    frames = ('31 52 01 00 84', '31 52 02 00 85', '31 52 03 00 86',
+              '31 53 28 00 AC')
+    for frame in frames:
+        if frame not in hub_log:
+            raise RuntimeError(f'missing MyDOS D1 command frame: {frame}')
+    if 'DATA_BLOCK[128]' not in hub_log:
+        raise RuntimeError('MyDOS boot lacks standard-density sector data')
+    return {'mydos_sd_commands': list(frames)}
+
+
 def verify_netsio_trace(hub_log, nio_log):
     """Assert the compact, production-path SIO trace required by Story 1.3."""
     required_hub_frames = (
@@ -2060,7 +2072,8 @@ def run_netsio(timeout, evidence_dir=None, settle=0.0, capture_dcb=False, comman
         result['first_read_sio'] = first_trace
         # The NIO counters are intentionally production-specific; both paths
         # retain raw hub/POKEY logs for the actual protocol comparison.
-        result['trace'] = (verify_netsio_trace(trace, text) if backend == 'nio' and boot_atr is not None
+        result['trace'] = (verify_mydos_trace(trace) if boot_atr == RESIDENT_O65_MYDOS_BASIC_ATR
+                           else verify_netsio_trace(trace, text) if backend == 'nio' and boot_atr is not None
                            else {'backend': backend, 'direct_program': True})
         result['backend'] = backend
         result['run_dir']=str(run); return result

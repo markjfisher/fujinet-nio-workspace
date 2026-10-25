@@ -56,7 +56,7 @@ _main:
         sta $b2
         lda #$95
         sta $b3
-        lda #$58
+        lda #$8a
         sta $b4
         lda #$37
         sta $b5
@@ -75,7 +75,7 @@ snapshot:
         sta $b2
         lda #$95
         sta $b3
-        lda #$58
+        lda #$8a
         sta $b4
         lda #$37
         sta $b5

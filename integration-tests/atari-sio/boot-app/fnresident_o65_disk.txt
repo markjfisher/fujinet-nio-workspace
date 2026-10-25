@@ -7,7 +7,7 @@ registers flush
 run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
 assert #0x0680 = 0x01 $$streamed installer returns to DOS caller$$
 assert #0x9385 = 0x00 $$streamed o65 installs at MyDOS MEMLO$$
-assert #0x02e7 = 0x40 $$resident end low byte$$
+assert #0x02e7 = 0x72 $$resident end low byte$$
 assert #0x02e8 = 0x56 $$resident end high byte$$
 assert #0x031a = 0x4e $$N published after stream relocation and initialization$$
 assert #0x0683 = 0x01 $$one payload open$$
@@ -24,7 +24,7 @@ run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
 assert #0x0682 = 0x00 $$first installation succeeds$$
 assert #0x9385 = 0x01 $$repeat installation detects owned handler$$
 assert #0x9386 = 0xff $$repeat does not initialize again$$
-assert #0x02e7 = 0x40 $$repeat preserves MEMLO low$$
+assert #0x02e7 = 0x72 $$repeat preserves MEMLO low$$
 assert #0x02e8 = 0x56 $$repeat preserves MEMLO high$$
 assert #0x1ee8 = 0xa5 $$repeat retains resident entry$$
 assert #0x0685 = 0x01 $$repeat retains every code DATA BSS and stack byte$$

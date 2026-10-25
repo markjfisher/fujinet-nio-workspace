@@ -4,7 +4,7 @@ feature: 'atari-nio-physical-sio'
 story: '2.5'
 type: 'feature'
 created: '2026-10-24'
-status: 'draft'
+status: 'in-progress'
 baseline_workspace_commit: 'f88e24c8'
 context:
   - 'docs/agent-test-policy.md'
@@ -1081,3 +1081,118 @@ ImGui (`ImVector<unsigned int>::back(): Size > 0`) before handling the speed
 command. `test-evidence/atari-sio-stream-warp-control/altirra.log` records this
 separate control failure. Acceptance therefore retains the working launch
 without `--test-mode`; no emulator source or settings were changed.
+
+## Functional BASIC lifecycle accepted — 2026-10-25
+
+The genuine MyDOS 4.53/4 → NIO.AR0 → Atari BASIC lifecycle now passes.
+The disk-streaming installer remains the installation mechanism; there is
+no second complete resident image in RAM. The two demonstrated compatibility
+failures were fixed without changing relocation, ownership, rollback or the
+public NIO API:
+
+- CIO OPEN copies the bounded URI suffix into a C string, accepting Atari's
+  `$9b` filename terminator as well as native callers' NUL. It preserves the
+  caller's filename. The production NetworkDevice now receives exactly
+  `fixture://resident-open`, without the following BASIC token.
+- Disk STATUS ignores unused AUX bytes, including the observed MyDOS `$0028`.
+  The payload still contains the original `$0f` timeout. The independent
+  direct-D1 control and production trace above establish the discrepancy;
+  focused tests compare AUX `$0028`, `$0015` and `$ffff` against AUX zero.
+  This explicitly extends the earlier Story 1.1 AUX-zero restriction for
+  MyDOS compatibility. The earlier recovery conclusion rejecting all AUX
+  acceptance is superseded by this valid control and the user's authorization.
+  The unrelated `$e0` timeout experiment stays uncommitted and was excluded
+  from the acceptance executable.
+
+Evidence: `test-evidence/atari-sio-mydos-basic-compatible/netsio/`.
+`before-load.png`, `after-load-typing.png`, `after-load.png`,
+`after-run-typing.png` and `after-run.png` capture the actual keyboard path.
+`load-keys.json` and `run-keys.json` retain acknowledged bridge commands;
+`altirra.log` records the bridge command stream. The runner compares every
+tokenized program byte against FNREAD.BAS before typing RUN. The final screen
+shows LOAD, RUN and a fresh READY prompt, not ERROR 144.
+
+`resident-basic.json` records `4e458801ad`: first bytes `NE`, EOF 136, CLOSE
+completion and the final BASIC marker. The production endpoint logs exactly
+one accepted GET open and one close. N: remains registered at `$4fb3`, within
+the allocation `$1ee8-$5671`, and MEMLO stays `$5672`. The entire allocation
+is byte-identical across BASIC LOAD; immutable TEXT SHA-256 before/after RUN
+is `8daac118af9b89d66f34132738aeee0bc34adad3e0cde01147ca7ea866ce94f4`.
+After RUN, CPU PC is `$f306`, SP `$f5`; BASIC's memory base is `$5672`.
+MEMTOP `$9c1f`, stack floor `$941f` and display bounds `$9c20/$9c40` retain
+the measured transient headroom. The compatibility fix adds 50 initialized
+bytes: 12,518 initialized + 1,444 BSS + 256 C stack = 14,218 reserved bytes.
+No resident footprint optimization was attempted; the final 3 KiB gate is
+still outstanding and Story 2.5 remains open.
+
+`termination.json` says `inspection completed`. Only after verifying the
+fixture did cleanup request SIGTERM and escalate after five seconds because
+Altirra displayed its exit confirmation. This was harness cleanup, not a
+fixture timeout or emulator crash.
+
+Verified changes are committed in nio-core-apps as
+`f3f274312503fafb57ea937e990eeaa3774d6dd3` and fujinet-nio as
+`e6703ccfef1967b1ca445999eb702cb27362d083`. Workspace submodule pins remain
+unchanged. Pre-existing Makefile, composer, unused runner hook, DOS-return
+source and STATUS-timeout experiments remain preserved outside these changes.
+
+Verification commands (after `source scripts/env.sh`):
+
+```sh
+make -C repos/nio-core-apps -f makefiles/build.mk TARGET=atari fnresident-module
+make -C integration-tests/atari-sio/boot-app test-resident-o65 test-resident-o65-disk resident-o65-mydos-basic
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+/tmp/story25-firmware.3PRKXZ/build/atari/tests/fujinet-nio-tests --test-case='*Atari SIO disk*'
+ATARI_ACCEPTANCE_ENDPOINT=/tmp/story25-firmware.3PRKXZ/build/atari/tests/fujinet-nio-atari-netsio-clock-acceptance \
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-mydos-basic-compatible --json
+ATARI_ACCEPTANCE_ENDPOINT=/tmp/story25-firmware.3PRKXZ/build/atari/tests/fujinet-nio-atari-netsio-clock-acceptance \
+python3 integration-tests/atari-sio/run_boot_acceptance.py --public-api-clock --timeout 15 --evidence-dir test-evidence/atari-sio-mydos-compatible-public-regression --json
+```
+
+Results: 66 Python tests; 79 disk frontend assertions in four cases; all
+staged installer/CIO controls; 33 streaming installer assertions; public-API
+ADP! acceptance. The OPEN control retains the original NUL filename case
+and adds an ATASCII-terminated case with trailing garbage, plus an unchanged
+caller terminator and C-stack boundary canaries. Snapshot sizes and expected
+addresses were adjusted for the measured 50-byte code increase.
+
+The native-mounted D1 regression passed NIO! in
+`test-evidence/atari-sio-mydos-compatible-d1-regression/native/`.
+Production D1 passed NIO! in
+`test-evidence/atari-sio-mydos-compatible-d1-native-profile/netsio/`, including
+the canonical first three 128-byte reads and sector 361's 256-byte read.
+The first-read checksum in this final D1 capture is valid (`$94`). The older
+MyDOS first-read diagnostic helper still misassociates a checksum byte; it
+is not used to assert a checksum pass for that capture.
+
+The isolated firmware tree contains the committed compatibility code and
+keeps the dirty timeout experiment out of the executable. Its native test
+fixture path was locally redirected to this workspace because the original
+test computes fixture paths relative to a `workspace/repos/repo` layout;
+that temporary absolute-path adjustment was not committed. An initial
+unfiltered native-test invocation failed nine missing-fixture lookups; the
+properly selected disk tests passed after fixing that isolated test setup.
+
+The first isolated standalone D1 attempt selected the legacy SIO profile,
+despite the dedicated acceptance endpoint explicitly constructing native
+NetSIO ingress. That invalid D1 setup was corrected with:
+
+```sh
+cmake -S /tmp/story25-firmware.3PRKXZ -B /tmp/story25-firmware.3PRKXZ/build/atari \
+  -DFN_BUILD_ATARI_SIO=OFF -DFN_BUILD_ATARI_NETSIO=OFF -DFN_BUILD_ATARI_FUJIBUS_NETSIO=ON
+cmake --build /tmp/story25-firmware.3PRKXZ/build/atari \
+  --target fujinet-nio-posix fujinet-nio-atari-netsio-clock-acceptance fujinet-nio-tests -j6
+python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,"integration-tests/atari-sio"); import run_boot_acceptance as r; r.NIO=Path("/tmp/story25-firmware.3PRKXZ/build/atari/fujinet-nio"); print(r.run_netsio(5,Path("test-evidence/atari-sio-mydos-compatible-d1-native-profile"),explicit_cold_reset=True))'
+```
+
+The successful D1 run uses that corrected profile; no disk protocol changes
+were made in response to the invalid standalone-app control.
+
+Final repeat with the corrected native NetSIO build also passes, using the
+same `--resident-o65-basic --timeout 1` command with evidence directory
+`test-evidence/atari-sio-mydos-basic-final`. It again records `4e458801ad`,
+N: `$4fb3`, MEMLO `$5672`, identical TEXT hashes and an exact tokenized
+FNREAD program match. Its first-read trace also has a valid `$b8` checksum.
+`after-run.png` shows LOAD, RUN and READY; `termination.json` confirms
+`inspection completed` before cleanup. Focused test logs are retained in
+`test-evidence/atari-sio-mydos-verification/`. Warp remains unused.
