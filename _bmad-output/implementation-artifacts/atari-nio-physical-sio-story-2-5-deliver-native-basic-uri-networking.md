@@ -1220,3 +1220,42 @@ python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,"integration
 The D1 trace helper again misassociated the first-read checksum in this run;
 that diagnostic is not an acceptance assertion. The prior final capture
 above retains an independently valid first-read checksum.
+
+### Genuine BASIC PRINT# output acceptance
+
+The tokenized FNWRITE.BAS is built with the existing pinned tokenizer and
+included with FNREAD.BAS in the MyDOS 4.53/4 ATR. From BASIC READY, the
+bridge types LOAD and RUN and compares the loaded token table against the
+entire compiled program before running it. Two output OPEN/CLOSE sessions
+exercise a partial and an exact 128-byte buffer. BASIC PRINT# appends ATASCII
+EOL `$9b`: the expected bodies are `42 43 44 9b` and 127 bytes `$41` followed
+by `$9b`. The acceptance protocol fixture checks every byte, offsets and
+lengths, and rejects invalid payloads. Production NetworkDevice handles the
+requests; the deterministic fixture is its protocol backend.
+
+`test-evidence/atari-sio-basic-put-1/netsio/` contains screen and CPU
+snapshots before and after LOAD/RUN, bridge key and command logs, exact loaded
+program, and service/SIO logs. The service records commands
+`OPEN WRITE WRITE CLOSE OPEN WRITE WRITE CLOSE`: body writes at offsets zero
+of lengths 4 and 128, followed by exactly one zero-length write at offsets 4
+and 128 respectively, and one CLOSE per body. No duplicates occur. BASIC
+reached READY after RUN; completion marker was `00000001ad`, N: HATABS stayed
+`$4fb3`, MEMLO `$5672`, and the resident TEXT hash remained
+`8daac118af9b89d66f34132738aeee0bc34adad3e0cde01147ca7ea866ce94f4`.
+The CPU snapshot after RUN records PC `$f2ff`, SP `$f5`. Termination records
+inspection completed before normal harness cleanup.
+
+After `source scripts/env.sh`, verification included:
+
+```sh
+make -C integration-tests/atari-sio/boot-app resident-o65-mydos-basic test-resident-o65 test-resident-o65-disk
+cmake --build repos/fujinet-nio/build/atari-fujibus-netsio-debug --target fujinet-nio-atari-netsio-clock-acceptance -j6
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-basic-put-1 --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-basic-put-read-regression --json
+```
+
+The firmware test-only fixture extension is committed as
+`31cda0ab21a47793352371ffb6e0f4b9506ade2d`. Its workspace submodule pin
+remains at the merged baseline until that commit is merged upstream, as
+required by the workspace instructions. Story 2.5 remains open.
