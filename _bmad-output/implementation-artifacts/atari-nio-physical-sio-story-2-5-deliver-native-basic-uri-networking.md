@@ -1196,3 +1196,27 @@ FNREAD program match. Its first-read trace also has a valid `$b8` checksum.
 `after-run.png` shows LOAD, RUN and READY; `termination.json` confirms
 `inspection completed` before cleanup. Focused test logs are retained in
 `test-evidence/atari-sio-mydos-verification/`. Warp remains unused.
+
+### Uncommitted experiment cleanup
+
+Removed the unused PicoBoot BASIC XEX/DOS-return targets and source, their
+optional composer path, and the unused ATR constant. The committed MyDOS
+disk-streaming build and existing XEX acceptance targets remain intact. The
+uncommitted `$e0` STATUS timeout experiment was removed, restoring the
+committed `$0f` response; the separate uncommitted AUX assertion and runner
+cold-reset hook remain preserved. Submodule pins were not changed.
+
+After `source scripts/env.sh`, the MyDOS build, staged and disk-streaming
+installer tests, 66 Python tests, and 79 focused disk frontend assertions
+passed. The live BASIC command from the previous section was repeated with
+`--evidence-dir test-evidence/atari-sio-cleanup-basic`: LOAD/RUN completed,
+result `4e458801ad`, MEMLO `$5672`, and resident TEXT and HATABS remained
+intact. Both direct and production NetSIO D1 controls passed NIO! using:
+
+```sh
+python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,"integration-tests/atari-sio"); import run_boot_acceptance as r; r.NIO=Path("/tmp/story25-firmware.3PRKXZ/build/atari/fujinet-nio"); print(r.run_native(5,Path("test-evidence/atari-sio-cleanup-d1"))); print(r.run_netsio(5,Path("test-evidence/atari-sio-cleanup-d1"),explicit_cold_reset=True))'
+```
+
+The D1 trace helper again misassociated the first-read checksum in this run;
+that diagnostic is not an acceptance assertion. The prior final capture
+above retains an independently valid first-read checksum.
