@@ -1608,3 +1608,70 @@ python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-
 
 All three BASIC runs reported delivered and computed checksums `$b8`, verified
 valid, with production NetworkDevice acceptance unchanged.
+
+### Reset and stale-session acceptance
+
+`--resident-o65-basic-reset` drives real MyDOS BASIC through an OPEN, warm
+reset, another OPEN/GET/CLOSE and cold boot. It records the IOCB, both resident
+owner records, HATABS, MEMLO, resident code hash, screen and CPU at each stage.
+On the observed MyDOS 4.53/4 warm reset, IOCB #1 and both local owner slots
+were cleared, N: was present in HATABS with MEMLO `$2806`, and a fresh
+NetworkDevice OPEN/GET/CLOSE succeeded. The cold test corrupts one resident
+code byte and clears the transient installation record before reset; normal
+MyDOS startup reinstalls the original code with both slots free. Evidence:
+`test-evidence/atari-sio-reset-observed-final-20261025-102940-_vy0gkmp/`.
+The same run warms again with four locally buffered output bytes; no body or
+commit is sent, and the subsequent cold installation restores the poisoned
+resident code byte. The overall result is `incomplete` and exits 1 because
+neither warm-reset remote CLOSE was observed.
+
+The warm reset did **not** send CLOSE for the pre-reset remote handle in this
+run. NetSIO reset clears its transport transaction, not the NetworkDevice
+session table; the unowned remote session remains until the service reaps it.
+This is a real resource limitation, especially with repeated resets, and is
+not evidence of immediate remote cleanup. The increment remains incomplete
+until reset-time remote cleanup is solved without replay or an unsafe change
+to the installer or transport.
+
+A CA65 experiment installed a chained DOSINI hook only after a successful
+OPEN, with CLOSE-only cleanup and no body flush or commit. MyDOS still issued
+no CLOSE on warm reset. An Altirra breakpoint at the installed hook address
+was not hit during 30 million emulated cycles after reset; the probe is in
+`test-evidence/atari-sio-reset-hook-breakpoint-20261025-102238-f25zij1f/netsio/reset-hook-probe.json`.
+The unsuccessful production-code experiment was removed; the original
+2,360-byte handler and installer remain intact. A safe reset integration
+that actually runs before MyDOS discards the resident ownership is unresolved.
+
+The BASIC stale fixtures make the real NetworkDevice invalidate an open handle
+immediately before READ, a body WRITE, or the terminal commit. Each produces
+CIO error 144 and a successful subsequent OPEN/GET. The stale read CLOSE also
+returns 144; after a failed output CLOSE, BASIC's repeated CLOSE succeeds
+locally. The trace verifies a single accepted body in the commit case, no
+accepted body in the stale-write case, no accepted commit or replay, and the
+resident owner slots are free after completion. A second IOCB remains open
+through each invalidation and successfully reads `N` before being closed;
+the failed IOCB then reopens and reads `N` as well. Invalidation is confined to
+the test endpoint's existing diagnostics accessor; production firmware,
+protocol, installer and CA65 code are unchanged.
+
+The 3,072-byte gate remains at 2,360 bytes. After `source scripts/env.sh`,
+the focused real-6502 recovery/installer controls and 71 Python tests passed:
+
+```sh
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale-read --timeout 1 --evidence-dir test-evidence/atari-sio-stale-two-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale --timeout 1 --evidence-dir test-evidence/atari-sio-stale-two-write --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale-commit --timeout 1 --evidence-dir test-evidence/atari-sio-stale-two-commit --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-final-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-final-put --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-final-post --json
+```
+
+The reset acceptance command below records successful local reset and BASIC
+recovery but exits nonzero with `outcome: incomplete` when the production
+service does not receive CLOSE for the pre-reset handles:
+
+```sh
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-reset --timeout 1 --evidence-dir test-evidence/atari-sio-reset-observed-final --json
+```

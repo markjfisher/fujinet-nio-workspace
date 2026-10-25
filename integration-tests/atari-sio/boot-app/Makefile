@@ -43,6 +43,8 @@ RESIDENT_O65_BASIC_SOURCE := fnresident_basic_read.bas
 RESIDENT_O65_BASIC_PROGRAM := $(OUT)/fnread.bas
 RESIDENT_O65_BASIC_WRITE := $(OUT)/fnwrite.bas
 RESIDENT_O65_BASIC_POST := $(OUT)/fnpost.bas
+RESIDENT_O65_BASIC_STALE := $(OUT)/fnstale.bas
+RESIDENT_O65_BASIC_STALE_READ := $(OUT)/fnstread.bas
 RESIDENT_O65_OPEN_CONTROL := $(OUT)/fnresident-o65-open-control.bin
 RESIDENT_O65_OPEN_SIOV := $(OUT)/fnresident-o65-open-siov.xex
 RESIDENT_O65_GET_CLOSE_CONTROL := $(OUT)/fnresident-o65-get-close-control.bin
@@ -176,6 +178,12 @@ $(RESIDENT_O65_BASIC_WRITE): fnresident_basic_write.bas $(TBXL_PARSER) | $(OUT)
 $(RESIDENT_O65_BASIC_POST): fnresident_basic_post.bas $(TBXL_PARSER) | $(OUT)
 	$(TBXL_PARSER) -A -q -o $@ $<
 
+$(RESIDENT_O65_BASIC_STALE): fnresident_basic_stale.bas $(TBXL_PARSER) | $(OUT)
+	$(TBXL_PARSER) -A -q -o $@ $<
+
+$(RESIDENT_O65_BASIC_STALE_READ): fnresident_basic_stale_read.bas $(TBXL_PARSER) | $(OUT)
+	$(TBXL_PARSER) -A -q -o $@ $<
+
 $(RESIDENT_O65_ATR): $(RESIDENT_O65_XEX) $(PICOBOOT) Makefile | $(OUT)
 	rm -rf $(OUT)/resident-o65-stage
 	mkdir -p $(OUT)/resident-o65-stage
@@ -237,7 +245,7 @@ $(OUT)/fnresident-asm-open-probe.xex: fnresident_o65_open_probe.s fnresident-o65
 $(OUT)/fnresident-asm-open.xex: $(OUT)/fnresident-asm-stage.xex $(OUT)/fnresident-asm-loader.xex $(OUT)/fnresident-asm-open-probe.xex ../compose_resident_o65_xex.py
 	python3 ../compose_resident_o65_xex.py --loader $(OUT)/fnresident-asm-loader.xex --staged $(OUT)/fnresident-asm-stage.xex --probe $(OUT)/fnresident-asm-open-probe.xex --output $@
 
-$(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST) Makefile | $(OUT)
+$(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST) $(RESIDENT_O65_BASIC_STALE) $(RESIDENT_O65_BASIC_STALE_READ) Makefile | $(OUT)
 	rm -rf $(OUT)/resident-o65-mydos-stage
 	mkdir -p $(OUT)/resident-o65-mydos-stage
 	cp $(ROOT)/repos/MyPicoDOS/mydos-dos.sys $(OUT)/resident-o65-mydos-stage/DOS.SYS
@@ -247,6 +255,8 @@ $(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE
 	cp $(RESIDENT_O65_BASIC_PROGRAM) $(OUT)/resident-o65-mydos-stage/fnread.bas
 	cp $(RESIDENT_O65_BASIC_WRITE) $(OUT)/resident-o65-mydos-stage/fnwrite.bas
 	cp $(RESIDENT_O65_BASIC_POST) $(OUT)/resident-o65-mydos-stage/fnpost.bas
+	cp $(RESIDENT_O65_BASIC_STALE) $(OUT)/resident-o65-mydos-stage/fnstale.bas
+	cp $(RESIDENT_O65_BASIC_STALE_READ) $(OUT)/resident-o65-mydos-stage/fnstread.bas
 	cd $(APPS) && dir2atr -m -S -b MyDos4534 $(abspath $@) $(abspath $(OUT)/resident-o65-mydos-stage)
 
 # Baseline for the virtual-D1 diagnosis: the matching checked-in MyDOS 4.53/4
