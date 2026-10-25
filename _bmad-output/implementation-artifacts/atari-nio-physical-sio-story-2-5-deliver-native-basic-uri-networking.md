@@ -1761,3 +1761,11 @@ was reinstalled, the remote handle reclaimed, and reopening read `N` and
 closed successfully. It therefore correctly reports incomplete, not a warm
 start pass. Evidence:
 `test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`.
+
+The MyPicoDOS BOOTQ correction (`3e68354d`) sets `$09` to 1 before running
+an XEX. A MyDOS watchpoint control measured BOOTQ as 1 before Reset and still
+1 as the OS entered cold initialization at `$C2D6`; the subsequent RAM test
+cleared it along with DOSINI. Thus this MyDOS control already has the disk
+boot flag required for a warm-start DOSINI call. Evidence:
+`test-evidence/atari-sio-bootq-observe-20261025-1135/netsio/reset-owner-watch.json`.
+The interactive snapshots now also record BOOTQ, COLDST, CARTCK and PUPBT.

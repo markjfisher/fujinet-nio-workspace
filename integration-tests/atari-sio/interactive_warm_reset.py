@@ -28,6 +28,9 @@ def run(evidence_dir, wait_seconds):
                 install = b.peek(0x9380, 40)
                 start, end = boot._u16(install, 12), boot._u16(install, 14)
                 state = {'regs': b.regs(), 'warmst': b.peek(8)[0],
+                         'bootq': b.peek(9)[0], 'coldst': b.peek(0x244)[0],
+                         'cart_checksum': b.peek(0x3eb)[0],
+                         'power_up_signature': b.peek(0x33d, 3).hex(),
                          'memlo': b.peek16(0x2e7), 'memtop': b.peek16(0x2e5),
                          'hatabs': b.peek(boot.HATABS_ADDR, boot.HATABS_TOTAL_BYTES).hex(),
                          'iocb1': b.peek(0x350, 16).hex(),
