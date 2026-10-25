@@ -1449,6 +1449,11 @@ def altirra_command(native, command_ack_delay_tics=None, trace_serial=False, pro
         while '--adddevice' in cmd:
             i=cmd.index('--adddevice'); del cmd[i:i+2]
         cmd.append(str(ATR))
+    if os.environ.get('ATARI_RESIDENT_DOS') == 'sdx':
+        cart = Path(os.environ['ATARI_SDX_CART']).resolve()
+        if hashlib.sha256(cart.read_bytes()).hexdigest() != 'e400cba0ba7e20dc62c60019ab99de04d11f4a4fa841e20cacca7c44099940a3':
+            raise RuntimeError('SDX cartridge checksum mismatch')
+        cmd.extend(['--cart', str(cart)])
     if trace_serial:
         # The caller appends the SIODATA logger after choosing its evidence
         # directory.  Debug commands start in suspend mode, so run_netsio
@@ -1682,6 +1687,12 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
     if not embedded and not PUBLIC_API_CLOCK_ENDPOINT.is_file():
         raise RuntimeError(f'production NetworkDevice fixture is missing: {PUBLIC_API_CLOCK_ENDPOINT}')
     run = Path(evidence_dir).resolve() / ('embedded' if embedded else 'netsio')
+    sdx = os.environ.get('ATARI_RESIDENT_DOS') == 'sdx'
+    sdx_child = sdx
+    if sdx:
+        local_disk = True
+    fixture_build = (Path(os.environ.get('ATARI_RESIDENT_BUILD_DIR', str(RESIDENT_O65_MYDOS_BASIC_ATR.parent)))
+                     if sdx else ROOT / 'integration-tests/atari-sio/boot-app/build').resolve()
     retained = {}
 
     def drive_basic(token, path):
@@ -1696,6 +1707,34 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
                 (path / f'{name}.json').write_text(json.dumps(state, indent=2))
                 (path / f'{name}.png').write_bytes(bridge.screenshot())
                 return screen
+            if sdx:
+                prompt = bytes((0x24, 0x11, 0x1a))
+                for _ in range(120):
+                    bridge.frame(30)
+                    if prompt in bridge.peek(bridge.peek16(0x58), 960):
+                        break
+                else:
+                    raise RuntimeError('SDX prompt not reached')
+                retained['sdx_before_hatabs'] = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
+                before = retained['sdx_before_hatabs']
+                retained['sdx_driver_tables'] = {i: bridge.peek(_u16(before, i+1), 12)
+                    for i in range(0, HATABS_ENTRY_BYTES, 3) if before[i]}
+                _type_atari_command(bridge, 'PARENT' if sdx_child else 'NIO')
+                sdx_result_addr = 0x06b0 if sdx_child else 0x9380
+                for _ in range(120):
+                    bridge.frame(30)
+                    if bridge.peek(sdx_result_addr, 6) == b'NRI!\x02\x00':
+                        break
+                else:
+                    raise RuntimeError('SDX installation trace missing')
+                for _ in range(120):
+                    bridge.frame(30)
+                    if bridge.peek(bridge.peek16(0x58), 960).count(prompt) >= 2:
+                        break
+                else:
+                    raise RuntimeError('SDX installer did not return to prompt')
+                retained['sdx_allocation'] = bridge.peek(sdx_result_addr, 40)
+                _type_atari_command(bridge, 'BASIC')
             # MyDOS invokes NIO.AR0 through INITAD, then enters BASIC normally.
             ready = bytes((0x32, 0x25, 0x21, 0x24, 0x39))
             for _ in range(120):
@@ -1708,12 +1747,18 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
                 'installer_raw': install.hex(), 'regs': bridge.regs(),
                 'memlo': bridge.peek16(0x2e7), 'hatabs': bridge.peek(HATABS_ADDR,35).hex(),
             }, indent=2))
-            if install[:5] != b'NRI!\x02' or install[5] != 0:
-                raise RuntimeError('BASIC fixture did not retain a successful resident install')
-            start, end = _u16(install, 12), _u16(install, 14)
+            if sdx:
+                allocation = retained['sdx_allocation']
+                if allocation[:6] != b'NRI!\x02\x00':
+                    raise RuntimeError('SDX allocation trace missing')
+                start, end = _u16(allocation, 12), _u16(allocation, 14)
+            else:
+                if install[:5] != b'NRI!\x02' or install[5] != 0:
+                    raise RuntimeError('BASIC fixture did not retain a successful resident install')
+                start, end = _u16(install, 12), _u16(install, 14)
             retained['range'] = (start, end)
             retained['before'] = hashlib.sha256(bridge.memdump(start, end - start)).hexdigest()
-            module = (ROOT / 'integration-tests/atari-sio/boot-app/build/nio.o65').read_bytes()
+            module = (fixture_build / 'nio.o65').read_bytes()
             retained['ram'] = {'code': _u16(module, 32), 'initialized_data': _u16(module, 36),
                                'bss': _u16(module, 40), 'zero_page': module[20],
                                'permanent_stack': _u16(module, 18)}
@@ -1723,6 +1768,14 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
             retained['owners_address'] = start + retained['initialized'] + _u16(module, 36)
             retained['code'] = hashlib.sha256(bridge.memdump(start, retained['initialized'])).hexdigest()
             retained['hatabs'] = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
+            if sdx:
+                before = retained['sdx_before_hatabs']
+                for index in range(0, HATABS_ENTRY_BYTES, 3):
+                    if before[index] and (retained['hatabs'][index:index+3] != before[index:index+3] or
+                                          bridge.peek(_u16(before, index+1), 12) != retained['sdx_driver_tables'][index]):
+                        raise RuntimeError('SDX installation changed an existing HATABS driver table')
+                if not 0 < start < end <= bridge.peek16(0x2e7):
+                    raise RuntimeError('SDX resident allocation is not below BASIC MEMLO')
             screen = snapshot('before-load')
             if ready not in screen:
                 raise RuntimeError('BASIC has not displayed READY before LOAD')
@@ -1732,7 +1785,7 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
             sent = _type_atari_command(bridge, f'LOAD "D:{filename}.BAS"')
             (path / 'load-keys.json').write_text(json.dumps(sent, indent=2))
             snapshot('after-load-typing')
-            fixture = (ROOT / f'integration-tests/atari-sio/boot-app/build/{filename.lower()}.bas').read_bytes()
+            fixture = (fixture_build / f'{filename.lower()}.bas').read_bytes()
             # BASIC SAVE header stores relative VNTP, STMTAB and STMCUR.
             # Compare every stored program line, excluding the immediate line.
             table_offset = 14 + _u16(fixture, 8) - _u16(fixture, 2)
@@ -1761,6 +1814,62 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
                     bridge.frame(60)  # allow the final READY/error text to render
                     break
             snapshot('after-run')
+            if sdx and os.environ.get('ATARI_SDX_LIFECYCLE') == '1':
+                if bridge.peek(0x6e0, 5) != b'NE\x88\x01\xad':
+                    raise RuntimeError('initial READ result is invalid before SDX transition')
+                if output or post or stale:
+                    raise RuntimeError('SDX lifecycle requires the READ fixture')
+                def check_transition(label):
+                    state = {'memlo': bridge.peek16(0x2e7), 'memtop': bridge.peek16(0x2e5),
+                             'hatabs': bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES).hex(),
+                             'code_sha256': hashlib.sha256(bridge.memdump(start, retained['initialized'])).hexdigest()}
+                    (path / f'{label}.png').write_bytes(bridge.screenshot())
+                    tables = {i: bridge.peek(_u16(retained['sdx_before_hatabs'], i+1), 12)
+                              for i in retained['sdx_driver_tables']}
+                    state['driver_tables'] = {str(i): value.hex() for i, value in tables.items()}
+                    (path / f'{label}.json').write_text(json.dumps(state, indent=2) + '\n')
+                    if (state['memlo'] < end or state['hatabs'] != retained['hatabs'].hex()
+                            or tables != retained['sdx_driver_tables'] or state['code_sha256'] != retained['code']):
+                        raise RuntimeError(f'SDX {label} damaged resident, allocation or HATABS')
+                prompt = bytes((0x24, 0x11, 0x1a))
+                old = bridge.peek(bridge.peek16(0x58), 960).count(prompt)
+                _type_atari_command(bridge, 'DOS')
+                for _ in range(120):
+                    bridge.frame(30)
+                    if bridge.peek(bridge.peek16(0x58), 960).count(prompt) > old:
+                        break
+                else:
+                    raise RuntimeError('SDX command prompt not reached after BASIC DOS')
+                check_transition('sdx-return-to-dos')
+                old = bridge.peek(bridge.peek16(0x58), 960).count(ready)
+                _type_atari_command(bridge, 'BASIC')
+                for _ in range(120):
+                    bridge.frame(30)
+                    if bridge.peek(bridge.peek16(0x58), 960).count(ready) > old:
+                        break
+                else:
+                    raise RuntimeError('BASIC READY not reached after re-entry')
+                check_transition('sdx-reenter-basic')
+                old = bridge.peek(bridge.peek16(0x58), 960).count(ready)
+                _type_atari_command(bridge, 'LOAD "D:FNREAD.BAS"')
+                for _ in range(60):
+                    bridge.frame(20)
+                    if (bridge.peek(bridge.peek16(0x58), 960).count(ready) > old and
+                            bridge.memdump(bridge.peek16(0x88), program_size) == expected_program):
+                        break
+                else:
+                    raise RuntimeError('BASIC did not reload READ fixture after DOS')
+                bridge.poke(0x6e4, 0)
+                _type_atari_command(bridge, 'RUN')
+                for _ in range(60):
+                    bridge.frame(30)
+                    if bridge.peek(0x6e4, 1) == b'\xad':
+                        bridge.frame(60)
+                        break
+                else:
+                    snapshot('sdx-read-after-return-failed')
+                    raise RuntimeError('READ did not complete after SDX transition')
+                check_transition('sdx-read-after-return')
 
     def inspect(token, path):
         sys.path[:0] = [str(SDK)]
@@ -1778,8 +1887,8 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
         n_entry = next((index for index in range(0, HATABS_ENTRY_BYTES, 3)
                         if hatabs[index] == ord('N')), None)
         ram = dict(retained['ram'])
-        ram.update(memlo_reservation=end - start,
-                   total_permanent=sum(ram.values()))
+        ram.update(memlo_reservation=end - start + (1 if sdx else 0),
+                   total_permanent=sum(ram.values()) + (1 if sdx else 0))
         memory = {'resident_start': f'${start:04X}', 'resident_end': f'${end:04X}',
                   'memlo': f'${memlo:04X}', 'memtop': f'${memtop:04X}',
                   'available_bytes': memtop - memlo,
@@ -1798,7 +1907,7 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
         stale_expected = b'\x90\x90N' if stale == 'read' else b'\x90\x01N'
         if (stale and (result[:3] != stale_expected or other_iocb_byte != ord('N'))) or (post and result[0] != ord('N')) or (not output and not post and not stale and (result[:2] != b'NE' or result[2] != 136)) or result[3:] != b'\x01\xad':
             raise RuntimeError(f'Atari BASIC N: OPEN/GET/EOF/CLOSE result is invalid: {result.hex()}')
-        if after != retained['code'] or memlo != end or hatabs != retained['hatabs']:
+        if after != retained['code'] or (memlo < end if sdx else memlo != end) or hatabs != retained['hatabs']:
             raise RuntimeError('Atari BASIC LOAD/RUN changed resident code, MEMLO or HATABS')
         if stale and owners[::16] != b'\xff\xff':
             raise RuntimeError('stale-session fixture left resident IOCB ownership allocated')
@@ -1913,8 +2022,8 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
                 trace.count('Resident N: PUT flags=04') != 2 or \
                 trace.count('Network fixture close count=') != 2:
             raise RuntimeError('BASIC PUT body, commit or close evidence differs')
-    elif trace.count('Resident N: fixture accepted GET open') != 1 or \
-            trace.count('Network fixture close count=') != 1:
+    elif trace.count('Resident N: fixture accepted GET open') != (2 if sdx and os.environ.get('ATARI_SDX_LIFECYCLE') == '1' else 1) or \
+            trace.count('Network fixture close count=') != (2 if sdx and os.environ.get('ATARI_SDX_LIFECYCLE') == '1' else 1):
         raise RuntimeError('BASIC N: exchange did not produce exactly one production open and close')
     result['network_trace'] = str(run / ('altirra.log' if embedded else 'nio.log'))
     result['dos_disk'] = 'direct MyDOS ATR' if embedded else 'direct control' if local_disk else 'production NetSIO DiskService'

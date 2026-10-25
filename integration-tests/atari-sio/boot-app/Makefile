@@ -250,3 +250,12 @@ resident-dos25-basic:
 	$(MAKE) DOS25_OFFLINE=1 $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST)
 	python3 make-dos25-atr.py clean "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_PROTECTED) $(foreach f,$(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST) $(RESIDENT_ASM_DISK_LOADER:.xex=.lbl) $(OUT)/dos25-resident.atr $(DOS25_MODULE_FILES),--protect "$(f)")
 	python3 make-dos25-atr.py resident "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_PROTECTED) $(foreach f,$(DOS25_MODULE_FILES),--protect "$(f)")
+
+# SDX cartridge and parser are locally provisioned; no download or DOS binary
+# is included in the generated direct-disk fixture.
+.PHONY: sdx-fixture
+sdx-fixture:
+	@test -n "$(SDX_CART)" || { echo 'Set SDX_CART to the verified SDX 4.51 cartridge' >&2; exit 1; }
+	python3 ../sdx-parent-child/preflight.py --car "$(SDX_CART)" --parser "$(TBXL_PARSER)" --out "$(OUT)"
+	$(MAKE) DOS25_OFFLINE=1 $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST)
+	python3 ../sdx-parent-child/build.py "$(OUT)/sdx-fixture.atr" --resident-build "$(OUT)"
