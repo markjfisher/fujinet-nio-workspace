@@ -1739,3 +1739,25 @@ python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-
 python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-post --json
 python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-reset --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-reset-final --json
 ```
+
+### Interactive reset control
+
+The tokenized `FNRESET.BAS` opens N:, displays `PRESS WARM START NOW`, and
+waits while the operator selects Altirra's Warm Reset. The runner observes the
+actual NetSIO reset event, records screen, CPU, `WARMST`, IOCB/owners, HATABS,
+MEMLO and resident-code hashes, and checks remote reclamation and a subsequent
+OPEN/GET/CLOSE. `--wait-seconds 0` waits without a deadline. It exits nonzero
+with `outcome: incomplete` if the OS took a cold start, even when the warm
+reset event was observed. Evidence directories include a date-time suffix.
+
+```sh
+source scripts/env.sh
+make -C integration-tests/atari-sio/boot-app resident-o65-mydos-basic
+python3 integration-tests/atari-sio/interactive_warm_reset.py --wait-seconds 0
+```
+
+The manual smoke control observed the warm-reset event, but `WARMST=0`; N:
+was reinstalled, the remote handle reclaimed, and reopening read `N` and
+closed successfully. It therefore correctly reports incomplete, not a warm
+start pass. Evidence:
+`test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`.
