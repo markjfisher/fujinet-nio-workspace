@@ -139,3 +139,35 @@ against the stated revisions. `source scripts/env.sh && python3 -m unittest
 discover -s integration-tests/atari-sio/tests -q` passed 69 tests. No firmware
 source, board, device, or production configuration was changed; no flash,
 physical measurement, or emulator acceptance run was performed.
+
+## 2026-10-25 command-ordering investigation
+
+The router now silently ignores complete command frames for IDs outside
+`$31–$38` and `$7F`, including frames with invalid checksums; owned unsupported
+commands still produce their established error. This is only address filtering:
+the physical ingress still does not reliably distinguish an unrelated device's
+write data from a command and must not be considered safe for a shared bus.
+
+Inspection of the locally installed ESP-IDF 5.4 `esp_driver_uart/src/uart.c`
+found that `uart_get_buffered_data_len` returns the driver ring's
+`rx_buffered_len`, excluding hardware FIFO and a character being received.
+The UART ISR drains the FIFO and queues events without byte-arrival timestamps;
+its scheduling relative to GPIO interrupts is not a physical ordering record.
+A threshold of one can reduce batching but does not establish ordering.
+`uart_flush_input` takes a blocking RX semaphore and cannot be called from the
+GPIO ISR. The IDF UART driver installs and owns its receive ISR and its
+public header does not provide an ISR replacement hook. A custom FIFO reader
+would need to replace that ownership, not merely wrap the driver. Even a shared
+same-core handler cannot recover all edges from the ESP32 GPIO status bit:
+assertion/release/assertion while interrupts are masked can collapse into the
+same latched status and final level as one assertion. A bounded adapter needs
+an ordering observation that detects such ambiguity, as well as independently
+buffered states and overflow, before the transaction matrix can be accepted. No physical timing measurements have been taken.
+
+Verification after the router change (environment sourced):
+`cd repos/fujinet-nio && ./build.sh -cp fujibus-pty-debug` passed;
+`build/fujibus-pty-debug/tests/fujinet-nio-tests --test-case='Atari SIO*'`
+passed 9 cases / 146 assertions; `ctest --test-dir build/fujibus-pty-debug
+--output-on-failure` passed 3/3; and `./build.sh -b` passed for the configured
+original-ESP32 16 MB Atari profile (44,248 bytes static RAM, 2,111,395 bytes
+application flash). These checks do not verify physical command capture.
