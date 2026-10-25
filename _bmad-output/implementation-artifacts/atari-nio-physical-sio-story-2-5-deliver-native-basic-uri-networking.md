@@ -17,50 +17,67 @@ context:
 
 # Story 2.5: Deliver native BASIC URI networking
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+<frozen-after-approval reason="human-owned intent — rebaselined by user decision 2026-10-25">
 
-## Intent
+## Intent and boundaries
 
-**Problem:** The Atari configuration ATR proves the public cc65 API but does
-not expose native URI networking to Atari BASIC through CIO `N1:` syntax.
+Deliver native BASIC URI networking as a relocatable, entirely CA65 resident
+CIO `N:` module installed during startup of the user's actual DOS. MyDOS
+4.53/4 is the first verified DOS. The configuration ATR is a transient
+configuration/boot-selection environment; its existing boot contract is
+unchanged and installing this handler from it is not required.
 
-**Approach:** Install a bounded resident CIO `N:` handler from the supported
-ATR.  It owns only CIO adaptation and per-IOCB state; all networking remains
-the public Atari `fujinet-nio-lib` client over native `0x7F`.
+Initialize resident state before publication, reserve all resident memory
+below adjusted `MEMLO`, register `HATABS` safely, preserve same-handler
+idempotence, reject foreign ownership and roll back failures. Total permanent
+RAM including code, data, BSS, buffers, zero page and retained workspace must
+not exceed 3,072 bytes. No C or cc65 runtime is linked into the production
+resident; the C prototype remains a reference.
 
-## Boundaries & Constraints
+CIO modes 4, 8 and 12 map to GET, PUT and POST; output uses `BODY_UNKNOWN`.
+Preserve IOCB ownership, 128-byte buffering, EOF and errors, short acknowledgements,
+STATUS/CLOSE and a single zero-length terminal commit before first STATUS,
+read or CLOSE. Use the existing native `$7F` NetworkService protocol; do not
+replay uncertain writes or commits or affect another client's sessions.
+Serialize foreground calls and preserve the recorded CIO error/status table.
 
-**Always:** Call `fn_init()` before publishing HATABS; install resident code,
-library state, handler table, and caches below the raised `MEMLO`; preserve the
-Graphics-0/runtime-memory gate.  Register `N` idempotently only when the entry
-points to this handler; report a foreign `N:` entry without replacing it.
-Map each CIO IOCB to its returned `fn_handle_t`; use no dynamic allocation,
-legacy IDs, `$71`, SLIP, padded reads, raw SIO/DCB/FujiBus frames, or IRQ-time
-network calls.  Serialize foreground library calls.  Keep a 128-byte cache per
-open IOCB and commit unknown POST/PUT exactly once with zero-length
-`fn_write()` before first STATUS, read, or CLOSE.
+On a genuine OS warm start the installed handler must remain usable, with
+valid HATABS and MEMLO; open sessions are abandoned and their remote resources
+reclaimed without flushing or committing incomplete output. Cold boot installs
+cleanly through DOS startup. Stale remote handles must fail safely, clean up
+ownership and allow subsequent OPEN. Genuine BASIC READ/PUT/POST acceptance and
+recovery evidence are required; virtual evidence is not physical proof.
 
-**Ask First:** Freeze the CIO error/status table in the first increment from
-the named Atari OS error constants.  The canonical contract requires recording
-the table but does not select every `FN_ERR_*` mapping; implementation must not
-invent values.  Select the BASIC tokenization/load mechanism only after proving
-it actually loads a BASIC program after installation without overwriting the
-resident allocation.
-
-**Never:** Add an Atari-specific network-slot protocol, alter the synchronous
-endpoint to create PENDING, replace NetworkDevice, create a second ATR or
-emulator runner, or treat virtual results as physical-SIO proof.
-
-## I/O & Edge-Case Matrix
-
-| Scenario | Input / State | Expected behavior | Error handling |
-|---|---|---|---|
-| install | no `N` HATABS entry | resident range is reserved, then `N` is registered | `fn_init`/space failure rolls back with no entry or MEMLO change |
-| reinstall/collision | own / foreign `N` entry | own entry is unchanged / foreign entry is preserved | explicit idempotent success / collision result |
-| OPEN | `N1:fixture://...` with read/write/update mode | URI is parsed without `N1:` prefix; one public `fn_open` and handle ownership | malformed URI, session exhaustion, and stale IOCB map through frozen CIO errors |
-| GET/PUT | byte CIO calls | 128-byte read refill and write flush preserve order and ownership | EOF, full cache, reset, and transport failure retain no unsafe retry |
-| boundary | STATUS, first read, or CLOSE after POST/PUT | buffered bytes flush; exactly one zero-length commit precedes info/read/close | failed commit is reported and never duplicated |
+Follow-on targets are Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X, reusing
+the resident module with DOS-appropriate installation. Their compatibility and
+the embedded-adapter BASIC lifecycle remain unverified. Future `config://`
+access to files from the original configuration/boot disk after a DOS is
+selected is a deferred idea, not a current feature or requirement.
 </frozen-after-approval>
+
+## Current acceptance and closure status — 2026-10-25
+
+**In progress.** The user has removed configuration-ATR installation from this
+story; the earlier closure review below is historical. Genuine OS warm-start
+persistence remains an unmet acceptance criterion. Embedded-adapter BASIC
+acceptance and physical SIO reset detection are explicitly outstanding and
+must not be inferred from NetSIO results.
+
+| Requirement | Current evidence and status |
+| --- | --- |
+| DOS startup, relocation, HATABS/MEMLO, rollback and collisions | **Verified for MyDOS 4.53/4.** `test-resident-asm`, `test-resident-o65` and `test-resident-o65-disk`; BASIC execution retains HATABS, MEMLO and resident code. The config ATR has no installation requirement. |
+| CA65-only; permanent RAM at most 3,072 bytes | **Verified:** 2,360 bytes: CODE 1,491, DATA 20, BSS 823, zero page 26, no dedicated stack. The build RAM gate covers the total. |
+| BASIC READ/PUT/POST, STATUS/CLOSE and native `$7F` | **Verified on production NetworkDevice through NetSIO:** `test-evidence/atari-sio-reclaim-{read,put,post}` runs documented below; post fixture verifies method, exact body including BASIC `$9b`, and one commit. CIOV STATUS and exact-boundary PUT are recorded in prior evidence. |
+| IOCB ownership, errors, short acknowledgement, uncertain operation and stale sessions | **Verified:** real-6502 fault/installer controls and `atari-sio-reclaim-stale-{read,write,commit}` BASIC runs documented below; another IOCB remains usable and no uncertain write or commit is replayed. |
+| Reset session reclamation, no flush or commit | **Verified for NetSIO host-reset event:** `test-evidence/atari-sio-reclaim-reset-final-20261025-105524-kwa8m3j9/` and owner-isolation tests. Physical SIO host-reset detection remains **unverified**. |
+| Genuine OS warm-start resident persistence | **Outstanding.** The observed manual reset took the OS cold path (`WARMST=0`), so equal resident bytes resulted from reinstallation; it cannot establish warm persistence. See `test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`. |
+| Cold boot reinstalls | **Verified in the NetSIO reset acceptance:** explicit cold boot restores deliberately altered resident code via MyDOS startup. |
+| Embedded-adapter BASIC acceptance | **Outstanding verification:** no Story 2.5 BASIC lifecycle on that adapter is established by the Story 2.4 public-API test. |
+
+Other DOS compatibility targets and `config://` are follow-on work, not
+Story 2.5 closure requirements. No additional test has been run as part of
+this documentation-only rebaseline.
+
 
 ## Implementation-preparation evidence
 
@@ -1465,7 +1482,10 @@ again misassociated that checksum, without affecting the BASIC/service checks.
 The apps fix is commit `7ef404e4`; the workspace audit commit pins it for
 coordinated publication. Story 2.5 remains open.
 
-### Closure review — original criteria versus verified baseline
+### Historical closure review — original criteria versus then-verified baseline
+
+This review predates the 2026-10-25 rebaseline and later POST/reset evidence;
+the current matrix above governs closure.
 
 **Verdict: not complete.** The original acceptance criteria are in the
 feature-specific `epics-atari-nio-physical-sio.md`, Story 2.5; the original

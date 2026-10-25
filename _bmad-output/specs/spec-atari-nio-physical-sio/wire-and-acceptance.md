@@ -14,14 +14,16 @@ Atari NIO application
   -> internal FujiBus transport -> FujinetCore -> existing services
 
 Atari BASIC
-  -> native CIO N: handler from supported startup/config ATR
-  -> public fujinet-nio-lib API
+  -> relocatable CA65 CIO N: handler installed by user DOS startup
+  -> native packet protocol
   -> SIO device 0x7F -> NetworkService URI + handle operations
 ```
 
 The planes share physical SIO, board configuration, disk-slot state, and core DiskDevice. They do not share framing or dispatch. The disk frontend is a narrowly scoped standard Atari disk adapter, not `LegacyTransport` and not a legacy FujiNet compatibility path.
 
-The CIO `N:` handler is likewise native: it is an Atari-side API adapter, not an SIO network-device alias. The startup/config ATR installs it resident below adjusted `MEMLO`, calls `fn_init`, and registers `HATABS`; failure rolls back installation, the same handler may be reinstalled idempotently, and a foreign `N:` entry is a reported collision. CIO `OPEN` associates the returned public `fn_handle_t` with the Atari IOCB; read/write/update maps to GET/PUT/POST, with write/update setting `FN_OPEN_BODY_UNKNOWN`. GET/PUT use bounded 128-byte per-open IOCB caches; after flushing, write/update commits exactly once with zero-length `fn_write` before first STATUS, read, or CLOSE; STATUS calls `fn_info`; CLOSE then closes the handle. It adds no retry beyond existing library policy. It must not address `0x71`–`0x78`, translate legacy `O/C/R/W/S` frames, or invoke `LegacyTransport`.
+The CIO `N:` handler is a native Atari-side adapter using the existing NetworkService contract, not an SIO network-device alias. The user's DOS startup installs the relocatable CA65 module below adjusted `MEMLO` and registers `HATABS`; MyDOS 4.53/4 is the first verified environment. The transient configuration ATR retains its existing configuration and boot-selection contract and is not the DOS startup disk. Installation initializes state, rolls back on failure, is idempotent for the same handler, and reports a foreign `N:` collision without replacement. IOCBs own returned service handles; read/write/update map to GET/PUT/POST with `BODY_UNKNOWN` on output. Bounded 128-byte caches preserve ordered I/O and partial acknowledgements; output flushes and commits exactly once with a zero-length write before first STATUS, read or CLOSE. Uncertain side effects are never automatically replayed. The total permanent allocation, including zero page and retained workspace, must not exceed 3,072 bytes. The handler must not address `0x71`–`0x78`, translate legacy `O/C/R/W/S` frames, or invoke `LegacyTransport`.
+
+A genuine OS warm start must leave the installed driver usable while abandoning open sessions and reclaiming their remote resources without flushing or committing incomplete output. NetSIO host-reset resource reclamation is verified; genuine OS warm-start persistence and physical SIO reset detection are not. Stale handles must fail safely, release local ownership and allow a subsequent OPEN without affecting other clients. Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X are follow-on compatibility targets for the same resident module with DOS-appropriate installation. Embedded-adapter BASIC acceptance remains outstanding. A possible future `config://` means of accessing files from the original configuration/boot disk after selecting a DOS is deferred and is not a current protocol or feature.
 
 ## NIO application-channel contract
 
@@ -72,7 +74,7 @@ The default backend polls `P`. An application that owns or chains the Atari PROC
 
 ## Required guest acceptance
 
-The cc65 XEX loaded from the configuration ATR must use the public library API and demonstrate:
+The cc65 XEX loaded from the configuration ATR must use the public library API and demonstrate items 1–5. Separately, a genuine BASIC program running under the user DOS must demonstrate item 6:
 
 1. Clock request/response.
 2. Network open/write/read/close, including delayed readiness through `P` and, where available, the application-owned PROC path.

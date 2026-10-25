@@ -42,7 +42,7 @@ FujiNet-NIO needs Atari to be a first-class host alongside BBC, Amiga, and MS-DO
 
 - **CAP-6**
   - **intent:** Atari BASIC can use a native NIO network device with `N1:`-style supported URIs.
-  - **success:** The supported startup/config ATR installs a CIO `N:` handler; a BASIC program opens a supported URI, performs stream I/O and status through NetworkService, then closes it, with proof that the handler uses only the public NIO client and `0x7F`.
+  - **success:** The user’s DOS startup installs a relocatable CA65 CIO `N:` handler; a BASIC program opens a supported URI, performs stream I/O and status through NetworkService, then closes it over native `0x7F`. MyDOS 4.53/4 is the first verified DOS. The configuration ATR remains a transient configuration/boot-selection environment with its existing boot contract.
 
 ## Constraints
 
@@ -51,8 +51,9 @@ FujiNet-NIO needs Atari to be a first-class host alongside BBC, Amiga, and MS-DO
 - `P` is a fixed three-byte NIO readiness/length poll: byte 0 is `0` idle, `1` pending, or `2` ready; its little-endian length is nonzero only when ready. `NAK` denotes only malformed or rejected transport transactions, never a pending response.
 - Atari `D1:`–`D8:` disk transactions are a purpose-built standard SIO frontend that composes the existing `DiskService` directly; it shares slot/media state, but no framing or routing, with the `0x7F` FujiBus path through `DiskDevice`.
 - Config mode prepares the flashed configuration ATR as the `D1:` candidate; normal mode restores configured URI-backed disk slots. The boot disk contains the cc65 XEX configuration and acceptance programs.
-- The supported startup/config ATR installs a native Atari CIO `N:` handler resident below adjusted `MEMLO` and registered in `HATABS`. Same-handler installation is idempotent; a different existing `N:` handler is a reported collision, never overwritten. CIO `OPEN` calls public `fn_open` and associates its returned `fn_handle_t` with the Atari IOCB; GET, PUT, STATUS, and CLOSE call public `fn_read`, `fn_write`, `fn_info`, and `fn_close` for that handle. `N1:` is user-facing syntax, not a network-slot protocol; capacity is the existing library session limit. The handler uses neither legacy SIO network IDs nor legacy command encodings.
-- Native `N:` installation calls `fn_init` before making the handler usable and rolls back on failure. It maps CIO read/write/update opens to public `fn_open` GET/PUT/POST; write/update sets `FN_OPEN_BODY_UNKNOWN`. It uses a bounded 128-byte cache per open IOCB for byte-stream GET/PUT, maps STATUS through `fn_info`, and flushes then commits a write/update body exactly once with zero-length `fn_write` before first STATUS, read, or CLOSE. CLOSE then calls `fn_close`. It uses neither dynamic allocation nor retry beyond the existing `fn_write` library policy.
+- The user's DOS startup installs the relocatable, CA65-only native CIO `N:` handler below adjusted `MEMLO` and registers `HATABS`. Installation initializes resident state and rolls back on failure; own-handler reinstall is idempotent and a foreign `N:` is never overwritten. Total permanent RAM, including zero page and retained workspace, is at most 3,072 bytes. MyDOS 4.53/4 is the first verified DOS; Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X are unverified follow-on targets using DOS-appropriate installation of the same module.
+- Each CIO IOCB owns its returned native NetworkService handle. Read/write/update select GET/PUT/POST over `$7F`; output sets `BODY_UNKNOWN`. Bounded 128-byte caches preserve byte order and short acknowledgements; output flushes and commits exactly once with a zero-length write before first STATUS, read or CLOSE. Errors and stale handles release ownership safely without affecting other clients; uncertain side effects are never automatically replayed. No legacy network IDs or command encodings are used.
+- On a genuine OS warm start, the installed driver remains usable, open sessions are abandoned and their remote resources reclaimed without flushing or committing incomplete output. A cold boot reinstalls through DOS startup. NetSIO reset-event reclamation is verified; genuine OS warm-start persistence and physical SIO reset detection remain unverified. Embedded-adapter BASIC acceptance is also outstanding.
 - PROC is opt-in and application-owned. The library supplies only an ISR-safe notification hook and remains polling-correct; it never installs or replaces an Atari IRQ handler.
 - Physical v1 NIO requires CMD and UART data lines at 19,200 baud. Board-driven data output and PROC are released-idle open-drain; INT, MTR, CKI, and CKO are electrically benign and have no NIO semantics.
 - Shared wire fixtures are independent of production framing code. Every repository changed by implementation follows the workspace test policy; a `fujinet-nio-lib` change requires complete `make check`.
@@ -63,6 +64,7 @@ FujiNet-NIO needs Atari to be a first-class host alongside BBC, Amiga, and MS-DO
 - Legacy FujiNet device/configuration adapters, legacy `N:`/`R:` wire behavior, proprietary legacy commands, or extending their device mappings. This does not exclude the separately defined native NIO CIO `N:` handler.
 - SLIP framing or a stream transport on the Atari NIO application channel.
 - High-speed SIO support or treating AltirraSDL/NetSIO results as electrical or timing proof.
+- A `config://` facility: access to files on the original configuration/boot disk after DOS selection is a deferred idea, not a current feature or requirement.
 
 ## Success signal
 

@@ -29,7 +29,7 @@ flowchart LR
     LIB[fujinet-nio-lib]
     APP --> LIB
     BASIC --> HANDLER[Native CIO N: handler]
-    HANDLER --> LIB
+    HANDLER -->|native 0x7F| MUX
   end
   LIB -->|0x7F Q W P R| MUX
   OS -->|D1-D8 sector SIO| MUX
@@ -68,7 +68,7 @@ flowchart LR
 
 ### AD-4 — Atari library is an application-channel client [ADOPTED]
 
-- **Binds:** CAP-2, CAP-5, CAP-6
+- **Binds:** CAP-2, CAP-5
 - **Prevents:** cc65 applications embedding disk emulation, owning NIO service codecs, or hijacking Atari interrupt vectors.
 - **Rule:** `repos/fujinet-nio-lib` owns public-API use, `0x7F` exchange, bounded buffers, configurable deadline/retry policy, polling, and an ISR-safe PROC flag hook. It exposes capability discovery as an explicit opt-in; ordinary applications start at the 512-byte baseline and do not issue `Q`. It does not implement `D:` behavior, install/replace `VPRCED`, or make a PROC pulse a correctness dependency.
 
@@ -106,7 +106,7 @@ flowchart LR
 
 - **Binds:** CAP-2, CAP-5, CAP-6
 - **Prevents:** the user-facing `N1:` syntax pulling `0x71`–`0x78`, legacy `O/C/R/W/S` framing, or `LegacyTransport` back into native Atari NIO.
-- **Rule:** The supported startup/config ATR installs a CIO `N:` handler following the BBC adapter model, resident below adjusted `MEMLO`; it calls `fn_init` before usable `HATABS` registration and rolls back on failure. Same-handler installation is idempotent; a foreign `N:` entry is a collision. CIO `OPEN` maps its Atari IOCB to the `fn_handle_t` returned by public `fn_open`; read/write/update maps to GET/PUT/POST, with write/update setting `FN_OPEN_BODY_UNKNOWN`. GET/PUT use bounded 128-byte per-open IOCB caches; after flush, write/update commits exactly once by zero-length `fn_write` before first STATUS/read/CLOSE; STATUS calls `fn_info`, and CLOSE then calls `fn_close`. The handler adds no retry beyond library policy. `N1:` is user syntax, not a network-slot protocol; capacity is the existing library session limit. The handler owns only Atari CIO/IOCB adaptation, and must not address legacy SIO network IDs or invoke compatibility adapters.
+- **Rule:** The user's DOS startup installs the relocatable, CA65-only resident CIO `N:` module, initializes its state, reserves memory below `MEMLO` and safely registers `HATABS`. MyDOS 4.53/4 is the first verified environment; the configuration ATR remains the existing transient configuration/boot-selection environment. Same-handler installation is idempotent, a foreign handler is preserved and failure rolls back. Permanent RAM, including zero page and retained workspace, is at most 3,072 bytes. CIO IOCBs own native NetworkService handles over `$7F`; read/write/update select GET/PUT/POST, output sets `BODY_UNKNOWN`, and bounded 128-byte caches preserve ordered bytes and short acknowledgements. Output commits exactly once before first STATUS/read/CLOSE, without replaying uncertain writes or commits. A genuine OS warm start must preserve handler usability and abandon/reclaim open sessions without flushing or committing incomplete output; NetSIO reclamation is verified, genuine warm persistence and physical reset detection are not. The handler does not use legacy SIO network IDs or compatibility adapters. Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X are follow-on targets for the same module with DOS-appropriate installation. Embedded-adapter BASIC acceptance is outstanding; `config://` access to original configuration/boot disk files after DOS selection is a deferred idea, not a current feature.
 
 ## Consistency Conventions
 
@@ -123,7 +123,8 @@ flowchart LR
 ```text
 repos/
   fujinet-nio-lib/       # Atari public API backend and optional PROC hook
-  nio-config/            # configuration XEX, N: handler startup, URI-to-D1-D8 mapping
+  nio-config/            # configuration XEX and URI-to-D1-D8 mapping
+  nio-core-apps/         # relocatable N: module and DOS-specific installation
   fujinet-nio/           # SIO multiplexer, ESP32 channel, DiskDevice integration, NetSIO channel
   AltirraSDL/             # independent embedded-SIO conformance adapter
 integration-tests/
@@ -141,7 +142,7 @@ _bmad-output/
 | CAP-3 ESP32 physical profile | `fujinet-nio` ESP32 platform | AD-1, AD-5, AD-6, AD-8 |
 | CAP-4 AltirraSDL and NetSIO | `AltirraSDL`, `fujinet-nio` POSIX platform | AD-3, AD-7, AD-8 |
 | CAP-5 operator acceptance | `fujinet-nio` docs/profiles and workspace evidence | AD-5, AD-6, AD-8 |
-| CAP-6 native BASIC N: | `nio-config`, `fujinet-nio-lib` | AD-4, AD-10 |
+| CAP-6 native BASIC N: | `nio-core-apps`, user DOS startup, native NetworkService | AD-3, AD-10 |
 
 ## Deferred
 

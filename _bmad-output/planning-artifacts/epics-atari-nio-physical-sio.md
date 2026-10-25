@@ -41,11 +41,11 @@ FR9: Deliver the official FujiNet v1 16 MB physical SIO profile at 19,200 baud, 
 
 FR10: Provide diagnostics, build/flash, boot-mode, URI mapping, and real-hardware acceptance documentation that distinguishes virtual regression evidence from electrical/timing proof.
 
-FR11: Provide a native Atari BASIC CIO `N:` handler, installed resident below adjusted `MEMLO`, initialized by `fn_init`, and registered in `HATABS` by the supported startup/config ATR. It follows the BBC handle model: CIO `OPEN` calls public `fn_open` and stores the returned `fn_handle_t` against its Atari IOCB; read/write/update maps to GET/PUT/POST, with write/update setting `FN_OPEN_BODY_UNKNOWN`; GET/PUT use bounded 128-byte per-open IOCB caches; STATUS uses `fn_info`; and CLOSE flushes, commits an unknown body once with zero-length `fn_write`, then calls `fn_close`. `N1:`-style syntax is user-facing only; capacity is the existing library session limit.
+FR11: Provide a relocatable, CA65-only Atari BASIC CIO `N:` handler installed during the user's DOS startup, resident below adjusted `MEMLO` and registered in `HATABS`. MyDOS 4.53/4 is the first verified environment. The configuration ATR remains a transient configuration/boot-selection environment, with its existing boot contract unchanged. IOCBs own native NetworkService handles over `$7F`; read/write/update maps to GET/PUT/POST, output uses `BODY_UNKNOWN`, bounded 128-byte buffers and exactly one terminal commit. STATUS and CLOSE use the existing native service semantics; uncertain side effects are never automatically replayed. Total permanent RAM is at most 3,072 bytes.
 
 ### NonFunctional Requirements
 
-NFR1: Preserve explicit exclusions: no `LegacyTransport`, legacy FujiNet framing/application compatibility, legacy `N:`/`R:` wire behavior, proprietary legacy commands, SLIP on `0x7F`, or high-speed SIO claim. The native CIO `N:` handler is permitted because it uses only the public NIO client and NetworkService.
+NFR1: Preserve explicit exclusions: no `LegacyTransport`, legacy FujiNet framing/application compatibility, legacy `N:`/`R:` wire behavior, proprietary legacy commands, SLIP on `0x7F`, or high-speed SIO claim. The native CIO `N:` handler is permitted because it uses the native NIO protocol and NetworkService.
 
 NFR2: The v1 NIO payload baseline is 512 bytes; every v1 device supports it, no implicit segmentation is allowed, and an optional `Q` must never become a bootstrap requirement.
 
@@ -65,7 +65,7 @@ NFR6: Each touched repository follows the workspace test policy; any `fujinet-ni
 - `Q` and `P` DCB receive sizes are client/fixture invariants because physical SIO does not expose Atari DCB byte counts to the device; firmware validates only observable AUX, command, checksum, state, and data.
 - A local timeout does not cancel an accepted request. A later call observes `P`; a valid terminal `R` consumes the response. Retrying remains an application decision based on operation semantics.
 - The ESP32 profile owns GPIO/UART sequencing and boot projection; the library owns only the application channel; AltirraSDL and NetSIO are separate conformance adapters.
-- The native BASIC `N:` handler owns only Atari CIO/IOCB adaptation. It maps each IOCB to a public `fn_handle_t` over `0x7F`, not an Atari-specific network slot; it must not address `0x71`–`0x78`, translate legacy `O/C/R/W/S`, or invoke `LegacyTransport`.
+- The native BASIC `N:` handler owns only Atari CIO/IOCB adaptation. It maps each IOCB to a native NetworkService handle over `0x7F`, not an Atari-specific network slot; it must not address `0x71`–`0x78`, translate legacy `O/C/R/W/S`, or invoke `LegacyTransport`.
 
 ### UX Design Requirements
 
@@ -299,27 +299,47 @@ As an Atari BASIC user,
 I want to open a supported URI through `N1:` syntax,
 So that I can use modern FujiNet networking from BASIC without a legacy FujiNet transport.
 
-**Acceptance Criteria:**
+**Acceptance Criteria (rebaselined 2026-10-25):**
 
-**Given** the supported startup/config ATR,
-**When** the native handler is installed,
-**Then** it calls `fn_init`, reserves its resident memory below adjusted `MEMLO`, installs its `HATABS` entry, and remains valid across subsequent BASIC/DOS program loads,
-**And** a same-handler reinstall is idempotent while a foreign `N:` handler is reported as a collision without replacement.
+**Given** the user's supported DOS startup, **when** the relocatable CA65
+handler is installed, **then** it initializes its resident state, reserves its
+whole allocation below adjusted `MEMLO`, registers `HATABS`, and survives
+subsequent BASIC/DOS program loads. Installation is idempotent for its own
+handler, rejects a foreign `N:` without replacement, and rolls back failures.
+MyDOS 4.53/4 is the first verified environment. The configuration ATR retains
+its existing transient configuration and boot-selection contract and does not
+install this handler as a Story 2.5 requirement.
 
-**Given** BASIC opens `N1:<supported-uri>`,
-**When** CIO OPEN succeeds,
-**Then** the handler stores the `fn_handle_t` returned by public `fn_open` against that IOCB,
-**And** session exhaustion fails OPEN normally rather than creating an Atari-specific network-slot scheme.
+**Given** BASIC opens an `N1:` URI, **then** modes 4, 8 and 12 select native
+GET, PUT and POST respectively; output sets `BODY_UNKNOWN`, and the returned
+service handle is owned by the IOCB. Exhaustion and errors preserve ownership
+of other IOCBs. GET/PUT, STATUS and CLOSE use native `$7F` NetworkService,
+bounded 128-byte caches, ordered partial acknowledgements and exactly one
+terminal zero-length commit before the first STATUS, read or CLOSE. Uncertain
+writes or commits are never automatically replayed. Foreground calls are
+serialized, and the CIO error/status table and behavior across all supported
+IOCBs are recorded and tested.
 
-**Given** an open NIO BASIC channel,
-**When** BASIC performs byte GET/PUT, STATUS, or CLOSE,
-**Then** the handler uses bounded 128-byte IOCB caches and public `fn_read`/`fn_write`/`fn_info`/`fn_close` with BBC-aligned semantics,
-**And** a POST/PUT unknown body is flushed and committed exactly once by zero-length `fn_write` before its first STATUS, read, or CLOSE.
+**Given** a genuine OS warm start, **then** the resident handler remains usable
+with valid `HATABS` and `MEMLO`, open sessions are abandoned and their remote
+resources reclaimed, and incomplete output is neither flushed nor committed.
+A cold boot reinstalls cleanly through DOS startup. Stale remote handles return
+appropriate CIO errors, release local ownership safely and permit a later OPEN
+without replaying uncertain operations or affecting another client.
 
-**Given** a BASIC acceptance fixture,
-**When** it exercises GET and update/commit flows,
-**Then** it proves only `0x7F` NetworkService traffic is used,
-**And** it records the CIO error table, stale/reset behavior, foreground serialization, and resident-memory budget across all supported IOCBs.
+**Given** genuine DOS/BASIC acceptance, **then** READ, PUT and POST fixtures
+execute against production NetworkDevice over native `$7F`, including correct
+bytes and exactly-once commit, and installer, error, recovery and RAM gates
+pass. The permanent allocation, including code, data, BSS, buffers, zero page
+and retained workspace, is at most 3,072 bytes. Embedded-adapter BASIC
+acceptance remains an explicit outstanding verification item; NetSIO results do
+not establish physical SIO reset detection or electrical behavior.
+
+**Follow-on compatibility targets:** Atari DOS 2.0S and 2.5, SpartaDOS and
+SpartaDOS X, using the same resident module with DOS-appropriate installation.
+These environments are not yet verified. Future `config://` access to files on
+the original configuration/boot disk after selecting a DOS is a deferred idea,
+not an implemented feature or current acceptance requirement.
 
 ## Epic 3: Operators can deploy and trust physical Atari NIO
 
