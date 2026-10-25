@@ -1464,3 +1464,46 @@ again misassociated that checksum, without affecting the BASIC/service checks.
 
 The apps fix is commit `7ef404e4`; the workspace audit commit pins it for
 coordinated publication. Story 2.5 remains open.
+
+### Closure review — original criteria versus verified baseline
+
+**Verdict: not complete.** The original acceptance criteria are in the
+feature-specific `epics-atari-nio-physical-sio.md`, Story 2.5; the original
+read/write/update mapping and `BODY_UNKNOWN` requirement are spelled out in
+`spec-atari-nio-physical-sio/wire-and-acceptance.md` and the frozen matrix at
+the top of this record. Later user instructions require a CA65-only handler
+and the MyDOS 4.53/4 lifecycle; those replace the former literal requirement to
+link and call the C public library. They do not establish that the current
+config ATR or the update/POST criterion has been met.
+
+| Original requirement | Evidence and closure finding |
+| --- | --- |
+| Install on supported startup/config ATR; reserve below MEMLO and survive BASIC/DOS loads | **Partial.** The MyDOS acceptance ATR installs NIO.AR0 and retains HATABS, `$27c1` MEMLO and resident TEXT through BASIC READ/PUT (`test-evidence/atari-sio-audit-{read,write}/netsio/`). The production config ATR uses `repos/nio-core-apps/boot-disk/manifests/atari.yaml` and `boot-disk-atari`; neither NIO.AR0 nor NIO.O65 is staged there. MyDOS acceptance is not evidence of installation from the production config ATR. |
+| Initialization, same-handler reinstall, foreign collision and failure rollback | **Satisfied for the accepted CA65 implementation.** `test-resident-asm` runs streamed o65 installer controls, repeat resident snapshot, foreign ownership and bounds/truncation checks. The assembly entry initializes owner records; the former `fn_init` call is superseded by the later CA65-only/no-runtime instruction. |
+| OPEN returns a handle owned by the IOCB; exhaustion is local | **Satisfied for supported modes.** Real-6502 OPEN controls exercise two IOCBs, local third-open `$a1`, re-entry and caller state. The production assembly sends the existing native NetworkService OPEN and retains its returned handle; the former literal public `fn_open` call is superseded by the CA65-only instruction. |
+| GET/PUT/STATUS/CLOSE, 128-byte caches, terminal commit once | **Partial.** MyDOS READ/PUT evidence and live CIOV `test-evidence/atari-sio-asm-ciov-final-2/` show GET, PUT, repeated STATUS, CLOSE and one terminal commit per body. Real-6502 controls cover partial acknowledgements and uncertain operations. However, original write/update requires `FN_OPEN_FLAG_BODY_UNKNOWN` (`$04`), while the assembly leaves OPEN flags at zero, and update/POST is not implemented. |
+| BASIC GET and update/commit flows; native `$7f` only; errors, reset/stale behavior, serialization and RAM budget | **Partial.** BASIC executes GET and PUT on the production NetSIO endpoint, not an update/POST flow. The assembly OPEN explicitly accepts only 4 and 8; a focused real-6502 run with mode 12 returns `$92` without dispatch. Existing evidence covers error codes, re-entry, close-after-failure and 2,291-byte total RAM, but the audit does not establish a resident-session reset/stale-handle acceptance run. |
+
+The earlier preparation checklist also calls for the same BASIC fixture on
+the embedded adapter. Story 2.4's embedded public-API acceptance is evidence
+for that earlier story, not an execution of this MyDOS BASIC fixture; no such
+Story 2.5 embedded run has been identified. This is recorded separately from
+the original Epic 2.5 acceptance wording above.
+
+Focused verification after `source scripts/env.sh`:
+
+```sh
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65
+```
+
+Both passed with the existing invalid-mode control changed from mode 0 to the
+originally required update mode 12; both the assembly and C reference return
+`$92`. The reference is not proof that the original update criterion passed.
+The config-ATR finding was verified directly against the production manifest
+and build target. No installation or update implementation was changed by
+this review. Closing the story would require resolving the production startup
+packaging and update/POST contract, plus the missing resident reset evidence,
+without breaking the existing MyPicoDOS/XEX path or the verified MyDOS path.
+Those changes exceed a verification-only closure and the instruction not to
+redesign functionality. The story status remains `in-progress`; Epic 2 is not
+marked complete.
