@@ -67,4 +67,33 @@ unowned frames, owned NAK, and subsequent owned command. Physical capture,
 independent UART buffering, unowned write-data spoofing, and recovery are not
 yet fixed or tested; the acceptance criteria remain open.
 
+**Legacy-based implementation (2026-10-25):** Firmware commit
+`25d8d87e4f1f363957861a9e943a5d402255e383` adds release-gated capture,
+bounded recovery, progress-based write timeout and focused state-machine
+coverage. After `source scripts/env.sh`, in `repos/fujinet-nio`,
+`./build.sh -cp fujibus-pty-debug` passed; the focused
+`build/fujibus-pty-debug/tests/fujinet-nio-tests --test-case='Atari SIO*'`
+passed 17 cases / 175 assertions; `ctest --test-dir build/fujibus-pty-debug
+--output-on-failure` passed 3/3; `./build.sh -b` passed for the configured
+classic ESP32 16 MB Atari profile. The acceptance criterion concerning *all*
+ambiguous ordering remains unproven: neither GPIO coalescing nor the UART's
+delayed hardware bytes are fully observable. The readiness record describes
+the assumptions and the physical measurement required.
+
 ## Spec Change Log
+
+## Current implementation direction
+
+The user requires the existing working Atari SIO implementation in
+`/home/markf/dev/atari/fujinet-firmware` as the primary reference. Study its
+`lib/bus/sio/sio.cpp`, `sio.h`, `lib/hardware/ESP32UARTChannel.cpp` and
+initialization paths before designing the fix. Legacy polls active-low COMMAND,
+reads five bytes using a timeout, waits for release, then routes; it handles
+write data inside the selected transaction and discards idle stray input.
+Adapt this proven sequence where practical; do not introduce a competing
+event-queue architecture without demonstrating why it is needed. Bound any
+recovery and explicitly document timing assumptions and physical limitations.
+Do not change reply timing, PROC, reset or service protocols. Own the firmware
+ingress and its focused host tests; update this spec and the Atari readiness
+record with verification and legacy comparisons. Other work may occur in the
+workspace: do not revert others' changes; accommodate them.

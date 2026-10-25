@@ -125,12 +125,8 @@ voltage and idle release on every supported board revision, signal edges,
 UART tolerance, phase timing under Wi-Fi/flash load, contention, interrupt
 latency and reset behavior. Source pin modes do not prove electrical safety.
 
-**Smallest next implementation task:** repair and host-test the existing
-ESP32 ingress's COMMAND/byte ordering and unowned-address silence, with
-focused tests covering both edges, queued bytes, write data and unrelated
-devices. Then add only the measured SIO reply timing required for the first
-isolated physical D1 STATUS/READ probe. Do not replace DiskService or the
-native `$7F` service path.
+**Next step:** perform the isolated physical D1 STATUS/READ probe above and
+measure timing before deciding whether a reply-timing change is needed.
 
 ## Verification of this record
 
@@ -171,3 +167,45 @@ passed 9 cases / 146 assertions; `ctest --test-dir build/fujibus-pty-debug
 --output-on-failure` passed 3/3; and `./build.sh -b` passed for the configured
 original-ESP32 16 MB Atari profile (44,248 bytes static RAM, 2,111,395 bytes
 application flash). These checks do not verify physical command capture.
+
+## Legacy sequencing adaptation
+
+The following supersedes the preceding preliminary capture investigation.
+Reference checkout `fujinet-firmware` commit
+`ac25a355271e4c4ba17967d6494161fe2df35a12` implements the proven sequence in
+`lib/bus/sio/sio.cpp`: poll active-low COMMAND, read five bytes, wait for
+release, verify and dispatch to a registered device; idle input is discarded
+when the modem path is present. `lib/hardware/ESP32UARTChannel.cpp` uses an
+ESP-IDF 2048-byte receive ring and a separate software FIFO. `IOChannel.cpp`
+resets its read timeout on progress. Device write data is read synchronously
+inside the selected transaction (`lib/bus/sio/FujiSIOPacket.cpp`); the ESP
+release wait and missing write-checksum wait are not bounded in legacy.
+
+Firmware commit `25d8d87e4f1f363957861a9e943a5d402255e383` adapts that
+sequence to the existing NIO router: collect no more than five command bytes,
+dispatch after release, deliver subsequent data only to an accepted write,
+ignore idle bytes, and reset an incomplete write on a new assertion. A
+bounded 50 ms command window and 200 ms write inactivity timeout permit
+recovery; the latter resets on progress. Observed multiple edges and reported
+UART errors abort the transaction. An ISR records edges and notifies the core
+task without blocking; while collecting, the task polls at 100 microsecond
+intervals. The configured FreeRTOS tick is 10 ms, so merely requesting a 1 ms
+UART wait cannot reliably wake during a five-byte 19200-baud frame.
+
+These checks do not establish physical ordering in all cases: GPIO interrupt
+coalescing, delayed bytes in the UART hardware FIFO, lost driver error events,
+and core-task scheduling delays are not timestamped. In particular a delayed
+byte after release cannot be distinguished in software from a later byte. The
+host tests cover reported errors and observable edges, not all possible
+physical histories, and do not prove unowned-device silence for ambiguous
+histories. Validate capture and silence on the board with a shared-bus trace;
+no physical timing or electrical measurements have been made. Unlike legacy,
+NIO preserves its established owned-device error responses.
+
+Verification, after `source scripts/env.sh`: in `repos/fujinet-nio`,
+`./build.sh -cp fujibus-pty-debug` passed;
+`build/fujibus-pty-debug/tests/fujinet-nio-tests --test-case='Atari SIO*'`
+passed 17 cases / 175 assertions, including a simulated 512-byte write taking
+more than 200 ms; `ctest --test-dir build/fujibus-pty-debug --output-on-failure`
+passed 3/3; `./build.sh -b` passed for the configured classic-ESP32 16 MB
+Atari profile. Build success is not physical acceptance.
