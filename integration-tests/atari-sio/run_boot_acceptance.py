@@ -1284,6 +1284,13 @@ def capture_first_boot_read(token):
 def sha256(path):
     return hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
 
+def make_evidence_dir(prefix):
+    """Allocate a dated run directory without overwriting earlier evidence."""
+    prefix = Path(prefix)
+    prefix.parent.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    return Path(tempfile.mkdtemp(prefix=f'{prefix.name}-{stamp}-', dir=prefix.parent))
+
 def first_read_trace(hub_log):
     """Extract the first D1/sector-1 response without relying on log order."""
     command = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?31 52 01 00 84(?:\s|$)', hub_log)
@@ -1298,11 +1305,10 @@ def first_read_trace(hub_log):
     ack = event(r'81:SYNC_RESPONSE\[5\].*? 41 00 00', 'command ACK')
     complete = event(r'01:DATA_BYTE\[1\].*? 43(?:\s|$)', 'COMPLETE')
     payload = event(r'02:DATA_BLOCK\[128\] \+\d+ (?P<data>(?:[0-9A-F]{2} ?){128})', '128-byte payload')
-    checksum = event(r'01:DATA_BYTE\[1\].*? (?P<checksum>[0-9A-F]{2})(?:\s|$)', 'checksum')
     # Restrict the checksum match to traffic after the payload; the command
     # response's COMPLETE is also a DATA_BYTE event.
     payload_end = tail[payload.end():]
-    checksum = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?< NET IN .*?01:DATA_BYTE\[1\] \+\d+ (?P<checksum>[0-9A-F]{2})(?:\s|$)', payload_end)
+    checksum = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?< NET IN .*?01:DATA_BYTE\[1\] \+\d+ (?P<checksum>[0-9A-F]{2})(?=\s|>|$)', payload_end)
     if not checksum:
         raise RuntimeError('first sector-1 response lacks checksum')
     def seconds(value):
@@ -1755,6 +1761,9 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
             retained['range'] = (start, end)
             retained['before'] = hashlib.sha256(bridge.memdump(start, end - start)).hexdigest()
             module = (ROOT / 'integration-tests/atari-sio/boot-app/build/nio.o65').read_bytes()
+            retained['ram'] = {'code': _u16(module, 32), 'initialized_data': _u16(module, 36),
+                               'bss': _u16(module, 40), 'zero_page': module[20],
+                               'permanent_stack': _u16(module, 18)}
             # o65 TEXT includes CODE/RODATA; initialized DATA contains live
             # transport state and legitimately changes when BASIC uses N:.
             retained['initialized'] = _u16(module, 22 + 10)
@@ -1808,12 +1817,24 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
             after = hashlib.sha256(bridge.memdump(start, retained['initialized'])).hexdigest()
             hatabs = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
             memlo = bridge.peek16(0x2e7)
+            memtop = bridge.peek16(0x2e5)
             screenshot = bridge.screenshot()
+        n_entry = next((index for index in range(0, HATABS_ENTRY_BYTES, 3)
+                        if hatabs[index] == ord('N')), None)
+        ram = dict(retained['ram'])
+        ram.update(memlo_reservation=end - start,
+                   total_permanent=sum(ram.values()))
+        memory = {'resident_start': f'${start:04X}', 'resident_end': f'${end:04X}',
+                  'memlo': f'${memlo:04X}', 'memtop': f'${memtop:04X}',
+                  'available_bytes': memtop - memlo,
+                  'hatabs_n_table': f'${_u16(hatabs, n_entry + 1):04X}' if n_entry is not None else None,
+                  'permanent_ram_bytes': ram}
         (path / 'resident-basic.json').write_text(json.dumps({
             'result_raw': result.hex(), 'resident_range': [start, end],
             'resident_sha256_before_basic_load': retained['before'],
             'initialized_sha256_before_basic_run': retained['code'],
             'initialized_sha256_after_basic_run': after, 'hatabs_raw': hatabs.hex(), 'memlo': memlo,
+            'memory': memory,
         }, indent=2) + '\n')
         (path / 'resident-basic-screen.png').write_bytes(screenshot)
         # N, E are the first two bytes of the deterministic production reply;
@@ -1825,7 +1846,7 @@ def run_resident_o65_basic(timeout, evidence_dir, *, local_disk=False, output=Fa
         if not any(hatabs[index] == ord('N') for index in range(0, HATABS_ENTRY_BYTES, 3)):
             raise RuntimeError('Atari BASIC LOAD/RUN invalidated the resident N: HATABS entry')
         observed = {'signature': 'BASIC-N:', 'close_status': result[3],
-                    'resident_sha256': after,
+                    'resident_sha256': after, 'memory': memory,
                     'screenshot': str(path / 'resident-basic-screen.png')}
         if post:
             observed.update(body_lengths=[5], response_byte=chr(result[0]))
@@ -4597,12 +4618,14 @@ def write_altirra_embedded_native_capacity_bounds_projection(run_result):
     return result
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser(); ap.add_argument('--timeout',type=float,default=20); ap.add_argument('--observe-native',action='store_true'); ap.add_argument('--native-only',action='store_true'); ap.add_argument('--resident-installer',action='store_true'); ap.add_argument('--resident-o65-installer',action='store_true'); ap.add_argument('--resident-o65-altbase',action='store_true'); ap.add_argument('--resident-o65-idempotent',action='store_true'); ap.add_argument('--resident-o65-foreign',action='store_true'); ap.add_argument('--resident-o65-open',action='store_true'); ap.add_argument('--resident-o65-basic',action='store_true'); ap.add_argument('--resident-o65-basic-write',action='store_true'); ap.add_argument('--resident-o65-basic-post',action='store_true'); ap.add_argument('--public-api-clock',action='store_true'); ap.add_argument('--public-api-clock-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-reset-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery',action='store_true'); ap.add_argument('--public-api-reset-recovery',action='store_true'); ap.add_argument('--native-core-dispatch',action='store_true'); ap.add_argument('--native-core-dispatch-altirra-embedded',action='store_true'); ap.add_argument('--native-wrong-r-retention',action='store_true'); ap.add_argument('--native-wrong-r-retention-altirra-embedded',action='store_true'); ap.add_argument('--native-reset-to-idle',action='store_true'); ap.add_argument('--native-reset-to-idle-altirra-embedded',action='store_true'); ap.add_argument('--native-interrupted-r-recovery',action='store_true'); ap.add_argument('--native-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--native-capacity-bounds',action='store_true'); ap.add_argument('--native-capacity-bounds-altirra-embedded',action='store_true'); ap.add_argument('--write-evidence',action='store_true'); ap.add_argument('--evidence-dir', type=Path); ap.add_argument('--json', action='store_true'); ap.add_argument('--settle', type=float, default=0.0); ap.add_argument('--repeat', type=int, default=1); ap.add_argument('--capture-dcb', action='store_true'); ap.add_argument('--command-ack-delay-tics', type=int); ap.add_argument('--trace-serial',action='store_true'); ap.add_argument('--write-projection-results', action='store_true'); ap.add_argument('--backend', choices=('nio', 'legacy'), default='nio'); ap.add_argument('--explicit-cold-reset', dest='explicit_cold_reset', action='store_true', default=True); ap.add_argument('--no-explicit-cold-reset', dest='explicit_cold_reset', action='store_false'); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--timeout',type=float,default=20); ap.add_argument('--observe-native',action='store_true'); ap.add_argument('--native-only',action='store_true'); ap.add_argument('--resident-installer',action='store_true'); ap.add_argument('--resident-o65-installer',action='store_true'); ap.add_argument('--resident-o65-altbase',action='store_true'); ap.add_argument('--resident-o65-idempotent',action='store_true'); ap.add_argument('--resident-o65-foreign',action='store_true'); ap.add_argument('--resident-o65-open',action='store_true'); ap.add_argument('--resident-o65-basic',action='store_true'); ap.add_argument('--resident-o65-basic-write',action='store_true'); ap.add_argument('--resident-o65-basic-post',action='store_true'); ap.add_argument('--public-api-clock',action='store_true'); ap.add_argument('--public-api-clock-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-reset-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery',action='store_true'); ap.add_argument('--public-api-reset-recovery',action='store_true'); ap.add_argument('--native-core-dispatch',action='store_true'); ap.add_argument('--native-core-dispatch-altirra-embedded',action='store_true'); ap.add_argument('--native-wrong-r-retention',action='store_true'); ap.add_argument('--native-wrong-r-retention-altirra-embedded',action='store_true'); ap.add_argument('--native-reset-to-idle',action='store_true'); ap.add_argument('--native-reset-to-idle-altirra-embedded',action='store_true'); ap.add_argument('--native-interrupted-r-recovery',action='store_true'); ap.add_argument('--native-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--native-capacity-bounds',action='store_true'); ap.add_argument('--native-capacity-bounds-altirra-embedded',action='store_true'); ap.add_argument('--write-evidence',action='store_true'); ap.add_argument('--evidence-dir', type=Path, help='run directory prefix; a unique date-time suffix is added'); ap.add_argument('--json', action='store_true'); ap.add_argument('--settle', type=float, default=0.0); ap.add_argument('--repeat', type=int, default=1); ap.add_argument('--capture-dcb', action='store_true'); ap.add_argument('--command-ack-delay-tics', type=int); ap.add_argument('--trace-serial',action='store_true'); ap.add_argument('--write-projection-results', action='store_true'); ap.add_argument('--backend', choices=('nio', 'legacy'), default='nio'); ap.add_argument('--explicit-cold-reset', dest='explicit_cold_reset', action='store_true', default=True); ap.add_argument('--no-explicit-cold-reset', dest='explicit_cold_reset', action='store_false'); a=ap.parse_args()
     def emit(value):
         print(json.dumps(value) if a.json else value)
     evidence_dir = a.evidence_dir
     if evidence_dir is None and not a.observe_native:
         evidence_kind = ('atari-sio-resident-o65-foreign-' if a.resident_o65_foreign else
+                         'atari-sio-resident-o65-basic-post-' if a.resident_o65_basic_post else
+                         'atari-sio-resident-o65-basic-write-' if a.resident_o65_basic_write else
                          'atari-sio-resident-o65-basic-' if a.resident_o65_basic else
                          'atari-sio-resident-o65-open-' if a.resident_o65_open else
                          'atari-sio-resident-o65-idempotent-' if a.resident_o65_idempotent else
@@ -4629,9 +4652,9 @@ if __name__=='__main__':
                          'atari-sio-native-reset-to-idle-' if a.native_reset_to_idle else
                          'atari-sio-native-wrong-r-retention-' if a.native_wrong_r_retention else
                          'atari-sio-native-core-dispatch-' if a.native_core_dispatch else 'atari-sio-boot-')
-        evidence_dir = ROOT / 'test-evidence' / (evidence_kind + time.strftime('%Y%m%d-%H%M%S'))
+        evidence_dir = ROOT / 'test-evidence' / evidence_kind.rstrip('-')
     if evidence_dir:
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_dir = make_evidence_dir(evidence_dir)
     if a.repeat < 1:
         raise ValueError('--repeat must be positive')
     if a.write_projection_results and not a.trace_serial:

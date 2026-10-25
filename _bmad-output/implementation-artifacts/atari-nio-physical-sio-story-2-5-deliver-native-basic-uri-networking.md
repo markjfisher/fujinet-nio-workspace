@@ -1568,3 +1568,20 @@ the three evidence directories above.
 The prior closure matrix records the state at review time. Its missing
 update/POST and output OPEN flag findings are resolved by this section; its
 other outstanding findings are unchanged and Story 2.5 remains in progress.
+
+### BASIC acceptance memory and evidence reporting
+
+The BASIC runner now reports resident segment sizes, the conservatively charged
+zero-page reservation, total permanent RAM, resident addresses, MEMLO, MEMTOP,
+available memory and the N: HATABS table in both its result and inspection
+evidence. Every CLI evidence directory, including a supplied directory prefix,
+gets a unique date-time suffix. A first-sector checksum parser fix handles
+interleaved hub log lines without treating a later COMPLETE as the checksum.
+
+After `source scripts/env.sh`, `python3 -m unittest discover -s
+integration-tests/atari-sio/tests -q` passed 71 tests, and `python3
+integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post
+--timeout 1 --evidence-dir test-evidence/atari-sio-basic-memory-post --json`
+passed using `test-evidence/atari-sio-basic-memory-post-20261025-095237-v5p7dgn0/`.
+It reported 2,360 total bytes, MEMLO `$2806`, MEMTOP `$9c1f`, N: table
+`$24bb` and a correct first-read checksum `$b8`.
