@@ -1256,6 +1256,7 @@ python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic 
 ```
 
 The firmware test-only fixture extension is committed as
-`31cda0ab21a47793352371ffb6e0f4b9506ade2d`. Its workspace submodule pin
-remains at the merged baseline until that commit is merged upstream, as
-required by the workspace instructions. Story 2.5 remains open.
+`31cda0ab21a47793352371ffb6e0f4b9506ade2d`. At the user's request, the
+workspace pins this commit for coordinated publication. The firmware commit
+must reach its upstream branch before the workspace pin check can pass.
+Story 2.5 remains open.
