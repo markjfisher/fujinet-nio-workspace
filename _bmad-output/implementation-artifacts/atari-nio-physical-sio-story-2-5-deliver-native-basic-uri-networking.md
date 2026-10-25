@@ -883,3 +883,201 @@ Evidence:
   each output body is written once, committed once, queried by two STATUS
   calls, then closed. The fixture records only two commitments at offsets 128
   and 3, so repeated STATUS and CLOSE cannot count as duplicate effects.
+
+## MyDOS BASIC recovery evidence (2026-10-25)
+
+The interrupted MyDOS work was re-started from the committed workspace
+baseline `da5e0ebd` without treating its uncommitted packaging or Disk STATUS
+experiments as evidence.  The established Story 2.4 launch convention is the
+debug `repos/AltirraSDL/.../AltirraSDL` executable with the rendered checked-in
+ROM settings, 800XL/PAL/1088 KiB profile, accurate disk and SIO patch disabled.
+The runner now supplies AltirraSDL's documented `--headless` frontend mode
+when no desktop display exists; this retains bridge screenshots and CPU-state
+inspection rather than substituting an emulator or ROM setup.
+
+The known-good configuration-ATR control was re-run through production
+NetSIO.  It reached `NIO!` at `$0627`; its screenshot and CPU state are in
+`test-evidence/atari-sio-recovery-known-good-headless/netsio/inspection.json`
+and `screen.png`.  The captured first boot transfer is the expected real D1
+sector-1 READ (`31 52 01 00 84`), ACK/COMPLETE, 128 data bytes and valid `$94`
+checksum.  This disposes of the previous no-ROM diagnosis.
+
+The required direct-mount control then exposed the first demonstrated MyDOS
+failure.  The generated standard-density ATR uses `dir2atr -b
+MyDos455Beta4`, but its staged checked-in `DOS.SYS`/`DUP.SYS` identify as
+MyDOS 4.53/4-.  Direct boot with the exact verified profile executes disk
+code then reaches an illegal instruction at `$1ae4` with a blank screen;
+evidence is in `test-evidence/atari-sio-recovery-mydos-direct-profile/`.
+An otherwise identical temporary ATR made with the matching `MyDos4534` boot
+sectors reaches the ordinary MyDOS 4.53/4- menu, with screenshot and CPU
+state in `test-evidence/atari-sio-recovery-mydos4534-direct-control/`.
+This proves a boot-sector/system-file version mismatch, not a NetSIO or ROM
+failure.  No valid checked-in MyDOS 4.55 Beta 4 `DOS.SYS`/`DUP.SYS` pair is
+currently available, so the gate forbids a production-NetSIO comparison,
+`NIO.AR0` installation, or BASIC acceptance claim.
+
+The uncommitted Disk STATUS experiment was also checked against the frozen
+Story 1.1 disk contract.  That contract requires STATUS AUX `$0000` and
+status byte 2 `$0f`; its format-oriented `$e0` timeout is explicitly excluded.
+Consequently the experimental arbitrary-AUX acceptance and `$e0` response are
+not retained as a MyDOS fix.  The worktree remains preserved for its owner;
+no production disk semantics were changed in this recovery.
+
+## MyDOS 4.53/4 BASIC attempt and current gate (2026-10-25)
+
+The acceptance scope was subsequently changed to the verified MyDOS 4.53/4
+combination, superseding the 4.55-specific gate above. The existing ATR
+builder now uses `MyDos4534` boot sectors with the checked-in matching
+`DOS.SYS` and `DUP.SYS`. A plain standard-density image reached BASIC's
+`READY` prompt through the production NetSIO endpoint using the established
+Altirra/ROM profile. Its screenshot, CPU state and transaction logs are in
+`test-evidence/atari-sio-4534-plain-netsio-baseline/netsio/`.
+
+The MyDOS image containing `NIO.AR0` and the existing `FNREAD.BAS` fixture
+was also booted directly with BASIC enabled. MyDOS did invoke the installer,
+but the installer reported `NRI!` outcome 3 (insufficient safe memory),
+before initialization or publication of an N: HATABS entry. Its captured
+result has old MEMLO `$1ee8`, candidate start `$1ee8`, candidate end `$5640`
+and unchanged MEMLO `$1ee8`. The current transient loader starts at `$3f00`
+and its staged source occupies `$4900-$9290`, both overlapping that
+candidate reservation. The range check correctly rejects it; disabling the
+check would overwrite live installer code or source. Evidence is in
+`test-evidence/atari-sio-4534-autorun-direct-long/`. This is not a successful
+N: installation or BASIC fixture run.
+
+The images are reproducibly built with `source scripts/env.sh` followed by
+`make -C integration-tests/atari-sio/boot-app resident-o65-mydos-basic
+mydos-plain`. The focused `test-resident-o65` target and the 65 Atari SIO
+Python unit tests passed after this attempt. The installer placement conflict
+remains unresolved without changing the existing staging approach or the
+resident footprint; neither has been authorized as part of this recovery.
+The unrelated uncommitted Disk STATUS experiment remains untouched.
+
+### Transient-layout follow-up
+
+The measured direct MyDOS run recorded MEMTOP `$9c1f`, the conservative
+stack floor `$941f`, SDLSTL `$9c20` and SAVMSC `$9c40`. The current XEX
+loads its 1,949-byte loader at `$3f00-$469c` and 18,833-byte FNR1/o65 source
+at `$4900-$9290` before invoking the installer. The proposed resident
+reservation is 14,168 bytes at `$1ee8-$563f`. Even the interval from MEMLO
+to MEMTOP contains only 32,055 bytes: the resident and uncompressed source
+alone require 33,001 bytes, before placing the loader or allowing for the
+stack. Consequently there is no disjoint relocation of these existing
+segments in that interval.
+
+Moving only the loader does not address the overlap. Although a carefully
+ordered first-install copy might tolerate overlapping source and destination,
+the DOS XEX loader writes the stage before the installer's ownership check;
+on a subsequent invocation it would overwrite an already-installed handler.
+Preserving the existing ownership guarantee therefore requires more than a
+change of the fixed addresses, such as a safely bounded alternate staging
+representation or preflight mechanism. No such implementation has been
+verified in this follow-up, and the BASIC lifecycle remains unaccepted.
+
+## Increment: DOS-streamed o65 installation (2026-10-25)
+
+The fixed-address staging constraint is resolved by a DOS-CIO source mode in
+the existing bounded o65 loader. `NIO.AR0` contains only 2,299 transient bytes
+at `$6000-$68fa` plus INITAD. The unchanged FNR1/o65 payload is `D1:NIO.O65`.
+The installer reads the 48-byte wrapper/fixed header at `$6e00`, resolves
+HATABS ownership and MEMLO bounds, then consumes the file sequentially through
+a 128-byte buffer at `$6f00`. The original relocation parser, resident entry
+and publication checks are shared with the existing staged-XEX build. No
+resident implementation or public API was changed for this installation step.
+
+All transient segments lie above the resident ceiling `$6000`; repeat DOS
+loading cannot overwrite a resident previously installed by this variant.
+The selected free IOCB and cc65 ZP are restored on exit. Stream truncation
+unwinds to the original installer caller, closes the file and leaves MEMLO
+and HATABS unchanged. No partial image is published. Measured MyDOS bounds
+remain MEMTOP `$9c1f`, stack floor `$941f`, display list `$9c20`, screen
+`$9c40`; header/buffer/result scratch are below those bounds.
+
+Direct MyDOS startup executed NIO.AR0, allocated `$1ee8-$563f`, raised MEMLO
+to `$5640`, and published N: table `$4f81`. BASIC subsequently reached READY.
+Screenshot and CPU/memory evidence:
+`test-evidence/atari-sio-disk-installer-direct-2/{screen.png,state.json}`.
+
+The direct-D1 / production-NetSIO-NetworkDevice control also executed actual
+keyboard LOAD and RUN. `load-keys.json` and `run-keys.json` retain bridge key
+acknowledgements; before/after screenshots and BASIC's loaded token table
+are in `test-evidence/atari-sio-disk-basic-local-2/netsio/`. The fixture
+**failed at line 10 with ERROR 144**: the existing CIO handler scans for NUL,
+but BASIC supplies an ATASCII `$9b` filename terminator. Production
+NetworkDevice logged `fixture://resident-open` followed by `$9b $14` and
+rejected it. GET/CLOSE were not executed. TEXT SHA-256 remained
+`e7da1284a41d29fc14339cd786999bc659496b652d3b9e585222951d46eeeaca`,
+HATABS retained `$4f81`, and MEMLO retained `$5640`. This is evidence that
+the program loaded and ran, not successful BASIC networking acceptance.
+
+A separate production-D1 blocker is independently reproduced with firmware
+HEAD `6386837d22ce9b9a32cd8d05606fb268085f0548` plus only the acceptance
+endpoint's optional boot mount. The identical ATR's MyDOS STATUS frame
+`31 53 28 00 AC` receives NAK on NetSIO (before NIO.AR0 runs), while the
+valid direct control accepts it and continues loading. Compare
+`test-evidence/atari-sio-disk-basic-1/netsio/hub.log` with
+`test-evidence/atari-sio-disk-basic-local-2/netsio/altirra.log` around line
+11080. The unrelated timeout/status experiments remain excluded. The local
+control uses the existing adapter's device exclusion setting in a temporary
+copy so only the directly mounted disk responds to D1; NIO uses the unchanged
+production `$7f` NetSIO route.
+
+Focused checks executed after `source scripts/env.sh`:
+
+- `make -C integration-tests/atari-sio/boot-app test-resident-o65-disk`:
+  33 assertions, including full resident byte comparison on repeat install,
+  foreign ownership, truncated disk input, IOCB cleanup and memory bounds.
+- `make -C integration-tests/atari-sio/boot-app test-resident-o65`: existing
+  staged relocation, installer and CIO OPEN/GET/PUT/STATUS/CLOSE controls pass.
+- `python3 -m unittest discover -s integration-tests/atari-sio/tests -q`:
+  65 tests pass.
+- `run_boot_acceptance.py --public-api-clock --timeout 15`: ADP! passes in
+  `test-evidence/atari-sio-stream-installer-public-regression-2/`. A stale
+  expected Network fixture log string was updated to its current format.
+- `run_boot_acceptance.py --timeout 5 --capture-dcb`: native and production
+  NetSIO D1 NIO! boot controls pass in
+  `test-evidence/atari-sio-stream-installer-d1-regression/`. The raw first-read
+  helper's checksum association is not an acceptance assertion and reported
+  a mismatched association in this capture; no checksum-proof claim is made.
+
+Story 2.5 stays open. The resident footprint is unchanged and remains outside
+the final 3 KiB budget; this increment does not start footprint optimization.
+
+The observed-state re-run in
+`test-evidence/atari-sio-disk-basic-local-observed/netsio/` confirms the exact
+tokenized program bytes were loaded before RUN. `after-run.png` records
+ERROR 144 at line 10; `resident-basic.json` confirms unchanged TEXT, HATABS
+and MEMLO. `termination.json` records the failed completion-marker assertion
+as the reason for ending emulation, followed by SIGTERM and SIGKILL after
+the GUI's exit confirmation did not close. No host-side crash or successful
+fixture execution is inferred from that termination.
+
+The direct-D1 diagnostic command was:
+
+```sh
+source scripts/env.sh
+ATARI_ACCEPTANCE_ENDPOINT=/tmp/story25-firmware.3PRKXZ/build/atari/tests/fujinet-nio-atari-netsio-clock-acceptance \
+python3 -c 'import sys; from pathlib import Path; sys.path.insert(0,"integration-tests/atari-sio"); import run_boot_acceptance as r; r.run_resident_o65_basic(1, Path("test-evidence/atari-sio-disk-basic-local-observed-rerun"), local_disk=True)'
+```
+
+The isolated endpoint was built from the firmware HEAD named above with only
+the optional boot-mount acceptance source overlaid, excluding both dirty
+STATUS files. The same runner's `--resident-o65-basic --timeout 1
+--evidence-dir <new-directory> --json` selects production NetSIO D1 and
+reproduces the earlier STATUS blocker. The pinned BASIC tokenizer was freshly
+downloaded, checksum-verified and its output compared byte-for-byte with
+`FNREAD.BAS`. The installer implementation is committed in nio-core-apps as
+`d7e5201803000c7a53cd92e5f3b0d7277e0ea18b`; workspace submodule pins are not
+advanced to these unmerged commits.
+
+The optional production DiskService acceptance mount is committed separately
+in fujinet-nio as `0817d5103f6c9f6a8c38888a9c78c1e3402fce67`. Its STATUS
+implementation/test experiments remain dirty and excluded from that commit.
+
+Warp-control check: the current bridge CONFIG interface does not expose
+turbo. AltirraSDL's separate `--test-mode` socket implements `set_speed warp`
+and `set_speed normal`, but enabling it in this debug executable aborts in
+ImGui (`ImVector<unsigned int>::back(): Size > 0`) before handling the speed
+command. `test-evidence/atari-sio-stream-warp-control/altirra.log` records this
+separate control failure. Acceptance therefore retains the working launch
+without `--test-mode`; no emulator source or settings were changed.

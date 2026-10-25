@@ -1,0 +1,83 @@
+enable run_limit 5000000
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x0680 = 0x01 $$streamed installer returns to DOS caller$$
+assert #0x9385 = 0x00 $$streamed o65 installs at MyDOS MEMLO$$
+assert #0x02e7 = 0x40 $$resident end low byte$$
+assert #0x02e8 = 0x56 $$resident end high byte$$
+assert #0x031a = 0x4e $$N published after stream relocation and initialization$$
+assert #0x0683 = 0x01 $$one payload open$$
+assert #0x0684 = 0x01 $$payload closed$$
+assert #0x03b0 = 0xff $$original free IOCB restored$$
+
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+memory write #0x0681 0x(01)
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x0682 = 0x00 $$first installation succeeds$$
+assert #0x9385 = 0x01 $$repeat installation detects owned handler$$
+assert #0x9386 = 0xff $$repeat does not initialize again$$
+assert #0x02e7 = 0x40 $$repeat preserves MEMLO low$$
+assert #0x02e8 = 0x56 $$repeat preserves MEMLO high$$
+assert #0x1ee8 = 0xa5 $$repeat retains resident entry$$
+assert #0x0685 = 0x01 $$repeat retains every code DATA BSS and stack byte$$
+
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+memory write #0x0681 0x(02)
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x0680 = 0x01 $$nested read failure unwinds to original caller$$
+assert #0x9385 = 0x06 $$truncated disk payload rejected$$
+assert #0x02e7 = 0xe8 $$failure preserves MEMLO low$$
+assert #0x02e8 = 0x1e $$failure preserves MEMLO high$$
+assert #0x031a = 0x00 $$failure does not publish N$$
+assert #0x0684 = 0x01 $$failed stream closed$$
+assert #0x03b0 = 0xff $$failed stream restores IOCB$$
+
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+memory write #0x031a 0x(4e)
+memory write #0x031b 0x(00)
+memory write #0x031c 0x(d0)
+memory write #0x1ee8 0x(a7)
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x9385 = 0x04 $$foreign N rejected$$
+assert #0x031b = 0x00 $$foreign table low retained$$
+assert #0x031c = 0xd0 $$foreign table high retained$$
+assert #0x1ee8 = 0xa7 $$foreign rejection never writes candidate allocation$$
+assert #0x02e8 = 0x1e $$foreign rejection retains MEMLO$$
+
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+memory write #0x0681 0x(03)
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x9385 = 0x03 $$resident overlapping transient loader rejected$$
+assert #0x02e8 = 0x70 $$overlap leaves MEMLO unchanged$$
+assert #0x031a = 0x00 $$overlap does not publish N$$
+
+memory flush
+memory load #0x8000 "build/fnresident-o65-disk-control.bin"
+memory load #0x9500 "build/nio.o65"
+memory load atari "build/fnresident-o65-disk-loader.xex"
+memory write #0x0681 0x(04)
+registers flush
+run #0x8000 until (#0x0680 = 0x01 OR cycle_count > 0x800000)
+assert #0x9385 = 0x06 $$insufficient transient headroom rejected$$
+assert #0x0683 = 0x00 $$headroom checked before opening file$$
+assert #0x02e8 = 0x1e $$headroom failure preserves MEMLO$$

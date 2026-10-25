@@ -32,6 +32,13 @@ RESIDENT_O65_FOREIGN_ATR := $(OUT)/fnresident-o65-foreign.atr
 RESIDENT_O65_OPEN_PROBE := $(OUT)/fnresident-o65-open-probe.xex
 RESIDENT_O65_OPEN_XEX := $(OUT)/fnresident-o65-open.xex
 RESIDENT_O65_OPEN_ATR := $(OUT)/fnresident-o65-open.atr
+RESIDENT_O65_MYDOS_ATR := $(OUT)/fnresident-o65-mydos-basic.atr
+RESIDENT_O65_DISK_LOADER := $(OUT)/fnresident-o65-disk-loader.xex
+RESIDENT_O65_DISK_IMAGE := $(OUT)/nio.o65
+MYDOS_PLAIN_ATR := $(OUT)/mydos-4534-plain.atr
+TBXL_PARSER := $(OUT)/tools/basicParser-v12-0-ga877718/basicParser
+RESIDENT_O65_BASIC_SOURCE := fnresident_basic_read.bas
+RESIDENT_O65_BASIC_PROGRAM := $(OUT)/fnread.bas
 RESIDENT_O65_OPEN_CONTROL := $(OUT)/fnresident-o65-open-control.bin
 RESIDENT_O65_OPEN_SIOV := $(OUT)/fnresident-o65-open-siov.xex
 RESIDENT_O65_GET_CLOSE_CONTROL := $(OUT)/fnresident-o65-get-close-control.bin
@@ -40,7 +47,7 @@ RESIDENT_O65_PUT_CONTROL := $(OUT)/fnresident-o65-put-control.bin
 RESIDENT_O65_PUT_SIOV := $(OUT)/fnresident-o65-put-siov.xex
 RESIDENT_O65_RELOCATION_COMPARE := $(OUT)/fnresident-o65-relocation-compare-control.bin
 
-.PHONY: all resident resident-foreign resident-own resident-overlap resident-o65 resident-o65-altbase resident-o65-overlap resident-o65-foreign resident-o65-open resident-o65-footprint test-resident-o65 clean
+.PHONY: all resident resident-foreign resident-own resident-overlap resident-o65 resident-o65-altbase resident-o65-overlap resident-o65-foreign resident-o65-open resident-o65-mydos-basic mydos-plain resident-o65-footprint test-resident-o65 clean
 all: $(ATR)
 resident: $(RESIDENT_ATR)
 resident-foreign: $(RESIDENT_FOREIGN_ATR)
@@ -51,6 +58,8 @@ resident-o65-altbase: $(RESIDENT_O65_ALTBASE_ATR)
 resident-o65-overlap: $(RESIDENT_O65_OVERLAP_ATR)
 resident-o65-foreign: $(RESIDENT_O65_FOREIGN_ATR)
 resident-o65-open: $(RESIDENT_O65_OPEN_ATR)
+resident-o65-mydos-basic: $(RESIDENT_O65_MYDOS_ATR)
+mydos-plain: $(MYDOS_PLAIN_ATR)
 
 # The N: payload uses URI-based fn_open(), not the optional TCP formatter.
 # Keep its module excluded and retain the measured bounded buffers: two shared
@@ -151,6 +160,12 @@ $(RESIDENT_O65_OPEN_PROBE): fnresident_o65_open_probe.s fnresident-o65-open-prob
 $(RESIDENT_O65_OPEN_XEX): $(RESIDENT_O65_LOADER) $(RESIDENT_O65_STAGE) $(RESIDENT_O65_OPEN_PROBE) ../compose_resident_o65_xex.py | $(OUT)
 	python3 ../compose_resident_o65_xex.py --loader $(RESIDENT_O65_LOADER) --staged $(RESIDENT_O65_STAGE) --probe $(RESIDENT_O65_OPEN_PROBE) --output $@
 
+$(TBXL_PARSER): ../fetch_tbxl_parser.py | $(OUT)
+	python3 ../fetch_tbxl_parser.py --output $@
+
+$(RESIDENT_O65_BASIC_PROGRAM): $(RESIDENT_O65_BASIC_SOURCE) $(TBXL_PARSER) | $(OUT)
+	$(TBXL_PARSER) -A -q -o $@ $<
+
 $(RESIDENT_O65_ATR): $(RESIDENT_O65_XEX) $(PICOBOOT) Makefile | $(OUT)
 	rm -rf $(OUT)/resident-o65-stage
 	mkdir -p $(OUT)/resident-o65-stage
@@ -180,6 +195,33 @@ $(RESIDENT_O65_OPEN_ATR): $(RESIDENT_O65_OPEN_XEX) $(PICOBOOT) Makefile | $(OUT)
 	mkdir -p $(OUT)/resident-o65-open-stage
 	cp $(RESIDENT_O65_OPEN_XEX) $(OUT)/resident-o65-open-stage/coltest.xex
 	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/resident-o65-open-stage)
+
+# MyDOS 4.53/4's checked-in DOS.SYS/DUP.SYS pair matches dir2atr's MyDos4534
+# boot sectors. MyDOS natively auto-loads NIO.AR0 during normal startup.
+$(RESIDENT_O65_DISK_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-disk-loader.cfg | $(OUT)
+	cl65 -t none --asm-define DISK_SOURCE=1 -C fnresident-o65-disk-loader.cfg -Ln $(@:.xex=.lbl) -o $@ $<
+
+$(RESIDENT_O65_DISK_IMAGE): $(RESIDENT_O65_MODULE) $(RESIDENT_O65_LABELS) ../make_resident_o65_image.py | $(OUT)
+	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --output $@
+
+$(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) Makefile | $(OUT)
+	rm -rf $(OUT)/resident-o65-mydos-stage
+	mkdir -p $(OUT)/resident-o65-mydos-stage
+	cp $(ROOT)/repos/MyPicoDOS/mydos-dos.sys $(OUT)/resident-o65-mydos-stage/DOS.SYS
+	cp $(ROOT)/repos/MyPicoDOS/mydos-dup.sys $(OUT)/resident-o65-mydos-stage/DUP.SYS
+	cp $(RESIDENT_O65_DISK_LOADER) $(OUT)/resident-o65-mydos-stage/NIO.AR0
+	cp $(RESIDENT_O65_DISK_IMAGE) $(OUT)/resident-o65-mydos-stage/NIO.O65
+	cp $(RESIDENT_O65_BASIC_PROGRAM) $(OUT)/resident-o65-mydos-stage/fnread.bas
+	cd $(APPS) && dir2atr -m -S -b MyDos4534 $(abspath $@) $(abspath $(OUT)/resident-o65-mydos-stage)
+
+# Baseline for the virtual-D1 diagnosis: the matching checked-in MyDOS 4.53/4
+# files only, deliberately no AR0 startup payload, NIO image, or BASIC program.
+$(MYDOS_PLAIN_ATR): Makefile | $(OUT)
+	rm -rf $(OUT)/mydos-plain-stage
+	mkdir -p $(OUT)/mydos-plain-stage
+	cp $(ROOT)/repos/MyPicoDOS/mydos-dos.sys $(OUT)/mydos-plain-stage/DOS.SYS
+	cp $(ROOT)/repos/MyPicoDOS/mydos-dup.sys $(OUT)/mydos-plain-stage/DUP.SYS
+	cd $(APPS) && dir2atr -m -S -b MyDos4534 $(abspath $@) $(abspath $(OUT)/mydos-plain-stage)
 
 $(RESIDENT_O65_OPEN_CONTROL): fnresident_o65_open_control.s fnresident-o65-loader-control.cfg | $(OUT)
 	cl65 -t none -C fnresident-o65-loader-control.cfg -o $@ fnresident_o65_open_control.s
@@ -217,3 +259,10 @@ test-resident-o65: resident-o65 resident-o65-altbase resident-o65-overlap reside
 
 clean:
 	rm -rf $(OUT)
+
+.PHONY: test-resident-o65-disk
+test-resident-o65-disk: $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(OUT)/fnresident-o65-disk-control.bin
+	soft65c02_tester -i fnresident_o65_disk.txt
+
+$(OUT)/fnresident-o65-disk-control.bin: fnresident_o65_disk_control.s fnresident-o65-disk-control.cfg | $(OUT)
+	cl65 -t none -C fnresident-o65-disk-control.cfg -o $@ $<
