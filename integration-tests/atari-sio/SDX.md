@@ -23,11 +23,9 @@ The release page says all rights reserved. Provision it locally; it is not
 redistributed here. The pinned BASIC parser and provisioning procedure are in
 [DOS25.md](DOS25.md). Builds below are offline and verify both inputs.
 
-The SDX fixture requires `nio-core-apps` commit
-`4856d27250add3df63345e8ecda81be1e7305c8a`. The workspace pin remains at
-the previously merged commit until this change is merged in that repository.
-For local reproduction, check out that commit in `repos/nio-core-apps` before
-running the commands below.
+The SDX fixture requires the pinned `nio-core-apps` commit
+`4856d27250add3df63345e8ecda81be1e7305c8a`. Initialize the workspace
+submodules at their recorded commits before running the commands below.
 
 The official release form produced the emulator cartridge locally with:
 
