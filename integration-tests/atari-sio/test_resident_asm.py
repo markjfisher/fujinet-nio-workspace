@@ -92,7 +92,7 @@ subprocess.run(['cl65', '-t', 'none', '--asm-define', 'ASM_FAILURE_TEST=1',
                 'build/fnresident-asm-fault-control.bin', 'fnresident_o65_put_control.s'], check=True)
 subprocess.run(['cl65', '-t', 'none', '-C', 'fnresident-o65-open-siov.cfg', '-o',
                 'build/fnresident-asm-fault-siov.xex', 'fnresident_asm_fault_siov.s'], check=True)
-for fault in range(1, 6):
+for fault in range(1, 10):
     source = f'''memory flush
 memory load #0x4700 "build/fnresident-asm-fault-control.bin"
 memory load atari "build/fnresident-asm-loader.xex"
@@ -122,5 +122,28 @@ assert #0x06c2 = 0x01 $$one remote CLOSE$$
         source = source.replace('only OPEN body CLOSE and new OPEN with no W replay', 'exactly two body writes plus commit and session lifecycle')
         source = source.replace('uncertain body never automatically committed', 'acknowledged body committed once')
         source += 'assert #0x06c7 = 0x00 $$every partial suffix byte and offset is exact$$\n'
+    if fault == 9:
+        source = source.replace('#0x06c0 = 0x04', '#0x06c0 = 0x08')
+        source = source.replace('#0x06c1 = 0x00', '#0x06c1 = 0x01')
+        source = source.replace('#0x06c2 = 0x01', '#0x06c2 = 0x02')
+        source = source.replace('only OPEN body CLOSE and new OPEN with no W replay', 'two independent sessions complete without replay')
+        source = source.replace('uncertain body never automatically committed', 'only the unaffected session commits')
+        source = source.replace('one remote CLOSE', 'one CLOSE per independent session')
+        source += 'assert #0x06db = 0x01 $$second IOCB opens$$\n'
+        source += 'assert #0x06dc = 0x01 $$second IOCB buffers before fault$$\n'
+        source += 'assert #0x06dd = 0x01 $$second IOCB accepts byte after first fault$$\n'
+        source += 'assert #0x06de = 0x01 $$second IOCB closes successfully$$\n'
+        source += 'assert #0x06c7 = 0x00 $$second IOCB sends its own exact bytes$$\n'
+    if fault == 8:
+        source += 'assert #0x06c0 = 0x04 $$short current response is drained without replay$$\n'
+    if fault == 7:
+        source = source.replace('#0x06d2 = 0x90', '#0x06d2 = 0x00')
+        source = source.replace('#0x06c0 = 0x04', '#0x06c0 = 0x05')
+        source = source.replace('#0x06c1 = 0x00', '#0x06c1 = 0x01')
+        source = source.replace('uncertain PUT reports error', 'full body write succeeds before commit')
+        source = source.replace('only OPEN body CLOSE and new OPEN with no W replay', 'OPEN body commit CLOSE and new OPEN without replay')
+        source = source.replace('uncertain body never automatically committed', 'one uncertain commit never repeated')
+        source += 'assert #0x06d9 = 0x90 $$lost commit completion fails STATUS$$\n'
+        source += 'assert #0x06da = 0x90 $$repeated STATUS does not retry commit$$\n'
     generated.write_text(source)
     subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)

@@ -40,6 +40,8 @@ write:
         lda CASE
         cmp #5
         beq partial_write
+        cmp #9
+        jeq interleaved_write
         ldy #13
         lda (ptr),y
         bne :+
@@ -48,9 +50,34 @@ write:
         jne ok
         lda CASE
         cmp #2
+        beq :+
+        cmp #6
         jne ok
-        inc FAULTED              ; accepted W with lost terminal completion
+:       inc FAULTED              ; accepted W with lost terminal completion
         jmp bad
+interleaved_write:
+        ldy #13
+        lda (ptr),y
+        sta length
+        beq @commit
+        cmp #128
+        bne @other
+        inc FAULTED
+        jmp bad                  ; first owner body completion lost
+@other: cmp #2
+        bne @wrong
+        ldy #15
+        lda (ptr),y
+        cmp #'B'
+        bne @wrong
+        iny
+        lda (ptr),y
+        cmp #'C'
+        beq ok
+@wrong: inc BAD_BODY
+        jmp ok
+@commit: inc COMMITS
+        jmp ok
 partial_write:
         ldy #9
         lda (ptr),y
@@ -108,12 +135,22 @@ poll:
         lda #6
         ldx command
         cpx #4
-        beq :+
+        beq @store_length
         lda #13
         cpx #1
-        beq :+
+        beq @store_length
         lda #18
-:       sta (ptr),y
+        cpx #3
+        bne @store_length
+        lda CASE
+        cmp #6
+        beq @short
+        cmp #8
+        beq @short
+        lda #18
+        bne @store_length
+@short: lda #5                  ; malformed but drainable retained reply
+@store_length: sta (ptr),y
         iny
         lda #0
         sta (ptr),y
@@ -158,7 +195,11 @@ load:   lda $ffff,y
         cmp #1
         beq corrupt
         cmp #5
+        beq partial_reply
+        cmp #9
         jne ok
+        lda #0
+        sta offset
         jmp partial_reply
 corrupt:
         ldy #4
@@ -170,9 +211,14 @@ partial_reply:
         lda offset
         sta (ptr),y
         ldy #16
+        lda CASE
+        cmp #9
+        beq @amount
         lda length
         beq :+
         lda #64
+        bne :+
+@amount:lda length
 :       sta (ptr),y
         lda #0
         ldy #0

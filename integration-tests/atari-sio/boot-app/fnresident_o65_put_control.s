@@ -53,6 +53,25 @@ fill_zp:
         lda #$5a
         jsr call_open
         sty RESULT+1
+.ifdef ASM_FAILURE_TEST
+        lda $06df
+        cmp #9
+        bne :+
+        ldx #$30
+        lda #<uri
+        sta IOCB+4,x
+        lda #>uri
+        sta IOCB+5,x
+        lda #8
+        sta IOCB+10,x
+        jsr call_open
+        sty RESULT+11
+        ldx #$30
+        lda #'B'
+        jsr call_put
+        sty RESULT+12
+:
+.endif
 put_loop:
         lda #'A'
 .ifdef ASM_FAILURE_TEST
@@ -71,10 +90,35 @@ put_loop:
         lda put_count
         cmp #128
         bne put_loop
+.ifdef ASM_FAILURE_TEST
+        lda $06df
+        cmp #7
+        bne :+
+        ldx #$20
+        jsr call_status
+        sty RESULT+9
+        ldx #$20
+        jsr call_status
+        sty RESULT+10
+:
+.endif
         ldx #$20
         lda #$7c
         jsr call_close
         sty RESULT+3
+.ifdef ASM_FAILURE_TEST
+        lda $06df
+        cmp #9
+        bne :+
+        ldx #$30
+        lda #'C'
+        jsr call_put
+        sty RESULT+13
+        ldx #$30
+        jsr call_close
+        sty RESULT+14
+:
+.endif
 .ifdef ASM_FAILURE_TEST
         lda #'B'
         ldx #$20
@@ -110,6 +154,9 @@ call_open:
         jmp call_vector
 call_close:
         ldy #2
+        jmp call_vector
+call_status:
+        ldy #8
         jmp call_vector
 call_put:
         ldy #6

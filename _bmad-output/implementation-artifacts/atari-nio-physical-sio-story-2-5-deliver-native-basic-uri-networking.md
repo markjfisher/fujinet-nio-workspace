@@ -1397,3 +1397,70 @@ both actual BASIC executions passed their complete result/service checks.
 Apps implementation commit: `eb707327`. The workspace acceptance/evidence
 commit pins this verified apps commit for the user's coordinated push.
 The firmware and library pins are unchanged. Nothing was pushed.
+
+### Assembly behavioural and recovery audit
+
+Compared production CA65 OPEN/GET/PUT/STATUS/CLOSE and its W/P/R recovery
+with the C resident, public Atari transport, Story 2.5 I/O matrix, and the
+existing real-6502 and production NetSIO fixtures. One concrete gap was
+reproduced: when a completed transaction advertised a nonzero response
+shorter than the six-byte FujiBus header, the assembly `receive` refused to
+issue R. The outstanding reply then blocked the failed owner's CLOSE and
+subsequent OPENs, potentially affecting an unrelated IOCB. The reference
+transport drains nonempty bounded retained replies before another W.
+
+The real-6502 peer reproduced the failure with a lost WRITE completion and a
+five-byte retained response: CLOSE retired local ownership, but the next OPEN
+returned `$90` because the reply could never be drained. The correction drains
+any nonzero bounded reply, then validates the six-byte minimum before parsing
+an ordinary exchange. A short current reply is therefore rejected as well;
+a short retained reply is discarded without replay. A zero-length ready
+response remains outstanding because it cannot be retired by a nonempty R.
+
+New real-6502 cases prove:
+
+- A short retained reply after an uncertain body drains, CLOSE proceeds and
+  the released IOCB reopens, with no duplicate body or commit.
+- A short current reply is consumed and reported as an error without replay.
+- A lost zero-length commit completion makes repeated STATUS and CLOSE report
+  the error, with exactly one commit request and one remote CLOSE.
+- With two owners open, an uncertain full-buffer write on one leaves the
+  other owner's `BC` bytes intact, permits its successful commit and CLOSE,
+  releases the failed owner and permits its IOCB to reopen. Only the
+  unaffected owner commits.
+
+The pre-existing controls cover OPEN ownership and exhaustion, GET/EOF,
+PUT buffers, partial acknowledgement suffixes, malformed checksum, lost W,
+bounded pending P, failed R, repeat installation and rollback. No additional
+behavioural change was demonstrated by this audit. The C reference and native
+protocol remain unchanged.
+
+The CA65-only RAM gate reports CODE 1,422, DATA 20, BSS 823 and ZP 26 bytes:
+**2,291 bytes total**, with no permanent stack. MEMLO reserves 2,265 bytes.
+The gate and its 3,072/3,073 boundary tests remain active.
+
+After `source scripts/env.sh`:
+
+```sh
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk resident-o65-mydos-basic
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-audit-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-audit-write --json
+```
+
+All commands passed, including 69 Python tests and the reference and assembly
+real-6502 controls. The final expanded fault suite was rerun separately with
+`make -C integration-tests/atari-sio/boot-app test-resident-asm`.
+`test-evidence/atari-sio-audit-read/netsio/` records BASIC LOAD/RUN result
+`4e458801ad` (NE, EOF 136, CLOSE 1). The corresponding
+`test-evidence/atari-sio-audit-write/netsio/` records `00000001ad`, exact
+four- and 128-byte PRINT# bodies including `$9b`, and one terminal commit per
+session. Both retain HATABS `$2476`, MEMLO `$27c1` and identical resident
+CODE SHA-256 `fb09a986bbf1809ac1de0604a5fca0cd7ff66a42d8efc252593eda277abdc55c`
+before and after BASIC execution. Screen, CPU, keyboard and production
+service evidence is retained; both runs ended after inspection. The READ
+first-sector capture has a valid `$b8` checksum. The known PUT trace heuristic
+again misassociated that checksum, without affecting the BASIC/service checks.
+
+The apps fix is commit `7ef404e4`; the workspace audit commit pins it for
+coordinated publication. Story 2.5 remains open.
