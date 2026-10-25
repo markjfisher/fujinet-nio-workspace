@@ -226,3 +226,9 @@ clean:
 
 .PHONY: test-resident-o65-disk
 test-resident-o65-disk: test-resident-asm
+
+# Set DOS25_SOURCE to the provenance-verified source ATR; never modify it.
+.PHONY: resident-dos25-basic
+resident-dos25-basic: $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST)
+	@test -n "$(DOS25_SOURCE)" || { echo 'Set DOS25_SOURCE to the verified DOS 2.5 source ATR' >&2; exit 1; }
+	python3 make-dos25-atr.py "$(DOS25_SOURCE)" $(OUT)

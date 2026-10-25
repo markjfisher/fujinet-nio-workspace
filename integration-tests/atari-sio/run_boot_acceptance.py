@@ -26,7 +26,7 @@ RESIDENT_O65_ALTBASE_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fn
 RESIDENT_O65_OVERLAP_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-overlap.atr"
 RESIDENT_O65_FOREIGN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-foreign.atr"
 RESIDENT_O65_OPEN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-open.atr"
-RESIDENT_O65_MYDOS_BASIC_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-mydos-basic.atr"
+RESIDENT_O65_MYDOS_BASIC_ATR = Path(os.environ.get('ATARI_RESIDENT_BASIC_ATR', str(ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-mydos-basic.atr"))).resolve()
 NATIVE_CORE_DISPATCH_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-core-dispatch.xex"
 NATIVE_WRONG_R_RETENTION_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-wrong-r-retention.xex"
 NATIVE_RESET_TO_IDLE_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-reset-to-idle.xex"
@@ -1362,6 +1362,15 @@ def verify_mydos_trace(hub_log):
         raise RuntimeError('MyDOS boot lacks standard-density sector data')
     return {'mydos_sd_commands': list(frames)}
 
+def verify_dos25_trace(hub_log):
+    frames = ('31 52 01 00 84', '31 52 02 00 85', '31 52 03 00 86')
+    for frame in frames:
+        if frame not in hub_log:
+            raise RuntimeError(f'missing DOS 2.5 D1 boot frame: {frame}')
+    if 'DATA_BLOCK[128]' not in hub_log:
+        raise RuntimeError('DOS 2.5 boot lacks 128-byte sector data')
+    return {'dos25_boot_commands': list(frames)}
+
 
 def verify_netsio_trace(hub_log, nio_log):
     """Assert the compact, production-path SIO trace required by Story 1.3."""
@@ -2160,7 +2169,7 @@ def run_netsio(timeout, evidence_dir=None, settle=0.0, capture_dcb=False, comman
         result['first_read_sio'] = first_trace
         # The NIO counters are intentionally production-specific; both paths
         # retain raw hub/POKEY logs for the actual protocol comparison.
-        result['trace'] = (verify_mydos_trace(trace) if boot_atr == RESIDENT_O65_MYDOS_BASIC_ATR
+        result['trace'] = ((verify_dos25_trace(trace) if os.environ.get('ATARI_RESIDENT_DOS') == 'dos25' else verify_mydos_trace(trace)) if boot_atr == RESIDENT_O65_MYDOS_BASIC_ATR
                            else verify_netsio_trace(trace, text) if backend == 'nio' and boot_atr is not None
                            else {'backend': backend, 'direct_program': True})
         result['backend'] = backend
