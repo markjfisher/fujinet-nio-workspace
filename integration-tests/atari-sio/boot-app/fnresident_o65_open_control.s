@@ -208,9 +208,8 @@ setup_bad_mode:
         sta IOCB+4,x
         lda #>uri_c
         sta IOCB+5,x
-        ; The original Story 2.5 contract requires update/POST mode 12.
-        ; Record the current implementation gap without dispatching a W.
-        lda #12
+        ; An unsupported CIO mode must fail locally.
+        lda #0
         sta IOCB+10,x
         rts
 

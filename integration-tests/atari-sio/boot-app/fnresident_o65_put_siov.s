@@ -54,8 +54,18 @@ w_open: lda #30
         jcs bad
         ldy #7
         jsr read_w
+.ifdef ASM_POST_TEST
+        cmp #2
+.else
         cmp #3
+.endif
         jne bad
+.ifdef ASM_OUTPUT_TEST
+        ldy #8
+        jsr read_w
+        cmp #4
+        jne bad
+.endif
         inc step
         jmp ok
 w_write:lda #143

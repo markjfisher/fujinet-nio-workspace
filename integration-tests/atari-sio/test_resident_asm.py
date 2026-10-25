@@ -24,6 +24,27 @@ for name in ('open', 'get_close', 'put'):
     generated.write_text(source)
     subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)
 
+# Exercise each output method with the strict literal SIO peer. The peer
+# checks both method and BODY_UNKNOWN on the actual OPEN request.
+for mode in (8, 12):
+    subprocess.run(['cl65', '-t', 'none', '--asm-define', f'OPEN_MODE={mode}',
+                    '-C', 'fnresident-o65-loader-control.cfg', '-o',
+                    f'build/fnresident-asm-output-{mode}.bin', 'fnresident_o65_put_control.s'], check=True)
+    defines = ['--asm-define', 'ASM_OUTPUT_TEST=1']
+    if mode == 12:
+        defines += ['--asm-define', 'ASM_POST_TEST=1']
+    subprocess.run(['cl65', '-t', 'none', *defines, '-C', 'fnresident-o65-open-siov.cfg', '-o',
+                    f'build/fnresident-asm-output-{mode}-siov.xex', 'fnresident_o65_put_siov.s'], check=True)
+    source = Path('fnresident_o65_put.txt').read_text()
+    source = source.replace('build/fnresident-o65-put-control.bin', f'build/fnresident-asm-output-{mode}.bin')
+    source = source.replace('build/fnresident-o65-put-siov.xex', f'build/fnresident-asm-output-{mode}-siov.xex')
+    source = source.replace('build/fnresident-o65-stage.xex', 'build/fnresident-asm-stage.xex')
+    source = source.replace('build/fnresident-o65-loader.xex', 'build/fnresident-asm-loader.xex')
+    source = '\n'.join(line for line in source.splitlines() if '#0x3d' not in line)
+    generated = Path(f'build/fnresident-asm-output-{mode}.txt')
+    generated.write_text(source)
+    subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)
+
 allocation = struct.unpack_from('<H', Path('build/nio.o65').read_bytes(), 14)[0]
 end = 0x1ee8 + allocation
 subprocess.run(['cl65', '-t', 'none', '--asm-define', f'RESIDENT_ALLOCATION={allocation}',
@@ -145,5 +166,19 @@ assert #0x06c2 = 0x01 $$one remote CLOSE$$
         source = source.replace('uncertain body never automatically committed', 'one uncertain commit never repeated')
         source += 'assert #0x06d9 = 0x90 $$lost commit completion fails STATUS$$\n'
         source += 'assert #0x06da = 0x90 $$repeated STATUS does not retry commit$$\n'
+    generated.write_text(source)
+    subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)
+
+# Repeat the uncertain W, partial acknowledgement and uncertain-commit cases
+# through POST/update; neither repeated STATUS nor CLOSE may replay a commit.
+subprocess.run(['cl65', '-t', 'none', '--asm-define', 'ASM_FAILURE_TEST=1',
+                '--asm-define', 'OPEN_MODE=12', '-C', 'fnresident-o65-loader-control.cfg',
+                '-o', 'build/fnresident-asm-post-fault-control.bin',
+                'fnresident_o65_put_control.s'], check=True)
+for fault in (2, 5, 7):
+    source = Path(f'build/fnresident-asm-fault-{fault}.txt').read_text()
+    source = source.replace('build/fnresident-asm-fault-control.bin',
+                            'build/fnresident-asm-post-fault-control.bin')
+    generated = Path(f'build/fnresident-asm-post-fault-{fault}.txt')
     generated.write_text(source)
     subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)

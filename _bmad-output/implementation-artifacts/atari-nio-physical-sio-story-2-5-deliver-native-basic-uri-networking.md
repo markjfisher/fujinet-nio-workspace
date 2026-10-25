@@ -1507,3 +1507,64 @@ without breaking the existing MyPicoDOS/XEX path or the verified MyDOS path.
 Those changes exceed a verification-only closure and the instruction not to
 redesign functionality. The story status remains `in-progress`; Epic 2 is not
 marked complete.
+
+### CIO update/POST and unknown-length output
+
+The closure-review mode/flag gap is resolved. The production CA65 resident
+maps CIO 4 to GET, 8 to PUT and 12 to POST. Both output OPENs set native
+`FN_OPEN_FLAG_BODY_UNKNOWN` (`$04`). The public `$7f` transport, firmware
+services and streamed installer remain unchanged. The C prototype remains a
+reference and continues to reject update mode.
+
+Mode 12 uses the same 128-byte output cache, validated partial-acknowledgement
+suffix, one terminal commit latch and uncertain-write fault as mode 8. STATUS
+or CLOSE finalizes the body as before. A first GET on an update channel
+finalizes it once before reading the POST response; the response offset starts
+at zero even after nonzero request-body offsets. No automatic retry occurs on
+uncertain body or commit outcomes.
+
+`test-resident-asm` now runs the existing strict real-6502 output peer for
+both modes, checking the actual OPEN method and `$04` flag, 128 body bytes,
+zero-length commitment and CLOSE. The POST mode additionally runs the lost W,
+partial-acknowledgement and lost-commit/repeated-STATUS fault cases. Existing
+reference, installer, GET/PUT and recovery controls continue to run. The
+production CA65 image measures CODE 1,491, initialized DATA 20, BSS 823 and
+26 conservatively charged zero-page bytes: **2,360 bytes total**, no dedicated
+stack, with a 2,334-byte MEMLO reservation. The 3,072-byte gate remains active.
+
+The tokenizer builds `FNPOST.BAS` into the existing MyDOS acceptance ATR.
+It opens `N1:fixture://resident-post` with mode 12, PRINTs `POST` plus the
+Atari `$9b` line terminator, reads the response byte and closes. The existing
+production NetworkDevice/NetSIO test endpoint's deterministic backend checks
+POST method and flag, all five body bytes, one zero-length commit at offset 5,
+response read at offset zero after commitment, and one CLOSE. No production
+firmware or protocol change was made.
+
+The NetSIO acceptance runner now polls the core at the 50 ms cadence assumed
+by NetworkDevice's upload timeout while continuing to service ingress promptly.
+Previously its fast loop could expire an upload while BASIC filled the 128-byte
+buffer; the saved failed PUT run shows the fixture closing before its write.
+This is a test-runner correction, not a change to production timeout semantics.
+
+Verification after `source scripts/env.sh`:
+
+```sh
+cmake --build repos/fujinet-nio/build/atari-fujibus-netsio-debug --target fujinet-nio-atari-netsio-clock-acceptance -j6
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk resident-o65-mydos-basic
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-basic-post-poll-fixed --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-basic-read-poll-fixed --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-basic-put-poll-fixed --json
+```
+
+All commands passed. The POST screenshot shows BASIC returning to READY after
+`LOAD "D:FNPOST.BAS"` and `RUN`; `after-run.json` records PC `$f308`, stack
+`$f5`, MEMLO `$2806` and result `4e000001ad`. The runner checked HATABS and
+the retained TEXT hash across execution. The READ run returned `NE` and EOF
+136; the PUT run checked the 4- and 128-byte bodies and one commit each.
+Screenshots, CPU snapshots, typed commands and production service logs are in
+the three evidence directories above.
+
+The prior closure matrix records the state at review time. Its missing
+update/POST and output OPEN flag findings are resolved by this section; its
+other outstanding findings are unchanged and Story 2.5 remains in progress.

@@ -6,6 +6,9 @@ HATABS = $031A
 IOCB = $0340
 CC65_ZP = $82
 RESULT = $06D0
+.ifndef OPEN_MODE
+OPEN_MODE = 8
+.endif
 
 .segment "CODE"
 _main:
@@ -48,7 +51,7 @@ fill_zp:
         sta IOCB+4,x
         lda #>uri
         sta IOCB+5,x
-        lda #8
+        lda #OPEN_MODE
         sta IOCB+10,x
         lda #$5a
         jsr call_open

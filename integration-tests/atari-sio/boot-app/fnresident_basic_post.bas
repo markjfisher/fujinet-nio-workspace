@@ -1,0 +1,5 @@
+10 OPEN #1,12,0,"N1:fixture://resident-post"
+20 PRINT #1;"POST"
+30 GET #1,A:POKE 1760,A
+40 CLOSE #1
+50 POKE 1763,1:POKE 1764,173
