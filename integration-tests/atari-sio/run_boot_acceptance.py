@@ -21,17 +21,12 @@ from fnaccept_memory_layout import layout_report, validate_runtime_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
 ATR = ROOT / "integration-tests/atari-sio/boot-app/build/boot-acceptance.atr"
-RESIDENT_INSTALL_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-install.atr"
-RESIDENT_FOREIGN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-foreign.atr"
-RESIDENT_OWN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-own.atr"
-RESIDENT_OVERLAP_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-overlap.atr"
 RESIDENT_O65_INSTALL_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-install.atr"
 RESIDENT_O65_ALTBASE_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-altbase.atr"
 RESIDENT_O65_OVERLAP_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-overlap.atr"
 RESIDENT_O65_FOREIGN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-foreign.atr"
 RESIDENT_O65_OPEN_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-open.atr"
 RESIDENT_O65_MYDOS_BASIC_ATR = ROOT / "integration-tests/atari-sio/boot-app/build/fnresident-o65-mydos-basic.atr"
-RESIDENT_APP = ROOT / "repos/nio-core-apps/build/atari/bin/fnresident.xex"
 NATIVE_CORE_DISPATCH_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-core-dispatch.xex"
 NATIVE_WRONG_R_RETENTION_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-wrong-r-retention.xex"
 NATIVE_RESET_TO_IDLE_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-reset-to-idle.xex"
@@ -1471,85 +1466,6 @@ def cleanup_temps(temps):
 def _u16(raw, offset):
     return raw[offset] | (raw[offset + 1] << 8)
 
-def _xex_bytes_at(path, address, length):
-    """Read literal bytes from a linked XEX without treating it as evidence."""
-    raw = path.read_bytes()
-    pos = 0
-    while pos < len(raw):
-        if raw[pos:pos + 2] == b'\xff\xff':
-            pos += 2
-            continue
-        if pos + 4 > len(raw):
-            break
-        start = raw[pos] | raw[pos + 1] << 8
-        end = raw[pos + 2] | raw[pos + 3] << 8
-        pos += 4
-        size = end - start + 1
-        if end < start or pos + size > len(raw):
-            raise RuntimeError(f'malformed XEX segment in {path}')
-        if start <= address and address + length - 1 <= end:
-            offset = address - start
-            return raw[pos + offset:pos + offset + length]
-        pos += size
-    raise RuntimeError(f'{path} has no bytes at ${address:04X}')
-
-def inspect_resident_installer(token, evidence_dir):
-    """Inspect the installer and separately loaded probe in live Atari RAM."""
-    sys.path[:0] = [str(SDK)]
-    from altirra_bridge import AltirraBridge
-    with AltirraBridge.from_token_file(token) as bridge:
-        install = bridge.peek(0x0b00, 40)
-        probe = bridge.peek(0x0b40, 8)
-        hatabs = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
-        memlo = bridge.peek16(0x02e7)
-        resident_head = bridge.peek(0x1d00, 8)
-        staged_head = bridge.peek(0x5000, 8)
-        screenshot = bridge.screenshot()
-    (evidence_dir / 'resident-installation.json').write_text(json.dumps({
-        'installer_raw': install.hex(), 'probe_raw': probe.hex(),
-        'hatabs_raw': hatabs.hex(), 'memlo': memlo,
-        'resident_head': resident_head.hex(), 'staged_head': staged_head.hex(),
-    }, indent=2) + '\n')
-    (evidence_dir / 'resident-screen.png').write_bytes(screenshot)
-    if install[:4] != b'NRI!' or install[4] != 1:
-        raise RuntimeError('resident installer did not publish its versioned result')
-    if install[5] not in (0, 1) or install[6] != 0:
-        raise RuntimeError(f'resident installer failed: outcome={install[5]} init={install[6]}')
-    if probe[:4] != b'RPR!' or probe[4] != 1 or probe[5] != 0:
-        raise RuntimeError('separately loaded resident probe did not validate retained handler state')
-    if memlo != _u16(install, 10):
-        raise RuntimeError('MEMLO changed after resident installation')
-    resident_start, resident_end = _u16(install, 12), _u16(install, 14)
-    memtop, stack_floor = _u16(install, 16), _u16(install, 18)
-    sdlstl, savmsc = _u16(install, 20), _u16(install, 22)
-    if not (resident_start < resident_end <= stack_floor <= memtop < sdlstl <= savmsc):
-        raise RuntimeError('resident range does not satisfy runtime memory bounds')
-    offset = install[24]
-    if offset >= HATABS_ENTRY_BYTES or hatabs[offset] != ord('N'):
-        raise RuntimeError('resident N: HATABS entry is stale')
-    if hatabs[HATABS_ENTRY_BYTES:HATABS_TOTAL_BYTES] != b'\x00\x00':
-        raise RuntimeError('resident N: HATABS terminator was not preserved')
-    table = _u16(install, 26)
-    if _u16(hatabs, offset + 1) != table:
-        raise RuntimeError('resident N: HATABS table pointer changed')
-    vectors = [_u16(install, 28 + index * 2) + 1 for index in range(6)]
-    if any(vector < resident_start or vector >= resident_end for vector in vectors):
-        raise RuntimeError('resident CIO vector escapes the protected image')
-    return {
-        'signature': 'RPR!', 'installer_outcome': install[5],
-        'old_memlo': _u16(install, 8), 'new_memlo': memlo,
-        'resident_start': resident_start, 'resident_end': resident_end,
-        'handler_table': table, 'vectors': vectors,
-        'screenshot': str(evidence_dir / 'resident-screen.png'),
-    }
-
-def run_resident_installer(timeout, evidence_dir):
-    if not RESIDENT_INSTALL_ATR.is_file():
-        raise RuntimeError(f'resident installer ATR is missing: {RESIDENT_INSTALL_ATR}')
-    return run_netsio(timeout, evidence_dir=evidence_dir, trace_serial=True,
-                      explicit_cold_reset=True, boot_atr=RESIDENT_INSTALL_ATR,
-                      inspector=inspect_resident_installer)
-
 def inspect_resident_o65_installer(token, evidence_dir, expected_outcome=0,
                                    expected_memlo=None, foreign=False):
     """Inspect the dynamic o65 install and a separately loaded CIO probe."""
@@ -2112,102 +2028,6 @@ def run_resident_basic_reset(timeout, evidence_dir):
     result['reset_reclamation'] = 'NetworkDevice backend close on NetSIO host reset'
     return result
 
-
-def inspect_resident_foreign(token, evidence_dir):
-    """Failure gate: a preceding INITAD owns N:, so nothing may be changed."""
-    sys.path[:0] = [str(SDK)]
-    from altirra_bridge import AltirraBridge
-    with AltirraBridge.from_token_file(token) as bridge:
-        install = bridge.peek(0x0b00, 32)
-        hatabs = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
-        memlo = bridge.peek16(0x02e7)
-    (evidence_dir / 'resident-foreign.json').write_text(json.dumps({
-        'installer_raw': install.hex(), 'hatabs_raw': hatabs.hex(), 'memlo': memlo,
-    }, indent=2) + '\n')
-    if install[:4] != b'NRI!' or install[5] != 4:
-        raise RuntimeError('foreign N: rejection was not reported')
-    if memlo != _u16(install, 8) or _u16(install, 10) != _u16(install, 8):
-        raise RuntimeError('failed foreign install changed MEMLO')
-    if hatabs[0:3] != bytes((ord('N'), 0x00, 0xd0)):
-        raise RuntimeError('failed foreign install changed HATABS')
-    if hatabs[HATABS_ENTRY_BYTES:HATABS_TOTAL_BYTES] != b'\x00\x00':
-        raise RuntimeError('failed foreign install changed HATABS termination')
-    return {'signature': 'NRF!', 'old_memlo': memlo, 'outcome': install[5]}
-
-def run_resident_foreign(timeout, evidence_dir):
-    if not RESIDENT_FOREIGN_ATR.is_file():
-        raise RuntimeError(f'resident foreign ATR is missing: {RESIDENT_FOREIGN_ATR}')
-    return run_netsio(timeout, evidence_dir=evidence_dir, explicit_cold_reset=True,
-                      boot_atr=RESIDENT_FOREIGN_ATR, inspector=inspect_resident_foreign)
-
-def inspect_resident_owned(token, evidence_dir):
-    """A preloaded genuine NIO table must make installer a no-op."""
-    sys.path[:0] = [str(SDK)]
-    from altirra_bridge import AltirraBridge
-    with AltirraBridge.from_token_file(token) as bridge:
-        install = bridge.peek(0x0b00, 40)
-        hatabs = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
-        memlo = bridge.peek16(0x02e7)
-    (evidence_dir / 'resident-owned.json').write_text(json.dumps({
-        'installer_raw': install.hex(), 'hatabs_raw': hatabs.hex(), 'memlo': memlo,
-    }, indent=2) + '\n')
-    if install[:4] != b'NRI!' or install[5] != 1 or install[6] != 0xff:
-        raise RuntimeError('owned N: reinstall was not a pre-init no-op')
-    if memlo != _u16(install, 8) or _u16(install, 10) != _u16(install, 8):
-        raise RuntimeError('owned N: reinstall changed MEMLO')
-    offset, table = install[24], _u16(install, 26)
-    if offset >= HATABS_ENTRY_BYTES or hatabs[offset] != ord('N'):
-        raise RuntimeError('owned N: entry was not retained')
-    if _u16(hatabs, offset + 1) != table:
-        raise RuntimeError('owned N: table was replaced')
-    if hatabs[HATABS_ENTRY_BYTES:HATABS_TOTAL_BYTES] != b'\x00\x00':
-        raise RuntimeError('owned N: changed the HATABS terminator')
-    return {'signature': 'NRO!', 'old_memlo': memlo, 'outcome': install[5],
-            'handler_table': table}
-
-def run_resident_owned(timeout, evidence_dir):
-    if not RESIDENT_OWN_ATR.is_file():
-        raise RuntimeError(f'resident owned ATR is missing: {RESIDENT_OWN_ATR}')
-    return run_netsio(timeout, evidence_dir=evidence_dir, explicit_cold_reset=True,
-                      boot_atr=RESIDENT_OWN_ATR, inspector=inspect_resident_owned)
-
-def inspect_resident_overlap(token, evidence_dir):
-    """The DOS loader must not overwrite an image below its raised MEMLO."""
-    expected = _xex_bytes_at(RESIDENT_APP, 0x1d00, 4)
-    sys.path[:0] = [str(SDK)]
-    from altirra_bridge import AltirraBridge
-    with AltirraBridge.from_token_file(token) as bridge:
-        install = bridge.peek(0x0b00, 40)
-        hatabs = bridge.peek(HATABS_ADDR, HATABS_TOTAL_BYTES)
-        memlo = bridge.peek16(0x02e7)
-        resident_head = bridge.peek(0x1d00, 4)
-        table_head = bridge.peek16(_u16(install, 26))
-    (evidence_dir / 'resident-overlap.json').write_text(json.dumps({
-        'installer_raw': install.hex(), 'hatabs_raw': hatabs.hex(), 'memlo': memlo,
-        'resident_head': resident_head.hex(), 'expected_head': expected.hex(),
-        'handler_table_head': table_head,
-    }, indent=2) + '\n')
-    if install[:4] != b'NRI!' or install[5] != 1 or install[6] != 0xff:
-        raise RuntimeError('second staged install was not an ownership no-op')
-    if memlo != _u16(install, 8) or _u16(install, 10) != _u16(install, 8):
-        raise RuntimeError('second staged install changed MEMLO')
-    offset, table = install[24], _u16(install, 26)
-    if offset >= HATABS_ENTRY_BYTES or hatabs[offset] != ord('N'):
-        raise RuntimeError('overlap load invalidated N: HATABS ownership')
-    if _u16(hatabs, offset + 1) != table or table_head != _u16(install, 28):
-        raise RuntimeError('overlap load changed resident handler data')
-    if hatabs[HATABS_ENTRY_BYTES:HATABS_TOTAL_BYTES] != b'\x00\x00':
-        raise RuntimeError('overlap load changed HATABS termination')
-    if resident_head != expected:
-        raise RuntimeError('DOS overlap segment overwrote resident image')
-    return {'signature': 'NROV!', 'outcome': install[5], 'new_memlo': memlo,
-            'resident_head': resident_head.hex(), 'handler_table': table}
-
-def run_resident_overlap(timeout, evidence_dir):
-    if not RESIDENT_OVERLAP_ATR.is_file():
-        raise RuntimeError(f'resident overlap ATR is missing: {RESIDENT_OVERLAP_ATR}')
-    return run_netsio(timeout, evidence_dir=evidence_dir, explicit_cold_reset=True,
-                      boot_atr=RESIDENT_OVERLAP_ATR, inspector=inspect_resident_overlap)
 
 def run_native(timeout, evidence_dir=None, observe=False):
     before=set(Path('/tmp').glob('altirra-bridge-*.token')); cmd,env,temps=altirra_command(True)
@@ -4823,7 +4643,7 @@ def write_altirra_embedded_native_capacity_bounds_projection(run_result):
     return result
 
 if __name__=='__main__':
-    ap=argparse.ArgumentParser(); ap.add_argument('--embedded-basic',action='store_true',help='run the selected BASIC fixture through the embedded adapter'); ap.add_argument('--timeout',type=float,default=20); ap.add_argument('--observe-native',action='store_true'); ap.add_argument('--native-only',action='store_true'); ap.add_argument('--resident-installer',action='store_true'); ap.add_argument('--resident-o65-installer',action='store_true'); ap.add_argument('--resident-o65-altbase',action='store_true'); ap.add_argument('--resident-o65-idempotent',action='store_true'); ap.add_argument('--resident-o65-foreign',action='store_true'); ap.add_argument('--resident-o65-open',action='store_true'); ap.add_argument('--resident-o65-basic',action='store_true'); ap.add_argument('--resident-o65-basic-write',action='store_true'); ap.add_argument('--resident-o65-basic-post',action='store_true'); ap.add_argument('--resident-o65-basic-stale',action='store_true'); ap.add_argument('--resident-o65-basic-stale-commit',action='store_true'); ap.add_argument('--resident-o65-basic-stale-read',action='store_true'); ap.add_argument('--resident-o65-basic-reset',action='store_true'); ap.add_argument('--public-api-clock',action='store_true'); ap.add_argument('--public-api-clock-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-reset-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery',action='store_true'); ap.add_argument('--public-api-reset-recovery',action='store_true'); ap.add_argument('--native-core-dispatch',action='store_true'); ap.add_argument('--native-core-dispatch-altirra-embedded',action='store_true'); ap.add_argument('--native-wrong-r-retention',action='store_true'); ap.add_argument('--native-wrong-r-retention-altirra-embedded',action='store_true'); ap.add_argument('--native-reset-to-idle',action='store_true'); ap.add_argument('--native-reset-to-idle-altirra-embedded',action='store_true'); ap.add_argument('--native-interrupted-r-recovery',action='store_true'); ap.add_argument('--native-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--native-capacity-bounds',action='store_true'); ap.add_argument('--native-capacity-bounds-altirra-embedded',action='store_true'); ap.add_argument('--write-evidence',action='store_true'); ap.add_argument('--evidence-dir', type=Path, help='run directory prefix; a unique date-time suffix is added'); ap.add_argument('--json', action='store_true'); ap.add_argument('--settle', type=float, default=0.0); ap.add_argument('--repeat', type=int, default=1); ap.add_argument('--capture-dcb', action='store_true'); ap.add_argument('--command-ack-delay-tics', type=int); ap.add_argument('--trace-serial',action='store_true'); ap.add_argument('--write-projection-results', action='store_true'); ap.add_argument('--backend', choices=('nio', 'legacy'), default='nio'); ap.add_argument('--explicit-cold-reset', dest='explicit_cold_reset', action='store_true', default=True); ap.add_argument('--no-explicit-cold-reset', dest='explicit_cold_reset', action='store_false'); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--embedded-basic',action='store_true',help='run the selected BASIC fixture through the embedded adapter'); ap.add_argument('--timeout',type=float,default=20); ap.add_argument('--observe-native',action='store_true'); ap.add_argument('--native-only',action='store_true'); ap.add_argument('--resident-o65-installer',action='store_true'); ap.add_argument('--resident-o65-altbase',action='store_true'); ap.add_argument('--resident-o65-idempotent',action='store_true'); ap.add_argument('--resident-o65-foreign',action='store_true'); ap.add_argument('--resident-o65-open',action='store_true'); ap.add_argument('--resident-o65-basic',action='store_true'); ap.add_argument('--resident-o65-basic-write',action='store_true'); ap.add_argument('--resident-o65-basic-post',action='store_true'); ap.add_argument('--resident-o65-basic-stale',action='store_true'); ap.add_argument('--resident-o65-basic-stale-commit',action='store_true'); ap.add_argument('--resident-o65-basic-stale-read',action='store_true'); ap.add_argument('--resident-o65-basic-reset',action='store_true'); ap.add_argument('--public-api-clock',action='store_true'); ap.add_argument('--public-api-clock-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-reset-recovery-altirra-embedded',action='store_true'); ap.add_argument('--public-api-rejected-w-recovery',action='store_true'); ap.add_argument('--public-api-malformed-r-recovery',action='store_true'); ap.add_argument('--public-api-interrupted-r-recovery',action='store_true'); ap.add_argument('--public-api-reset-recovery',action='store_true'); ap.add_argument('--native-core-dispatch',action='store_true'); ap.add_argument('--native-core-dispatch-altirra-embedded',action='store_true'); ap.add_argument('--native-wrong-r-retention',action='store_true'); ap.add_argument('--native-wrong-r-retention-altirra-embedded',action='store_true'); ap.add_argument('--native-reset-to-idle',action='store_true'); ap.add_argument('--native-reset-to-idle-altirra-embedded',action='store_true'); ap.add_argument('--native-interrupted-r-recovery',action='store_true'); ap.add_argument('--native-interrupted-r-recovery-altirra-embedded',action='store_true'); ap.add_argument('--native-capacity-bounds',action='store_true'); ap.add_argument('--native-capacity-bounds-altirra-embedded',action='store_true'); ap.add_argument('--write-evidence',action='store_true'); ap.add_argument('--evidence-dir', type=Path, help='run directory prefix; a unique date-time suffix is added'); ap.add_argument('--json', action='store_true'); ap.add_argument('--settle', type=float, default=0.0); ap.add_argument('--repeat', type=int, default=1); ap.add_argument('--capture-dcb', action='store_true'); ap.add_argument('--command-ack-delay-tics', type=int); ap.add_argument('--trace-serial',action='store_true'); ap.add_argument('--write-projection-results', action='store_true'); ap.add_argument('--backend', choices=('nio', 'legacy'), default='nio'); ap.add_argument('--explicit-cold-reset', dest='explicit_cold_reset', action='store_true', default=True); ap.add_argument('--no-explicit-cold-reset', dest='explicit_cold_reset', action='store_false'); a=ap.parse_args()
     def emit(value):
         print(json.dumps(value) if a.json else value)
     evidence_dir = a.evidence_dir
@@ -4840,7 +4660,6 @@ if __name__=='__main__':
                          'atari-sio-resident-o65-idempotent-' if a.resident_o65_idempotent else
                          'atari-sio-resident-o65-altbase-' if a.resident_o65_altbase else
                          'atari-sio-resident-o65-installer-' if a.resident_o65_installer else
-                         'atari-sio-resident-installer-' if a.resident_installer else
                          'atari-sio-public-api-reset-recovery-altirra-embedded-' if a.public_api_reset_recovery_altirra_embedded else
                          'atari-sio-public-api-interrupted-r-recovery-altirra-embedded-' if a.public_api_interrupted_r_recovery_altirra_embedded else
                          'atari-sio-public-api-malformed-r-recovery-altirra-embedded-' if a.public_api_malformed_r_recovery_altirra_embedded else
@@ -4870,7 +4689,7 @@ if __name__=='__main__':
         raise ValueError('--write-projection-results requires --trace-serial for required POKEY evidence')
     if a.write_projection_results and a.backend != 'nio':
         raise ValueError('--write-projection-results only records the production netsio adapter')
-    if sum((a.resident_installer, a.resident_o65_installer, a.resident_o65_altbase, a.resident_o65_idempotent, a.resident_o65_foreign, a.resident_o65_open, a.resident_o65_basic, a.resident_o65_basic_write, a.resident_o65_basic_post, a.resident_o65_basic_stale, a.resident_o65_basic_stale_commit, a.resident_o65_basic_stale_read, a.resident_o65_basic_reset, a.public_api_clock, a.public_api_clock_altirra_embedded, a.public_api_rejected_w_recovery_altirra_embedded, a.public_api_malformed_r_recovery_altirra_embedded, a.public_api_interrupted_r_recovery_altirra_embedded, a.public_api_reset_recovery_altirra_embedded, a.public_api_rejected_w_recovery, a.public_api_malformed_r_recovery, a.public_api_interrupted_r_recovery, a.public_api_reset_recovery, a.native_core_dispatch, a.native_core_dispatch_altirra_embedded,
+    if sum((a.resident_o65_installer, a.resident_o65_altbase, a.resident_o65_idempotent, a.resident_o65_foreign, a.resident_o65_open, a.resident_o65_basic, a.resident_o65_basic_write, a.resident_o65_basic_post, a.resident_o65_basic_stale, a.resident_o65_basic_stale_commit, a.resident_o65_basic_stale_read, a.resident_o65_basic_reset, a.public_api_clock, a.public_api_clock_altirra_embedded, a.public_api_rejected_w_recovery_altirra_embedded, a.public_api_malformed_r_recovery_altirra_embedded, a.public_api_interrupted_r_recovery_altirra_embedded, a.public_api_reset_recovery_altirra_embedded, a.public_api_rejected_w_recovery, a.public_api_malformed_r_recovery, a.public_api_interrupted_r_recovery, a.public_api_reset_recovery, a.native_core_dispatch, a.native_core_dispatch_altirra_embedded,
             a.native_reset_to_idle_altirra_embedded,
             a.native_interrupted_r_recovery_altirra_embedded,
             a.native_capacity_bounds_altirra_embedded,
@@ -4916,16 +4735,6 @@ if __name__=='__main__':
             result = run_resident_o65_installer(
                 a.timeout, evidence_dir, altbase=a.resident_o65_altbase,
                 overlap=a.resident_o65_idempotent, foreign=a.resident_o65_foreign)
-            result['outcome'] = 'launch'
-        except Exception as exc:
-            result = {'outcome': 'failure', 'evidence_dir': str(evidence_dir), 'error': str(exc)}
-        (evidence_dir / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        emit(result)
-        if result['outcome'] != 'launch':
-            raise SystemExit(1)
-    elif a.resident_installer:
-        try:
-            result = run_resident_installer(a.timeout, evidence_dir)
             result['outcome'] = 'launch'
         except Exception as exc:
             result = {'outcome': 'failure', 'evidence_dir': str(evidence_dir), 'error': str(exc)}

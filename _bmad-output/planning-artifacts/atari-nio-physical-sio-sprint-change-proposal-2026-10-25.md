@@ -1,5 +1,10 @@
 # Atari physical SIO: Story 2.5 rebaseline
 
+**Historical proposal.** The later user decision deferred genuine OS warm-start
+persistence and physical reset detection to Epic 3. Embedded BASIC acceptance
+has since passed, the C resident prototype was retired, and Story 2.5 is done.
+See the feature-specific Story 2.5 record and epic tracker for current status.
+
 **Decision:** User-directed rebaseline, 2026-10-25. Scope is documentation and
 planning only; the user explicitly requested and authorized these edits and a
 commit. Story 2.5 remains **in progress**.

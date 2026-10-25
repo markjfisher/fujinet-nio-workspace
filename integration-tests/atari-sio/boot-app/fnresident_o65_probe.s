@@ -9,13 +9,14 @@ HATABS  = $031A
 MEMLO   = $02E7
 RESULT  = $9380
 PROBE   = $5440
-FNCNOT  = $92
 TABLE   = $80
 VECTOR  = $82
 
 .segment "CODE"
 
 _main:
+        lda #1
+        sta PROBE+6
         lda RESULT
         cmp #'N'
         jne fail
@@ -46,6 +47,8 @@ installed:
         lda RESULT+6
         jne fail
 ownership_ok:
+        lda #2
+        sta PROBE+6
         lda MEMLO
         cmp RESULT+10
         jne fail
@@ -66,10 +69,13 @@ ownership_ok:
         sta TABLE+1
         cmp RESULT+27
         bne fail
+        lda #3
+        sta PROBE+6
         ; Verify each address-minus-one vector still targets the dynamically
         ; protected resident allocation.
         ldy #0
 vectors:
+        sty PROBE+7
         lda (TABLE),y
         sta VECTOR
         iny
@@ -101,23 +107,8 @@ vectors:
 vector_ok:
         cpy #12
         bne vectors
-        ; Directly invoke the retained OPEN stub with an IOCB offset in X.
-        ldy #0
-        lda (TABLE),y
-        clc
-        adc #1
-        sta call_open+1
-        iny
-        lda (TABLE),y
-        adc #0
-        sta call_open+2
-        ldx #$20
-call_open:
-        jsr $ffff
-        cpy #FNCNOT
-        bne fail
-        cpx #$20
-        bne fail
+        ; Functional CIO calls are exercised by the separately loaded OPEN
+        ; probe and the BASIC acceptance fixtures.
         lda #'R'
         sta PROBE
         lda #'P'

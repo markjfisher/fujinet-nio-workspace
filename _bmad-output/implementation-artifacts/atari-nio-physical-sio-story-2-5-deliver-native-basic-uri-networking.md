@@ -4,7 +4,7 @@ feature: 'atari-nio-physical-sio'
 story: '2.5'
 type: 'feature'
 created: '2026-10-24'
-status: 'in-progress'
+status: 'done'
 baseline_workspace_commit: 'f88e24c8'
 context:
   - 'docs/agent-test-policy.md'
@@ -32,7 +32,7 @@ below adjusted `MEMLO`, register `HATABS` safely, preserve same-handler
 idempotence, reject foreign ownership and roll back failures. Total permanent
 RAM including code, data, BSS, buffers, zero page and retained workspace must
 not exceed 3,072 bytes. No C or cc65 runtime is linked into the production
-resident; the C prototype remains a reference.
+resident; the obsolete C prototype and gateway are retired.
 
 CIO modes 4, 8 and 12 map to GET, PUT and POST; output uses `BODY_UNKNOWN`.
 Preserve IOCB ownership, 128-byte buffering, EOF and errors, short acknowledgements,
@@ -41,12 +41,13 @@ read or CLOSE. Use the existing native `$7F` NetworkService protocol; do not
 replay uncertain writes or commits or affect another client's sessions.
 Serialize foreground calls and preserve the recorded CIO error/status table.
 
-On a genuine OS warm start the installed handler must remain usable, with
-valid HATABS and MEMLO; open sessions are abandoned and their remote resources
-reclaimed without flushing or committing incomplete output. Cold boot installs
-cleanly through DOS startup. Stale remote handles must fail safely, clean up
-ownership and allow subsequent OPEN. Genuine BASIC READ/PUT/POST acceptance and
-recovery evidence are required; virtual evidence is not physical proof.
+NetSIO host-reset events reclaim owned sessions without flushing or committing
+incomplete output. Cold boot installs cleanly through DOS startup. Stale remote
+handles fail safely, clean up ownership and allow subsequent OPEN. Genuine
+BASIC READ/PUT/POST acceptance and recovery evidence are required; virtual
+evidence is not physical proof. Genuine OS warm-start persistence and physical
+SIO reset detection are deferred to platform/physical acceptance and are not
+Story 2.5 closure criteria.
 
 Follow-on targets are Atari DOS 2.0S/2.5, SpartaDOS and SpartaDOS X, reusing
 the resident module with DOS-appropriate installation. Their compatibility remains unverified. The embedded-adapter BASIC lifecycle
@@ -57,11 +58,10 @@ selected is a deferred idea, not a current feature or requirement.
 
 ## Current acceptance and closure status — 2026-10-25
 
-**In progress.** The user has removed configuration-ATR installation from this
-story; the earlier closure review below is historical. Genuine OS warm-start
-persistence remains an unmet acceptance criterion. Embedded-adapter BASIC
-acceptance is now independently verified below; physical SIO reset detection
-remains outstanding and must not be inferred from virtual results.
+**Complete.** The earlier closure reviews and implementation increments below are historical.
+The user deferred genuine OS warm-start persistence and physical SIO reset
+detection to platform/physical acceptance. Neither is established by the
+verified NetSIO reset-event test.
 
 | Requirement | Current evidence and status |
 | --- | --- |
@@ -70,13 +70,12 @@ remains outstanding and must not be inferred from virtual results.
 | BASIC READ/PUT/POST, STATUS/CLOSE and native `$7F` | **Verified on production NetworkDevice through NetSIO:** `test-evidence/atari-sio-reclaim-{read,put,post}` runs documented below; post fixture verifies method, exact body including BASIC `$9b`, and one commit. CIOV STATUS and exact-boundary PUT are recorded in prior evidence. |
 | IOCB ownership, errors, short acknowledgement, uncertain operation and stale sessions | **Verified:** real-6502 fault/installer controls and `atari-sio-reclaim-stale-{read,write,commit}` BASIC runs documented below; another IOCB remains usable and no uncertain write or commit is replayed. |
 | Reset session reclamation, no flush or commit | **Verified for NetSIO host-reset event:** `test-evidence/atari-sio-reclaim-reset-final-20261025-105524-kwa8m3j9/` and owner-isolation tests. Physical SIO host-reset detection remains **unverified**. |
-| Genuine OS warm-start resident persistence | **Outstanding.** The observed manual reset took the OS cold path (`WARMST=0`), so equal resident bytes resulted from reinstallation; it cannot establish warm persistence. See `test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`. |
+| Genuine OS warm-start resident persistence | **Deferred to platform/physical acceptance, not passed.** The observed manual reset took the OS cold path (`WARMST=0`), so equal resident bytes resulted from reinstallation; it cannot establish warm persistence. See `test-evidence/atari-sio-manual-reset-recovery-20261025-113002-h5d13yr7/`. |
 | Cold boot reinstalls | **Verified in the NetSIO reset acceptance:** explicit cold boot restores deliberately altered resident code via MyDOS startup. |
 | Embedded-adapter BASIC acceptance | **Verified:** genuine MyDOS BASIC READ, PUT and POST through the embedded production NetworkDevice; see the embedded acceptance evidence below. |
 
 Other DOS compatibility targets and `config://` are follow-on work, not
-Story 2.5 closure requirements. No additional test has been run as part of
-this documentation-only rebaseline.
+Story 2.5 closure requirements.
 
 
 ## Implementation-preparation evidence
@@ -1842,3 +1841,58 @@ python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-
 
 Story 2.5 remains in progress; this increment does not establish genuine OS
 warm-start persistence or physical SIO reset detection.
+
+
+### Final closure and prototype retirement — 2026-10-25
+
+The production CA65 o65 module is the sole maintained resident handler. The
+old C resident, gateway, fixed prototype, prototype-only build rules and
+footprint controls were retired in `nio-core-apps` commit `5721eff1`. Independent public `fn_*` C clients and
+tests remain. Relocation comparison and malformed staged-image coverage now
+exercise the production assembly image. The streamed MyDOS installer and
+shared o65 utilities remain in use; the configuration ATR was not changed.
+
+Fresh MyDOS BASIC execution passed through both production transports:
+
+| Fixture | NetSIO evidence | Embedded-adapter evidence |
+| --- | --- | --- |
+| READ | `test-evidence/atari-sio-closure-netsio-basic-20261025-120950-nmuol4ss/` | `test-evidence/atari-sio-closure-embedded-basic-20261025-120953-cb3b_zti/` |
+| PUT | `test-evidence/atari-sio-closure-netsio-basic-write-20261025-121017-u6mcg05x/` | `test-evidence/atari-sio-closure-embedded-basic-write-20261025-121029-t8_as_to/` |
+| POST | `test-evidence/atari-sio-closure-netsio-basic-post-20261025-121045-o1bya0zd/` | `test-evidence/atari-sio-closure-embedded-basic-post-20261025-121107-j4brvodq/` |
+
+Each run records BASIC LOAD/RUN, screen and CPU state, HATABS and MEMLO,
+resident integrity and service traffic. PUT and POST validate exact payloads,
+BASIC `$9b` line terminators, single terminal commits and CLOSE. The
+configuration ATR public-API boot remains verified at
+`test-evidence/atari-sio-closure-config-public-20261025-121121-65n71h5w/`.
+The retained MyPicoDOS staged o65 install control passed at
+`test-evidence/atari-sio-closure-mypicodos-diagnose-20261025-121320-o1hn20y_/`;
+additional live controls verified alternate MEMLO, repeated installation and
+foreign-handler rejection. The direct CIOV OPEN/GET/PUT/STATUS/CLOSE probe
+passed with 17 production NetworkDevice requests at
+`test-evidence/atari-sio-closure-resident-o65-open-final-20261025-121510-poo2_am5/`.
+Its caller was moved to `$5800` to avoid overlapping the CA65 staged loader.
+
+The real-6502 assembly, streamed installer and RAM gate passed at 2,360 bytes;
+65 Python integration tests passed. Production NetworkDevice/Atari/NetSIO
+focused tests passed (25 cases, 1,373 assertions), as did the Altirra embedded
+adapter test. NetSIO reset-event reclamation and cold reinstallation remain
+verified in the earlier evidence. Genuine OS warm-start persistence and
+physical SIO reset detection remain deferred to Epic 3: neither is claimed
+as passed. Other DOS families and `config://` remain follow-on work.
+
+Final focused commands, after `source scripts/env.sh`:
+
+```sh
+make -C repos/nio-core-apps -f makefiles/build.mk TARGET=atari fnresident-asm
+make -C integration-tests/atari-sio/boot-app test-resident-asm resident-o65-mydos-basic
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+repos/fujinet-nio/build/atari-fujibus-netsio-debug/tests/fujinet-nio-tests --test-case='NetworkDevice*,Atari host reset*,Atari native NIO*,Atari NetSIO*'
+ctest --test-dir repos/AltirraSDL/build/linux-debug -R '^altirra-fujinet-nio-sio$' --output-on-failure
+```
+
+The six fresh BASIC runs used `run_boot_acceptance.py` with each of
+`--resident-o65-basic`, `--resident-o65-basic-write`, and
+`--resident-o65-basic-post`, first over NetSIO and then with
+`--embedded-basic`. Earlier sections contain the corresponding recovery,
+stale-session, STATUS and reset commands and evidence.

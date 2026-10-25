@@ -4,19 +4,7 @@ PICOBOOT := $(ROOT)/repos/MyPicoDOS/picobootcode-dd.bin
 OUT := build
 XEX := $(OUT)/boot-acceptance.xex
 ATR := $(OUT)/boot-acceptance.atr
-RESIDENT_APP := $(APPS)/build/atari/bin/fnresident.xex
-RESIDENT_PROBE := $(OUT)/fnresident-probe.xex
-RESIDENT_BOOTSTRAP_INC := $(OUT)/fnresident-bootstrap.inc
-RESIDENT_BOOTSTRAP := $(OUT)/fnresident-bootstrap.xex
-RESIDENT_XEX := $(OUT)/fnresident-install.xex
-RESIDENT_ATR := $(OUT)/fnresident-install.atr
-RESIDENT_FOREIGN_XEX := $(OUT)/fnresident-foreign.xex
-RESIDENT_FOREIGN_ATR := $(OUT)/fnresident-foreign.atr
-RESIDENT_OWN_XEX := $(OUT)/fnresident-own.xex
-RESIDENT_OWN_ATR := $(OUT)/fnresident-own.atr
-RESIDENT_OVERLAP_XEX := $(OUT)/fnresident-overlap.xex
-RESIDENT_OVERLAP_ATR := $(OUT)/fnresident-overlap.atr
-RESIDENT_O65_MODULE := $(APPS)/build/atari/bin/fnresident-module.o65
+RESIDENT_O65_MODULE := $(APPS)/build/atari/bin/fnresident-asm.o65
 RESIDENT_ASM_MODULE := $(APPS)/build/atari/bin/fnresident-asm.o65
 RESIDENT_O65_LABELS := $(RESIDENT_O65_MODULE:.o65=.lbl)
 RESIDENT_O65_STAGE := $(OUT)/fnresident-o65-stage.xex
@@ -34,7 +22,6 @@ RESIDENT_O65_OPEN_PROBE := $(OUT)/fnresident-o65-open-probe.xex
 RESIDENT_O65_OPEN_XEX := $(OUT)/fnresident-o65-open.xex
 RESIDENT_O65_OPEN_ATR := $(OUT)/fnresident-o65-open.atr
 RESIDENT_O65_MYDOS_ATR := $(OUT)/fnresident-o65-mydos-basic.atr
-RESIDENT_O65_DISK_LOADER := $(OUT)/fnresident-o65-disk-loader.xex
 RESIDENT_ASM_DISK_LOADER := $(OUT)/fnresident-asm-disk-loader.xex
 RESIDENT_O65_DISK_IMAGE := $(OUT)/nio.o65
 MYDOS_PLAIN_ATR := $(OUT)/mydos-4534-plain.atr
@@ -52,14 +39,9 @@ RESIDENT_O65_GET_CLOSE_CONTROL := $(OUT)/fnresident-o65-get-close-control.bin
 RESIDENT_O65_GET_CLOSE_SIOV := $(OUT)/fnresident-o65-get-close-siov.xex
 RESIDENT_O65_PUT_CONTROL := $(OUT)/fnresident-o65-put-control.bin
 RESIDENT_O65_PUT_SIOV := $(OUT)/fnresident-o65-put-siov.xex
-RESIDENT_O65_RELOCATION_COMPARE := $(OUT)/fnresident-o65-relocation-compare-control.bin
 
-.PHONY: all resident resident-foreign resident-own resident-overlap resident-o65 resident-o65-altbase resident-o65-overlap resident-o65-foreign resident-o65-open resident-o65-mydos-basic mydos-plain resident-o65-footprint test-resident-o65 clean
+.PHONY: all resident-o65 resident-o65-altbase resident-o65-overlap resident-o65-foreign resident-o65-open resident-o65-mydos-basic mydos-plain test-resident-o65 clean
 all: $(ATR)
-resident: $(RESIDENT_ATR)
-resident-foreign: $(RESIDENT_FOREIGN_ATR)
-resident-own: $(RESIDENT_OWN_ATR)
-resident-overlap: $(RESIDENT_OVERLAP_ATR)
 resident-o65: $(RESIDENT_O65_ATR)
 resident-o65-altbase: $(RESIDENT_O65_ALTBASE_ATR)
 resident-o65-overlap: $(RESIDENT_O65_OVERLAP_ATR)
@@ -67,12 +49,6 @@ resident-o65-foreign: $(RESIDENT_O65_FOREIGN_ATR)
 resident-o65-open: $(RESIDENT_O65_OPEN_ATR)
 resident-o65-mydos-basic: $(RESIDENT_O65_MYDOS_ATR)
 mydos-plain: $(MYDOS_PLAIN_ATR)
-
-# The N: payload uses URI-based fn_open(), not the optional TCP formatter.
-# Keep its module excluded and retain the measured bounded buffers: two shared
-# 512-byte packet workspaces and no second Atari recovery discard workspace.
-resident-o65-footprint: $(RESIDENT_O65_MODULE)
-	python3 ../resident-relocation/resident_footprint_report.py --map $(RESIDENT_O65_MODULE:.o65=.map) --max-initialized 12600 --max-bss 1500 --forbid-module fn_tcp_open.o
 
 $(OUT):
 	mkdir -p $@
@@ -89,62 +65,16 @@ $(ATR): $(XEX) $(PICOBOOT) Makefile | $(OUT)
 	cp $(XEX) $(OUT)/stage/coltest.xex
 	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/stage)
 
-$(RESIDENT_APP):
-	$(MAKE) -C $(APPS) -f makefiles/build.mk TARGET=atari fnresident
-
-$(RESIDENT_PROBE): fnresident_probe.s fnresident-probe.cfg | $(OUT)
-	cl65 -t none -C fnresident-probe.cfg -o $@ $<
-
-$(RESIDENT_BOOTSTRAP_INC): $(RESIDENT_APP) ../make_resident_bootstrap_include.py | $(OUT)
-	python3 ../make_resident_bootstrap_include.py --map $(RESIDENT_APP:.xex=.map) --xex $(RESIDENT_APP) --lbl $(RESIDENT_APP:.xex=.lbl) --output $@
-
-$(RESIDENT_BOOTSTRAP): fnresident_bootstrap.s fnresident-bootstrap.cfg $(RESIDENT_BOOTSTRAP_INC) | $(OUT)
-	cl65 -t none -C fnresident-bootstrap.cfg -o $@ fnresident_bootstrap.s
-
-$(RESIDENT_XEX): $(RESIDENT_APP) $(RESIDENT_PROBE) $(RESIDENT_BOOTSTRAP) ../compose_resident_xex.py | $(OUT)
-	python3 ../compose_resident_xex.py --bootstrap $(RESIDENT_BOOTSTRAP) $(RESIDENT_APP) $(RESIDENT_PROBE) $@
-
-$(RESIDENT_FOREIGN_XEX): $(RESIDENT_APP) $(RESIDENT_PROBE) $(RESIDENT_BOOTSTRAP) ../compose_resident_xex.py | $(OUT)
-	python3 ../compose_resident_xex.py --foreign-hatabs --bootstrap $(RESIDENT_BOOTSTRAP) $(RESIDENT_APP) $(RESIDENT_PROBE) $@
-
-$(RESIDENT_OWN_XEX): $(RESIDENT_APP) $(RESIDENT_PROBE) ../compose_resident_xex.py | $(OUT)
-	table=$$(sed -n 's/^al \([0-9A-F]*\) \._fnresident_handler_table$$/0x\1/p' $(RESIDENT_APP:.xex=.lbl)); test -n "$$table"; python3 ../compose_resident_xex.py --own-hatabs "$$table" $(RESIDENT_APP) $(RESIDENT_PROBE) $@
-
-$(RESIDENT_OVERLAP_XEX): $(RESIDENT_APP) $(RESIDENT_PROBE) $(RESIDENT_BOOTSTRAP) ../compose_resident_xex.py | $(OUT)
-	python3 ../compose_resident_xex.py --bootstrap $(RESIDENT_BOOTSTRAP) --repeat-bootstrap $(RESIDENT_APP) $(RESIDENT_PROBE) $@
-
-$(RESIDENT_ATR): $(RESIDENT_XEX) $(PICOBOOT) Makefile | $(OUT)
-	rm -rf $(OUT)/resident-stage
-	mkdir -p $(OUT)/resident-stage
-	cp $(RESIDENT_XEX) $(OUT)/resident-stage/coltest.xex
-	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/resident-stage)
-
-$(RESIDENT_FOREIGN_ATR): $(RESIDENT_FOREIGN_XEX) $(PICOBOOT) Makefile | $(OUT)
-	rm -rf $(OUT)/resident-foreign-stage
-	mkdir -p $(OUT)/resident-foreign-stage
-	cp $(RESIDENT_FOREIGN_XEX) $(OUT)/resident-foreign-stage/coltest.xex
-	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/resident-foreign-stage)
-
-$(RESIDENT_OWN_ATR): $(RESIDENT_OWN_XEX) $(PICOBOOT) Makefile | $(OUT)
-	rm -rf $(OUT)/resident-own-stage
-	mkdir -p $(OUT)/resident-own-stage
-	cp $(RESIDENT_OWN_XEX) $(OUT)/resident-own-stage/coltest.xex
-	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/resident-own-stage)
-
-$(RESIDENT_OVERLAP_ATR): $(RESIDENT_OVERLAP_XEX) $(PICOBOOT) Makefile | $(OUT)
-	rm -rf $(OUT)/resident-overlap-stage
-	mkdir -p $(OUT)/resident-overlap-stage
-	cp $(RESIDENT_OVERLAP_XEX) $(OUT)/resident-overlap-stage/coltest.xex
-	cd $(APPS) && dir2atr -m -D -B $(PICOBOOT) $(abspath $@) $(abspath $(OUT)/resident-overlap-stage)
-
 $(RESIDENT_O65_MODULE):
-	$(MAKE) -C $(APPS) -f makefiles/build.mk TARGET=atari fnresident-module
+	$(MAKE) -C $(APPS) -f makefiles/build.mk TARGET=atari fnresident-asm
+
+$(RESIDENT_O65_LABELS): $(RESIDENT_O65_MODULE)
 
 $(RESIDENT_O65_STAGE): $(RESIDENT_O65_MODULE) $(RESIDENT_O65_LABELS) ../make_resident_o65_image.py Makefile | $(OUT)
-	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --stage 0x4900 --max-stage-end 0x9380 --output $@
+	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --cstack 0 --stage 0x4900 --max-stage-end 0x9380 --output $@
 
-$(RESIDENT_O65_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-loader.cfg | $(OUT)
-	cl65 -t none -C fnresident-o65-loader.cfg -o $@ $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s
+$(RESIDENT_O65_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-loader.cfg Makefile | $(OUT)
+	cl65 -t none --asm-define ASM_RESIDENT=1 -C fnresident-o65-loader.cfg -o $@ $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s
 
 $(RESIDENT_O65_PROBE): fnresident_o65_probe.s fnresident-o65-probe.cfg | $(OUT)
 	cl65 -t none -C fnresident-o65-probe.cfg -o $@ fnresident_o65_probe.s
@@ -161,8 +91,8 @@ $(RESIDENT_O65_OVERLAP_XEX): $(RESIDENT_O65_LOADER) $(RESIDENT_O65_STAGE) $(RESI
 $(RESIDENT_O65_FOREIGN_XEX): $(RESIDENT_O65_LOADER) $(RESIDENT_O65_STAGE) $(RESIDENT_O65_PROBE) ../compose_resident_o65_xex.py | $(OUT)
 	python3 ../compose_resident_o65_xex.py --foreign --loader $(RESIDENT_O65_LOADER) --staged $(RESIDENT_O65_STAGE) --probe $(RESIDENT_O65_PROBE) --output $@
 
-$(RESIDENT_O65_OPEN_PROBE): fnresident_o65_open_probe.s fnresident-o65-open-probe.cfg | $(OUT)
-	cl65 -t none -C fnresident-o65-open-probe.cfg -o $@ $<
+$(RESIDENT_O65_OPEN_PROBE): fnresident_o65_open_probe.s fnresident-o65-open-probe.cfg Makefile | $(OUT)
+	cl65 -t none --start-addr 0x5800 -C fnresident-o65-open-probe.cfg -o $@ $<
 
 $(RESIDENT_O65_OPEN_XEX): $(RESIDENT_O65_LOADER) $(RESIDENT_O65_STAGE) $(RESIDENT_O65_OPEN_PROBE) ../compose_resident_o65_xex.py | $(OUT)
 	python3 ../compose_resident_o65_xex.py --loader $(RESIDENT_O65_LOADER) --staged $(RESIDENT_O65_STAGE) --probe $(RESIDENT_O65_OPEN_PROBE) --output $@
@@ -220,9 +150,6 @@ $(RESIDENT_O65_OPEN_ATR): $(RESIDENT_O65_OPEN_XEX) $(PICOBOOT) Makefile | $(OUT)
 
 # MyDOS 4.53/4's checked-in DOS.SYS/DUP.SYS pair matches dir2atr's MyDos4534
 # boot sectors. MyDOS natively auto-loads NIO.AR0 during normal startup.
-$(RESIDENT_O65_DISK_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-disk-loader.cfg | $(OUT)
-	cl65 -t none --asm-define DISK_SOURCE=1 -C fnresident-o65-disk-loader.cfg -Ln $(@:.xex=.lbl) -o $@ $<
-
 $(RESIDENT_ASM_DISK_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-disk-loader.cfg | $(OUT)
 	cl65 -t none --asm-define DISK_SOURCE=1 --asm-define ASM_RESIDENT=1 -C fnresident-o65-disk-loader.cfg -Ln $(@:.xex=.lbl) -o $@ $<
 
@@ -291,30 +218,11 @@ $(RESIDENT_O65_PUT_CONTROL): fnresident_o65_put_control.s fnresident-o65-loader-
 $(RESIDENT_O65_PUT_SIOV): fnresident_o65_put_siov.s fnresident-o65-open-siov.cfg | $(OUT)
 	cl65 -t none -C fnresident-o65-open-siov.cfg -o $@ fnresident_o65_put_siov.s
 
-$(RESIDENT_O65_RELOCATION_COMPARE): fnresident_o65_relocation_compare_control.s fnresident-o65-loader-control.cfg | $(OUT)
-	cl65 -t none -C fnresident-o65-loader-control.cfg -o $@ fnresident_o65_relocation_compare_control.s
-
-test-resident-o65: resident-o65 resident-o65-altbase resident-o65-overlap resident-o65-foreign resident-o65-footprint $(RESIDENT_O65_OPEN_CONTROL) $(RESIDENT_O65_OPEN_SIOV) $(RESIDENT_O65_GET_CLOSE_CONTROL) $(RESIDENT_O65_GET_CLOSE_SIOV) $(RESIDENT_O65_PUT_CONTROL) $(RESIDENT_O65_PUT_SIOV) $(RESIDENT_O65_RELOCATION_COMPARE)
-	cl65 -t none -C fnresident-o65-direct-control.cfg -o $(OUT)/fnresident-o65-direct-control.bin fnresident_o65_direct_control.s
-	cl65 -t none -C fnresident-o65-loader-control.cfg -o $(OUT)/fnresident-o65-loader-control.bin fnresident_o65_loader_control.s
-	cl65 -t none -C fnresident-o65-loader-siov.cfg -o $(OUT)/fnresident-o65-loader-siov.xex fnresident_o65_loader_siov.s
-	python3 ../resident-relocation/verify_o65_api_closure.py $(RESIDENT_O65_MODULE) --output-relocated $(OUT)/fnresident-o65-module-0700.bin --relocation-base 0x0700
-	soft65c02_tester -i fnresident_o65_relocation_compare.txt
-	soft65c02_tester -i fnresident_o65_direct.txt
-	soft65c02_tester -i fnresident_o65_loader.txt
-	soft65c02_tester -i fnresident_o65_loader_failure.txt
-	soft65c02_tester -i fnresident_o65_open.txt
-	soft65c02_tester -i fnresident_o65_get_close.txt
-	soft65c02_tester -i fnresident_o65_put.txt
+# The staged and streamed production controls are exercised together.
+test-resident-o65: test-resident-asm
 
 clean:
 	rm -rf $(OUT)
 
 .PHONY: test-resident-o65-disk
-test-resident-o65-disk: $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_MODULE) $(OUT)/fnresident-o65-disk-control.bin
-	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --output $(OUT)/nio-prototype.o65
-	sed 's@build/nio.o65@build/nio-prototype.o65@g' fnresident_o65_disk.txt > $(OUT)/fnresident-prototype-disk.txt
-	soft65c02_tester -i $(OUT)/fnresident-prototype-disk.txt
-
-$(OUT)/fnresident-o65-disk-control.bin: fnresident_o65_disk_control.s fnresident-o65-disk-control.cfg | $(OUT)
-	cl65 -t none -C fnresident-o65-disk-control.cfg -o $@ $<
+test-resident-o65-disk: test-resident-asm

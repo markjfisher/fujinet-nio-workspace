@@ -2,18 +2,14 @@ ROOT := $(abspath ../../..)
 OUT := build/relocation-feasibility
 APPS := $(ROOT)/repos/nio-core-apps
 LIB := $(ROOT)/repos/fujinet-nio-lib
-API_OUT := build/api-closure
 O65_API_OUT := build/o65-api-closure
 O65_RUNTIME_OUT := build/o65-api-runtime
 CL65 ?= cl65
 
-.PHONY: relocation-feasibility api-closure-map o65-relocation-metadata o65-api-closure o65-api-runtime load-run-symbols allocation-plan allocation-plan-o65 clean
+.PHONY: relocation-feasibility o65-relocation-metadata o65-api-closure o65-api-runtime load-run-symbols allocation-plan allocation-plan-o65 clean
 
 relocation-feasibility:
 	soft65c02_unit -b $(OUT) -i relocation_feasibility.yaml
-
-api-closure-map: $(API_OUT)/resident-api-closure.map
-	python3 resident_footprint_report.py --map $<
 
 # ld65's supported o65 writer emits relocation metadata for a loadable cc65
 # module.  This target deliberately stops at format validation: deploying an
@@ -66,13 +62,6 @@ build/load-run-probe.bin build/load-run-probe.lbl: load_run_probe.s load_run_pro
 
 build/o65-probe.o65: o65_probe.s | build
 	cl65 -t none --config $(ROOT)/repos/cc65/cfg/module.cfg -o $@ $<
-
-$(API_OUT)/resident-api-closure.map: resident_api_closure.c | $(API_OUT)
-	$(MAKE) -C $(LIB) atari
-	cl65 -t atari --config $(APPS)/makefiles/cc65-atari-resident.cfg --start-addr 0x1D00 -Osir -O -I $(LIB)/include --mapfile $@ -Ln $(API_OUT)/resident-api-closure.lbl -o $(API_OUT)/resident-api-closure.xex $< $(LIB)/build/fujinet-nio-atari.lib
-
-$(API_OUT):
-	mkdir -p $@
 
 $(O65_API_OUT):
 	mkdir -p $@

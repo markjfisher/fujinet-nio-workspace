@@ -105,6 +105,9 @@ Atari users can boot the selected configuration ATR as `D1:` and use configured 
 
 ### Epic 2: Atari applications and BASIC use native NIO services
 
+**Status: done.** Stories 2.1–2.5 are complete; platform and physical reset
+verification is deferred to Epic 3.
+
 Atari developers can use the public cc65 NIO API and BASIC users can use native `N1:` URI opens; both reach the same modern services through packet-native `0x7F`, without legacy transport or compatibility adapters.
 
 **FRs covered:** FR1, FR2, FR3, FR6, FR7, FR11
@@ -295,6 +298,8 @@ So that I can verify the supported public API and recovery behavior on each Atar
 
 ### Story 2.5: Deliver native BASIC URI networking
 
+**Status: done** (closure evidence in the feature-specific Story 2.5 record).
+
 As an Atari BASIC user,
 I want to open a supported URI through `N1:` syntax,
 So that I can use modern FujiNet networking from BASIC without a legacy FujiNet transport.
@@ -320,12 +325,15 @@ writes or commits are never automatically replayed. Foreground calls are
 serialized, and the CIO error/status table and behavior across all supported
 IOCBs are recorded and tested.
 
-**Given** a genuine OS warm start, **then** the resident handler remains usable
-with valid `HATABS` and `MEMLO`, open sessions are abandoned and their remote
-resources reclaimed, and incomplete output is neither flushed nor committed.
-A cold boot reinstalls cleanly through DOS startup. Stale remote handles return
+**Given** a NetSIO host-reset event, **then** sessions owned by that Atari
+client are reclaimed without flushing or committing abandoned output. A cold
+boot reinstalls cleanly through DOS startup. Stale remote handles return
 appropriate CIO errors, release local ownership safely and permit a later OPEN
 without replaying uncertain operations or affecting another client.
+
+Genuine OS warm-start persistence and physical SIO reset detection are
+**deferred to platform/physical acceptance**. They are not established by the
+NetSIO reset-event test and do not block Story 2.5 closure.
 
 **Given** genuine DOS/BASIC acceptance, **then** READ, PUT and POST fixtures
 execute against production NetworkDevice over native `$7F`, including correct
@@ -375,6 +383,12 @@ So that the Atari can safely share its bus with the device at standard speed.
 **When** physical SIO is exercised at 19,200 baud,
 **Then** CMD/UART sequencing, ACK/COMPLETE timing, data/checksum timing, and reset recovery are recorded,
 **And** DATA OUT and PROC are verified released-idle open-drain with no contention.
+
+**Given** an installed resident N: handler on a supported platform,
+**When** genuine OS warm start and physical host reset are validated,
+**Then** record HATABS, MEMLO, handler usability, and how remote sessions are
+reclaimed without flushing or committing abandoned output. These behaviors
+are unverified by the virtual Story 2.5 reset-event test.
 
 **Given** unused SIO lines INT, MTR, CKI, and CKO,
 **When** the v1 profile runs,

@@ -42,12 +42,13 @@ _main:
         sta expected+1
         lda #>$a000
         sta expected+2
-        ; fn_init() deliberately mutates initialized library state. Compare
-        ; the complete relocated TEXT closure; DATA/BSS lifecycle is covered
-        ; by the loader/runtime tests below.
-        lda #<$2eb7
+        ; Compare complete relocated TEXT; mutable DATA/BSS are tested separately.
+.ifndef TEXT_SIZE
+TEXT_SIZE = $2eb7
+.endif
+        lda #<TEXT_SIZE
         sta remaining
-        lda #>$2eb7
+        lda #>TEXT_SIZE
         sta remaining+1
         lda #0
         sta offset

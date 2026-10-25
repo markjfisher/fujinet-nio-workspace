@@ -14,6 +14,37 @@ ranges = sorted((start, end) for start, end, _ in segments(
     Path("build/fnresident-asm-open.xex").read_bytes()))
 assert all(a[1] < b[0] for a, b in zip(ranges, ranges[1:])), ranges
 
+# Preserve the independent host-vs-Atari relocation and malformed wrapper
+# controls formerly run against the retired C prototype.
+module = Path('../../../repos/nio-core-apps/build/atari/bin/fnresident-asm.o65')
+text_size = struct.unpack_from('<H', module.read_bytes(), 10)[0]
+subprocess.run([sys.executable, '../resident-relocation/verify_o65_api_closure.py',
+                str(module), '--output-relocated', 'build/fnresident-asm-host-0700.bin',
+                '--relocation-base', '0x0700'], check=True)
+subprocess.run(['cl65', '-t', 'none', '--asm-define', f'TEXT_SIZE={text_size}',
+                '-C', 'fnresident-o65-loader-control.cfg', '-o',
+                'build/fnresident-asm-relocation-control.bin',
+                'fnresident_o65_relocation_compare_control.s'], check=True)
+source = Path('fnresident_o65_relocation_compare.txt').read_text()
+source = source.replace('fnresident-o65-relocation-compare-control.bin', 'fnresident-asm-relocation-control.bin')
+source = source.replace('fnresident-o65-loader.xex', 'fnresident-asm-loader.xex')
+source = source.replace('fnresident-o65-stage.xex', 'fnresident-asm-stage.xex')
+source = source.replace('fnresident-o65-module-0700.bin', 'fnresident-asm-host-0700.bin')
+source = source.replace('#0xa000 = 0xa5', '#0xa000 = 0xa9')
+generated = Path('build/fnresident-asm-relocation-compare.txt')
+generated.write_text(source)
+subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)
+subprocess.run(['cl65', '-t', 'none', '-C', 'fnresident-o65-loader-control.cfg',
+                '-o', 'build/fnresident-o65-loader-control.bin', 'fnresident_o65_loader_control.s'], check=True)
+subprocess.run(['cl65', '-t', 'none', '-C', 'fnresident-o65-loader-siov.cfg',
+                '-o', 'build/fnresident-o65-loader-siov.xex', 'fnresident_o65_loader_siov.s'], check=True)
+source = Path('fnresident_o65_loader_failure.txt').read_text()
+source = source.replace('fnresident-o65-loader.xex', 'fnresident-asm-loader.xex')
+source = source.replace('fnresident-o65-stage.xex', 'fnresident-asm-stage.xex')
+generated = Path('build/fnresident-asm-loader-failure.txt')
+generated.write_text(source)
+subprocess.run(['soft65c02_tester', '-i', str(generated)], check=True)
+
 for name in ('open', 'get_close', 'put'):
     source = Path(f'fnresident_o65_{name}.txt').read_text()
     source = source.replace('build/fnresident-o65-stage.xex', 'build/fnresident-asm-stage.xex')
