@@ -98,7 +98,11 @@ $(RESIDENT_O65_OPEN_XEX): $(RESIDENT_O65_LOADER) $(RESIDENT_O65_STAGE) $(RESIDEN
 	python3 ../compose_resident_o65_xex.py --loader $(RESIDENT_O65_LOADER) --staged $(RESIDENT_O65_STAGE) --probe $(RESIDENT_O65_OPEN_PROBE) --output $@
 
 $(TBXL_PARSER): ../fetch_tbxl_parser.py | $(OUT)
+ifeq ($(DOS25_OFFLINE),1)
+	@echo 'BASIC parser missing; provision it before the offline build' >&2; exit 1
+else
 	python3 ../fetch_tbxl_parser.py --output $@
+endif
 
 $(RESIDENT_O65_BASIC_PROGRAM): $(RESIDENT_O65_BASIC_SOURCE) $(TBXL_PARSER) | $(OUT)
 	$(TBXL_PARSER) -A -q -o $@ $<
@@ -227,8 +231,22 @@ clean:
 .PHONY: test-resident-o65-disk
 test-resident-o65-disk: test-resident-asm
 
-# Set DOS25_SOURCE to the provenance-verified source ATR; never modify it.
-.PHONY: resident-dos25-basic
-resident-dos25-basic: $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST)
+# Explicitly provision media and parser before these offline targets.
+DOS25_CONFIG_ATR := $(ROOT)/repos/fujinet-nio/distfiles/boot/atari/autorun.atr
+DOS25_CONFIG_ESP := $(ROOT)/repos/fujinet-nio/distfiles/esp32-data/boot/atari/autorun.atr
+DOS25_PROTECTED := --protect "$(DOS25_CONFIG_ATR)" --protect "$(DOS25_CONFIG_ESP)" --protect "$(APPS)/build/atari/disk/boot/autorun.atr" --protect "$(TBXL_PARSER)"
+DOS25_MODULE_FILES := $(RESIDENT_ASM_MODULE) $(RESIDENT_O65_LABELS) $(RESIDENT_ASM_MODULE:.o65=.map) $(RESIDENT_ASM_MODULE:.o65=.o)
+DOS25_OUTPUTS := --output "$(OUT)/dos25-clean.atr" --output "$(OUT)/dos25-resident.atr" --output "$(RESIDENT_ASM_DISK_LOADER)" --output "$(RESIDENT_ASM_DISK_LOADER:.xex=.lbl)" --output "$(RESIDENT_O65_DISK_IMAGE)" --output "$(RESIDENT_O65_BASIC_PROGRAM)" --output "$(RESIDENT_O65_BASIC_WRITE)" --output "$(RESIDENT_O65_BASIC_POST)"
+
+.PHONY: clean-dos25 resident-dos25-basic
+clean-dos25:
 	@test -n "$(DOS25_SOURCE)" || { echo 'Set DOS25_SOURCE to the verified DOS 2.5 source ATR' >&2; exit 1; }
-	python3 make-dos25-atr.py "$(DOS25_SOURCE)" $(OUT)
+	python3 make-dos25-atr.py clean "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_PROTECTED) $(foreach f,$(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST) $(RESIDENT_ASM_DISK_LOADER:.xex=.lbl) $(OUT)/dos25-resident.atr $(DOS25_MODULE_FILES),--protect "$(f)")
+
+resident-dos25-basic:
+	@test -n "$(DOS25_SOURCE)" || { echo 'Set DOS25_SOURCE to the verified DOS 2.5 source ATR' >&2; exit 1; }
+	@python3 -c 'import hashlib,os,sys; p=sys.argv[1]; sys.exit(0 if os.access(p,os.X_OK) and hashlib.sha256(open(p,"rb").read()).hexdigest()=="ac65c8308d4c3fd851057aa61bd66a80fce61f54f56da0ef3e378835ce141200" else "BASIC parser missing or checksum mismatch")' "$(TBXL_PARSER)"
+	python3 make-dos25-atr.py preflight "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_OUTPUTS) $(foreach f,$(DOS25_MODULE_FILES),--output "$(f)") $(DOS25_PROTECTED)
+	$(MAKE) DOS25_OFFLINE=1 $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST)
+	python3 make-dos25-atr.py clean "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_PROTECTED) $(foreach f,$(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) $(RESIDENT_O65_BASIC_POST) $(RESIDENT_ASM_DISK_LOADER:.xex=.lbl) $(OUT)/dos25-resident.atr $(DOS25_MODULE_FILES),--protect "$(f)")
+	python3 make-dos25-atr.py resident "$(DOS25_SOURCE)" "$(OUT)" $(DOS25_PROTECTED) $(foreach f,$(DOS25_MODULE_FILES),--protect "$(f)")
