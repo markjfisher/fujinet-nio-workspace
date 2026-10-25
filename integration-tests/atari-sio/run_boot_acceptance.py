@@ -1985,6 +1985,7 @@ def run_resident_basic_reset(timeout, evidence_dir):
                 state = {'install': install.hex(), 'memlo': b.peek16(0x2e7),
                          'memtop': b.peek16(0x2e5), 'hatabs': b.peek(HATABS_ADDR, 35).hex(),
                          'dosini': b.peek16(0x000c),
+                         'warmst': b.peek(0x0008)[0],
                          'iocb1': b.peek(0x350, 16).hex(),
                          'owners': b.peek(start + initialized, 32).hex(),
                          'resident_start': start, 'resident_end': end,
@@ -2060,8 +2061,20 @@ def run_resident_basic_reset(timeout, evidence_dir):
     choices = (prefix, prefix + (4,), closed_prefix, closed_prefix + (4,))
     if commands not in choices or 'Network fixture write count=' in trace or 'fixture committed body' in trace:
         raise RuntimeError(f'warm-reset NetworkDevice exchange differs: {commands!r}')
-    result['warm_pre_reset_remote_close_observed'] = observed['warm_owner_retained'] or commands in (closed_prefix, closed_prefix + (4,))
-    result['warm_buffered_remote_close_observed'] = commands in (prefix + (4,), closed_prefix + (4,))
+    # NetSIO host reset reclaims the ingress-owned sessions directly in the
+    # production NetworkDevice. No wire CLOSE (and no output WRITE) is sent.
+    reset_marker = 'Atari host reset reclaiming NetworkDevice sessions'
+    reset_after_open = re.search(
+        r'NetworkDevice routed request \d+ command=1.*?' + reset_marker +
+        r'.*?Network fixture close count=1.*?NetworkDevice routed request \d+ command=1', trace, re.S)
+    reset_after_output = re.search(
+        r'Network fixture close count=2.*?NetworkDevice routed request \d+ command=1.*?' +
+        reset_marker + r'.*?Network fixture close count=3', trace, re.S)
+    if trace.count('Network fixture close count=') != 3:
+        raise RuntimeError('reset test did not close each NetworkDevice session exactly once')
+    result['warm_pre_reset_remote_close_observed'] = bool(reset_after_open)
+    result['warm_buffered_remote_close_observed'] = bool(reset_after_output)
+    result['reset_reclamation'] = 'NetworkDevice backend close on NetSIO host reset'
     return result
 
 

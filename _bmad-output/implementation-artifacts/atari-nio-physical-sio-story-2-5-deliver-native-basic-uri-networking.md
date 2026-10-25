@@ -1611,6 +1611,9 @@ valid, with production NetworkDevice acceptance unchanged.
 
 ### Reset and stale-session acceptance
 
+This section records the original failed reset experiment; the later
+"Reset reclamation correction" section supersedes its reset conclusion.
+
 `--resident-o65-basic-reset` drives real MyDOS BASIC through an OPEN, warm
 reset, another OPEN/GET/CLOSE and cold boot. It records the IOCB, both resident
 owner records, HATABS, MEMLO, resident code hash, screen and CPU at each stage.
@@ -1674,4 +1677,65 @@ service does not receive CLOSE for the pre-reset handles:
 
 ```sh
 python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-reset --timeout 1 --evidence-dir test-evidence/atari-sio-reset-observed-final --json
+```
+
+### Reset reclamation correction
+
+The preceding reset interpretation was incomplete. A write watch on DOSINI
+and the live owner byte showed the XL OS RAM test at `$C2F6` writing `$FF`
+and `$00` over DOSINI and then `$FF` over the owner. Before Reset, COLDST was
+zero and PUPBT was `$5C,$93,$25`; during the reset decision the cartridge
+checksum changed from `$DF` to `$4A`, followed by cold initialization. Thus
+the equal HATABS, MEMLO and code bytes at READY were the result of MyDOS
+reinstallation, not evidence that the prior resident survived. The detailed
+watchpoints and CPU registers are in
+`test-evidence/atari-sio-reset-decision-20261025-105159/reset-owner-watch.json`.
+
+The [config-ng pre-init](https://github.com/markjfisher/fujinet-config-ng/blob/master/src/atari/common/init/pre_init.s)
+installs its chained DOSINI callback while its application is starting; its
+[reset handler](https://github.com/markjfisher/fujinet-config-ng/blob/master/src/atari/common/init/reset_handler.s)
+calls the saved vector, and [main](https://github.com/markjfisher/fujinet-config-ng/blob/master/src/atari/common/main.s)
+restores that vector on exit. In the observed MyDOS path, the OS overwrites
+the installed vector before any such callback can execute.
+
+NetSIO delivers explicit warm/cold host-reset events. The Atari `$7F` ingress
+now supplies a private in-process owner identity to NetworkDevice and passes
+that identity through the existing routing on a host reset. NetworkDevice
+closes only sessions created by that ingress, using its ordinary backend close;
+it does not write or commit pending body data. An interrupted W/P/R transaction
+still only resets the transaction state. The identity is not a wire field and
+neither the native protocol nor other clients' session semantics changed.
+The ingress also reclaims its sessions on destruction to avoid reusing an
+identity while its old sessions are still alive. This is NetSIO reset-event
+coverage; it does not establish how a physical adapter detects a host reset.
+
+The reset acceptance now passes with three backend closes: the abandoned read,
+the normally closed read, and the abandoned output session. It records no
+body write or commit for the abandoned output, and the subsequent explicit
+cold boot reinstalls the original resident bytes. The tested Reset command
+entered the OS cold path (`WARMST=0`); evidence including CPU state and screens:
+`test-evidence/atari-sio-reclaim-reset-final-20261025-105524-kwa8m3j9/`.
+The resident remains CA65-only at 2,360 permanent bytes.
+An additional diagnostic set CARTCK to the previously observed post-reset
+value `$4A` before Reset; the OS recomputed `$05` and still took the cold
+path. This does not prove a true OS warm-start lifecycle. The control is at
+`test-evidence/atari-sio-warm-control-20261025-105800/netsio/reset-owner-watch.json`.
+
+The NetworkDevice regression keeps another owner's and an unowned session open
+while reclaiming the Atari owner, then repeats reclamation eight times. The
+frontend regression distinguishes host reset from transaction reset and checks
+owner cleanup on destruction. With `source scripts/env.sh`, verification was:
+
+```sh
+cmake --build repos/fujinet-nio/build/atari-fujibus-netsio-debug --target fujinet-nio-tests fujinet-nio-atari-netsio-clock-acceptance -j6
+repos/fujinet-nio/build/atari-fujibus-netsio-debug/tests/fujinet-nio-tests --test-case='NetworkDevice*,Atari host reset*,Atari native NIO*,Atari NetSIO*'
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale-read --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-stale-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-stale-write --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-stale-commit --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-stale-commit --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-put --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-post --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-reset --timeout 1 --evidence-dir test-evidence/atari-sio-reclaim-reset-final --json
 ```
