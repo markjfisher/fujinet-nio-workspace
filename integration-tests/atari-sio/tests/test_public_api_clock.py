@@ -12,19 +12,37 @@ import run_boot_acceptance as boot_runner
 
 
 class PublicApiClockTests(unittest.TestCase):
-    def test_first_read_checksum_with_interleaved_log_line(self):
-        payload = bytes(range(128))
-        checksum = boot_runner._sio_checksum(payload)
-        trace = '\n'.join((
-            '12:00:00.000000 ATD -> 31 52 01 00 84',
-            '12:00:00.001000 < NET IN 81:SYNC_RESPONSE[5] +2 02 01 41 00 00',
-            '12:00:00.002000 < NET IN 01:DATA_BYTE[1] +4 43',
-            f'12:00:00.003000 < NET IN 02:DATA_BLOCK[128] +2 {payload.hex(" ").upper()}',
-            f'12:00:00.00400012:00:00.004001  < NET IN 01:DATA_BYTE[1] +2 {checksum:02X}> ATD 100',
-        ))
-        self.assertTrue(boot_runner.first_read_trace(trace)['checksum']['valid'])
-        bad = trace.replace(f'{checksum:02X}> ATD', f'{checksum ^ 1:02X}> ATD')
-        self.assertFalse(boot_runner.first_read_trace(bad)['checksum']['valid'])
+    def test_first_read_transaction_checksum_from_real_interleaved_trace(self):
+        trace = (ROOT / 'fixtures/first-sector-interleaved-hub.txt').read_text()
+        result = boot_runner.first_read_trace(trace)
+        self.assertEqual(result['checksum']['status'], 'verified_valid')
+        self.assertEqual((result['checksum']['sent'], result['checksum']['computed']), ('B8', 'B8'))
+        self.assertTrue(result['checksum']['valid'])
+        boot_runner.validate_first_read_checksum(result)
+
+        corrupted = trace.replace('< ATD 01:DATA_BYTE[1] +55616 B8',
+                                  '< ATD 01:DATA_BYTE[1] +55616 B9')
+        self.assertNotEqual(corrupted, trace)
+        bad = boot_runner.first_read_trace(corrupted)
+        self.assertEqual(bad['checksum']['status'], 'verified_invalid')
+        self.assertFalse(bad['checksum']['valid'])
+        with self.assertRaisesRegex(RuntimeError, 'invalid SIO checksum'):
+            boot_runner.validate_first_read_checksum(bad)
+
+        # Keep the next transaction's 43 COMPLETE and NET checksum but remove
+        # the actual delivered checksum from the sector-1 transaction.
+        incomplete = trace.replace('< ATD 01:DATA_BYTE[1] +55616 B8', '')
+        unknown = boot_runner.first_read_trace(incomplete)
+        self.assertEqual(unknown['checksum']['status'], 'unverified')
+        self.assertIsNone(unknown['checksum']['valid'])
+        self.assertIsNone(unknown['checksum']['sent'])
+        boot_runner.validate_first_read_checksum(unknown)
+        ambiguous = trace.replace('< ATD 01:DATA_BYTE[1] +55616 B8',
+                                  '< ATD 01:DATA_BYTE[1] +55616 B8\n'
+                                  '< ATD 01:DATA_BYTE[1] +1 43')
+        self.assertEqual(boot_runner.first_read_trace(ambiguous)['checksum']['status'],
+                         'unverified')
+        self.assertEqual(boot_runner._sio_checksum(bytes((0xff, 0xff, 0x01))), 1)
 
     def test_evidence_directory_is_timestamped_and_unique(self):
         with tempfile.TemporaryDirectory() as parent:

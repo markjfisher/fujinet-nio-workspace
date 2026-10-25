@@ -1585,3 +1585,26 @@ integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post
 passed using `test-evidence/atari-sio-basic-memory-post-20261025-095237-v5p7dgn0/`.
 It reported 2,360 total bytes, MEMLO `$2806`, MEMTOP `$9c1f`, N: table
 `$24bb` and a correct first-read checksum `$b8`.
+
+### First disk-read checksum transaction verification
+
+The trace extractor now bounds the first D1 sector-1 read by Atari-facing
+command events and checks the delivered ACK, COMPLETE, sector and checksum in
+wire order. It reports verified-valid, verified-invalid or unverified evidence;
+a verified-invalid checksum fails disk acceptance. Regression tests use a real
+interleaved hub excerpt, a deliberately corrupted checksum, a missing checksum
+followed by the next transaction's `$43`, and an ambiguous extra byte.
+
+After `source scripts/env.sh`, the following passed:
+
+```sh
+python3 -m unittest discover -s integration-tests/atari-sio/tests -p test_public_api_clock.py -q
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-checksum-read --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-checksum-put --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-checksum-post --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-post --timeout 1 --evidence-dir test-evidence/atari-sio-checksum-post-final --json
+```
+
+All three BASIC runs reported delivered and computed checksums `$b8`, verified
+valid, with production NetworkDevice acceptance unchanged.

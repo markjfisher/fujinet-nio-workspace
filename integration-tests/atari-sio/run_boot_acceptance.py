@@ -1292,44 +1292,69 @@ def make_evidence_dir(prefix):
     return Path(tempfile.mkdtemp(prefix=f'{prefix.name}-{stamp}-', dir=prefix.parent))
 
 def first_read_trace(hub_log):
-    """Extract the first D1/sector-1 response without relying on log order."""
-    command = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?31 52 01 00 84(?:\s|$)', hub_log)
+    """Inspect the first sector-1 transaction as delivered to the Atari.
+
+    NET IN and ATD log lines can be interleaved, even within one line.  The
+    ATD events describe the serialized wire delivery; a later COMMAND_ON or
+    command frame bounds the transaction and prevents borrowing its bytes.
+    """
+    command = re.search(r'ATD -> 02:DATA_BLOCK\[5\] \+\d+ 31 52 01 00 84(?=\s|>|$)', hub_log)
+    unknown = {'status': 'unverified', 'valid': None, 'sent': None,
+               'computed': None, 'reason': 'sector-1 command not observed'}
     if not command:
-        return {'present': False}
-    tail = hub_log[command.end():]
-    def event(pattern, name):
-        match = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?' + pattern, tail)
-        if not match:
-            raise RuntimeError(f'first sector-1 response lacks {name}')
-        return match
-    ack = event(r'81:SYNC_RESPONSE\[5\].*? 41 00 00', 'command ACK')
-    complete = event(r'01:DATA_BYTE\[1\].*? 43(?:\s|$)', 'COMPLETE')
-    payload = event(r'02:DATA_BLOCK\[128\] \+\d+ (?P<data>(?:[0-9A-F]{2} ?){128})', '128-byte payload')
-    # Restrict the checksum match to traffic after the payload; the command
-    # response's COMPLETE is also a DATA_BYTE event.
-    payload_end = tail[payload.end():]
-    checksum = re.search(r'(?P<time>\d\d:\d\d:\d\d\.\d+) .*?< NET IN .*?01:DATA_BYTE\[1\] \+\d+ (?P<checksum>[0-9A-F]{2})(?=\s|>|$)', payload_end)
-    if not checksum:
-        raise RuntimeError('first sector-1 response lacks checksum')
+        return {'present': False, 'checksum': unknown}
+
+    def event_time(position):
+        line = hub_log[hub_log.rfind('\n', 0, position) + 1:position]
+        # Concurrent writers can concatenate timestamps with no delimiter.
+        times = re.findall(r'(?=(\d\d:\d\d:\d\d\.\d{6}))', line)
+        return times[0] if len(times) == 1 else None
+
     def seconds(value):
         h, m, s = value.split(':')
         return int(h) * 3600 + int(m) * 60 + float(s)
-    t0 = seconds(command['time'])
+
+    command_at = event_time(command.start())
+    def info(match, **fields):
+        at = event_time(match.start())
+        fields['at'] = at
+        fields['after_ms'] = (round((seconds(at) - seconds(command_at)) * 1000, 3)
+                              if at and command_at else None)
+        return fields
+
+    remainder = hub_log[command.end():]
+    boundary = re.search(r'> ATD 11 00[^\n]*?11:COMMAND_ON|ATD -> 02:DATA_BLOCK\[5\]', remainder)
+    transaction_end = command.end() + (boundary.start() if boundary else len(remainder))
+    event_pattern = re.compile(
+        r'(?P<ack>< ATD RESPONSE 16769 = 0x4181)'
+        r'|(?P<byte>< ATD 01:DATA_BYTE\[1\] \+\d+ (?P<value>[0-9A-F]{2})(?=\s|>|$))'
+        r'|(?P<payload>< ATD WRITE_BUFFER 128 <- 02:DATA_BLOCK\[128\] \+\d+ (?P<data>(?:[0-9A-F]{2} ){127}[0-9A-F]{2})(?=\s|>|$))')
+    events = list(event_pattern.finditer(hub_log, command.end(), transaction_end))
+    result = {'present': True, 'command_frame': '31 52 01 00 84',
+              'command_at': command_at, 'checksum': dict(unknown)}
+    kinds = [m.lastgroup for m in events]
+    if kinds != ['ack', 'byte', 'payload', 'byte']:
+        result['checksum']['reason'] = 'incomplete or ambiguous Atari-facing response sequence'
+        return result
+    ack, complete, payload, checksum = events
+    if complete['value'] != '43':
+        result['checksum']['reason'] = 'response does not contain COMPLETE'
+        return result
     data = bytes.fromhex(payload['data'])
-    computed = sum(data)
-    while computed > 0xff:
-        computed = (computed & 0xff) + (computed >> 8)
-    return {
-        'present': True, 'command_frame': '31 52 01 00 84',
-        'command_at': command['time'],
-        'ack': {'byte': '41', 'at': ack['time'], 'after_ms': round((seconds(ack['time']) - t0) * 1000, 3)},
-        'complete': {'byte': '43', 'at': complete['time'], 'after_ms': round((seconds(complete['time']) - t0) * 1000, 3)},
-        'payload': {'bytes': len(data), 'at': payload['time'], 'after_ms': round((seconds(payload['time']) - t0) * 1000, 3)},
-        'checksum': {'sent': checksum['checksum'], 'computed': f'{computed:02X}',
-                     'valid': int(checksum['checksum'], 16) == computed,
-                     'at': checksum['time'],
-                     'after_ms': round((seconds(checksum['time']) - t0) * 1000, 3)},
-    }
+    computed = _sio_checksum(data)
+    valid = int(checksum['value'], 16) == computed
+    result.update(ack=info(ack, byte='41'), complete=info(complete, byte='43'),
+                  payload=info(payload, bytes=len(data)),
+                  checksum=info(checksum, sent=checksum['value'], computed=f'{computed:02X}',
+                                valid=valid, status='verified_valid' if valid else 'verified_invalid'))
+    return result
+
+
+def validate_first_read_checksum(first_trace):
+    """A proven checksum error is a disk-protocol acceptance failure."""
+    if first_trace.get('checksum', {}).get('status') == 'verified_invalid':
+        raise RuntimeError('first D1 sector-1 read has an invalid SIO checksum')
+
 
 def verify_mydos_trace(hub_log):
     """MyDOS SD boot commands; the fixture inspector proves file execution."""
@@ -2129,6 +2154,7 @@ def run_netsio(timeout, evidence_dir=None, settle=0.0, capture_dcb=False, comman
             'phase_grouping': 'legacy DATA_BLOCK[1] for COMPLETE/checksum',
         }
         (run / 'first-read-sio.json').write_text(json.dumps(first_trace, indent=2) + '\n')
+        validate_first_read_checksum(first_trace)
         result=(inspector(token, run) if inspector else inspect_launch(token, run))
         if dcb_trace:
             result['first_read_dcb'] = dcb_trace
