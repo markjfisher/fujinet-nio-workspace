@@ -55,6 +55,13 @@ fill_zp:
         sty RESULT+1
 put_loop:
         lda #'A'
+.ifdef ASM_FAILURE_TEST
+        ldx $06df
+        cpx #5
+        bne :+
+        lda put_count
+:
+.endif
         ldx #$20
         jsr call_put
         cpy #1
@@ -68,6 +75,15 @@ put_loop:
         lda #$7c
         jsr call_close
         sty RESULT+3
+.ifdef ASM_FAILURE_TEST
+        lda #'B'
+        ldx #$20
+        jsr call_put
+        sty RESULT+7             ; failed CLOSE still retired local owner
+        ldx #$20
+        jsr call_open
+        sty RESULT+8             ; released slot can be reused
+.endif
         lda failure
         sta RESULT+4
         lda step

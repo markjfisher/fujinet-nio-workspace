@@ -304,7 +304,7 @@ packet_open_b:
         .byte $fd,1,30,0,$2f,0,1,1,0,11,0
         .byte "fixture://b",0,0,0,0,0,0,0,0
 packet_read:
-        .byte $fd,3,15,0,$d7,0,1,$34,$12,0,0,0,0,$80,0
+        .byte $fd,2,15,0,$d6,0,1,$34,$12,0,0,0,0,$80,0
 packet_info:
         .byte $fd,5,9,0,$53,0,1,$34,$12
 packet_close:
@@ -312,7 +312,7 @@ packet_close:
 reply_open:
         .byte $fd,1,13,0,$53,0,1,0,0,0,$34,$12,0
 reply_read:
-        .byte $fd,3,20,0,$03,0,1,1,0,0,$34,$12,0,0,0,0,2,0,'Q','R'
+        .byte $fd,2,20,0,$02,0,1,1,0,0,$34,$12,0,0,0,0,2,0,'Q','R'
 reply_info:
         .byte $fd,5,6,0,$09,0
 reply_close:

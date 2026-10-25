@@ -1260,3 +1260,140 @@ The firmware test-only fixture extension is committed as
 workspace pins this commit for coordinated publication. The firmware commit
 must reach its upstream branch before the workspace pin check can pass.
 Story 2.5 remains open.
+
+### Production CA65 resident replacement — 2026-10-25
+
+Implemented the mandatory assembly replacement; Story 2.5 remains open.
+The pinned C implementation remains unchanged as a functional reference.
+No production firmware, Disk STATUS semantics, public NIO API or library
+implementation changed.
+
+The measured prototype o65 has TEXT 12,491, DATA 27 and BSS 1,444 bytes.
+With its separately reserved 256-byte C stack and conservatively charged
+26-byte ZP bank, its permanent total is **14,244 bytes**, not its o65 file
+size. The unavoidable Atari responsibilities are CIO entry/return and IOCB
+ownership, handle/offset state, byte buffering, EOF/error translation,
+terminal output commitment and bounded native transport recovery. URI
+routing and networking already belong to production NetworkDevice.
+
+The replacement is one hand-written CA65 object, using direct JSRs, registers
+and static state. Existing `$7f` W/P/R packets reach the same firmware
+OPEN/READ/WRITE/CLOSE/INFO services. This needs no Atari-specific firmware
+adaptation. The module uses the existing o65 format and streamed installer;
+MyDOS `NIO.AR0` now installs this assembly payload by default.
+
+| Permanent component | Bytes |
+| --- | ---: |
+| CODE | 1,420 |
+| DATA: CIO table and ownership marker | 20 |
+| BSS: two owner records | 32 |
+| BSS: two byte caches | 256 |
+| BSS: shared packet/recovery workspace | 512 |
+| BSS: gateway/wire state | 23 |
+| Zero page, conservatively charging the complete declared bank | 26 |
+| Dedicated stack | 0 |
+| **Total** | **2,289** |
+
+The MEMLO reservation is 2,263 bytes; the total is 783 bytes below the hard
+3,072-byte cap and 271 below the preferred 2,560-byte target. Only two ZP
+bytes are used, borrowed and restored per foreground call. JSR/PHA borrow
+the existing OS hardware stack while executing and return at the original
+depth; no dedicated stack is permanently reserved. The transient installer,
+source file and relocation records are not part of the retained allocation.
+
+`fnresident-asm` always runs `tools/check_atari_resident_ram.py`, checking
+TEXT+DATA+BSS+ZP and rejecting implicit stacks, additional linked objects or
+a total over 3,072. Tests prove 3,072 passes and 3,073 fails. The production
+installer also rejects a nonzero C-stack request or an allocation plus ZP
+over budget before copying payload bytes. Marker `FNA1` distinguishes the
+assembly ownership contract from prototype `FNR1`; installing over the
+prototype is rejected without writing resident RAM. The disk wrapper is
+still FNR1. Existing relocation, MEMLO/display/stack bounds, rollback,
+repeat-install preservation and foreign-handler rejection remain in force.
+
+The handler retains two independent owners, 128-byte caches and full 32-bit
+offsets. Partial acknowledgements send only the unacknowledged suffix.
+Uncertain output faults the owner and never replays body or commit requests.
+A pending transaction must be P/R-drained or explicitly idle before another
+W. CLOSE attempts remote cleanup and retires local ownership even on error.
+Repeated STATUS and CLOSE share the one-time terminal commitment latch.
+
+Verification reused the original real-6502 OPEN/GET/PUT controls. The GET
+stand-in had READ command `$03` instead of production `$02`; its command and
+checksums were corrected so the replacement can validate response commands.
+The reference C controls still pass. Added real-6502 cases cover lost W
+completion, a complete bounded busy wait, failed R with retained response,
+malformed checksum, and two 64-byte acknowledgements for a varying 128-byte
+body. They assert no W replay, no uncertain commit, exact suffix bytes and
+offsets, cleanup, slot reuse and one successful commit. The 33 streamed
+installer assertions run against both payloads; additional assembly cases
+cover the prototype marker and runtime budget/stack rejection.
+
+The initial staged CIOV run failed before its first OPEN reached firmware.
+The C reference control passed. Segment inspection demonstrated that the
+assembly-only checks extended the transient loader into the caller at
+`$46a0`; loader state writes damaged its first instructions. The assembly
+CIOV probe now links separately at `$5800`, outside the loader, stage,
+launcher and result region. A generated-XEX disjoint-range assertion guards
+this path. The actual MyDOS streamed layout was unaffected.
+
+Final genuine BASIC evidence:
+
+- `test-evidence/atari-sio-asm-read-final/netsio/`: MyDOS boot, automatic
+  installation, READY, typed `LOAD "D:FNREAD.BAS"`, exact loaded-token match,
+  typed RUN, result `4e458801ad` (NE, EOF 136, CLOSE 1) and READY again.
+- `test-evidence/atari-sio-asm-write-final/netsio/`: the same lifecycle with
+  FNWRITE.BAS, result `00000001ad`; production NetworkDevice accepts the exact
+  bodies `42 43 44 9b` and 127 `$41` bytes followed by `$9b`. Each has one
+  body write, one zero-length commit at offset 4 or 128, and one CLOSE.
+  BASIC PRINT# line termination is included in both expected bodies.
+- Both retain HATABS N: table `$2474`, MEMLO `$27bf` (start `$1ee8`) and
+  identical before/after resident CODE SHA-256
+  `8fac861ddf72481a72cbc7cc0048dc6c73917c3e7c83b193c7c9aa521c01bf01`.
+  Screens, CPU snapshots, bridge key logs, complete loaded programs and
+  production service/SIO logs are captured. READ after-RUN PC is `$f301`,
+  SP `$f5`. Inspection completes before harness termination; no fixed-frame
+  wait is treated as execution evidence.
+
+Commands, after `source scripts/env.sh`:
+
+```sh
+make -C integration-tests/atari-sio/boot-app test-resident-asm test-resident-o65 test-resident-o65-disk resident-o65-mydos-basic
+python3 -m unittest discover -s integration-tests/atari-sio/tests -q
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic --timeout 1 --evidence-dir test-evidence/atari-sio-asm-read-final --json
+python3 integration-tests/atari-sio/run_boot_acceptance.py --resident-o65-basic-write --timeout 1 --evidence-dir test-evidence/atari-sio-asm-write-final --json
+```
+
+The build, real-6502 controls and 69 Python tests pass. The apps directory's
+`apps/platform/atari/resident/README.md` records the durable implementation,
+memory accounting, transport rules and reference/production build targets.
+
+Final live CIOV and D1 controls also pass on the final image:
+
+```sh
+mkdir -p test-evidence/atari-sio-asm-d1-final
+python3 - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, 'integration-tests/atari-sio')
+import run_boot_acceptance as r
+print(r.run_resident_o65_open(15, Path('test-evidence/atari-sio-asm-ciov-final-2'), assembly=True))
+print(r.run_native(5, Path('test-evidence/atari-sio-asm-d1-final')))
+print(r.run_netsio(5, Path('test-evidence/atari-sio-asm-d1-final'), explicit_cold_reset=True))
+PY
+```
+
+CIOV records all 17 expected production requests, including repeated STATUS
+and no duplicate commitment on CLOSE. Direct D1 returns NIO! at `$0627`;
+production NetSIO D1 returns NIO! at `$0626`, validates its first-read `$94`
+checksum, and reports the expected 128-byte boot reads and 256-byte sector
+361 read. The first D1 invocation failed to create its missing parent
+evidence directory; the command above includes that setup. No emulator or
+protocol change was needed. PUT after-RUN PC is `$f306`, SP `$f5`.
+The known first-read trace heuristic misassociated the PUT boot checksum;
+the final READ and D1 captures independently retain valid checksums, and
+both actual BASIC executions passed their complete result/service checks.
+
+Apps implementation commit: `eb707327`. The workspace acceptance/evidence
+commit pins this verified apps commit for the user's coordinated push.
+The firmware and library pins are unchanged. Nothing was pushed.

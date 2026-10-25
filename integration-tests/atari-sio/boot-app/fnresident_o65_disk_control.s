@@ -1,6 +1,9 @@
 ; Real-6502 streamed installer control. The CIO stand-in exposes a file at
 ; $9500, outside every installer/resident write range. $0681 selects a fault.
         .export _main
+.ifndef RESIDENT_ALLOCATION
+RESIDENT_ALLOCATION = $378a
+.endif
 .segment "CODE"
 _main:
         ldx #$ff
@@ -56,9 +59,9 @@ _main:
         sta $b2
         lda #$95
         sta $b3
-        lda #$8a
+        lda #<RESIDENT_ALLOCATION
         sta $b4
-        lda #$37
+        lda #>RESIDENT_ALLOCATION
         sta $b5
 snapshot:
         ldy #0
@@ -75,9 +78,9 @@ snapshot:
         sta $b2
         lda #$95
         sta $b3
-        lda #$8a
+        lda #<RESIDENT_ALLOCATION
         sta $b4
-        lda #$37
+        lda #>RESIDENT_ALLOCATION
         sta $b5
 compare:
         ldy #0

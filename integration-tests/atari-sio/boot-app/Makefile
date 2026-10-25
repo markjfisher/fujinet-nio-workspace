@@ -17,6 +17,7 @@ RESIDENT_OWN_ATR := $(OUT)/fnresident-own.atr
 RESIDENT_OVERLAP_XEX := $(OUT)/fnresident-overlap.xex
 RESIDENT_OVERLAP_ATR := $(OUT)/fnresident-overlap.atr
 RESIDENT_O65_MODULE := $(APPS)/build/atari/bin/fnresident-module.o65
+RESIDENT_ASM_MODULE := $(APPS)/build/atari/bin/fnresident-asm.o65
 RESIDENT_O65_LABELS := $(RESIDENT_O65_MODULE:.o65=.lbl)
 RESIDENT_O65_STAGE := $(OUT)/fnresident-o65-stage.xex
 RESIDENT_O65_LOADER := $(OUT)/fnresident-o65-loader.xex
@@ -34,6 +35,7 @@ RESIDENT_O65_OPEN_XEX := $(OUT)/fnresident-o65-open.xex
 RESIDENT_O65_OPEN_ATR := $(OUT)/fnresident-o65-open.atr
 RESIDENT_O65_MYDOS_ATR := $(OUT)/fnresident-o65-mydos-basic.atr
 RESIDENT_O65_DISK_LOADER := $(OUT)/fnresident-o65-disk-loader.xex
+RESIDENT_ASM_DISK_LOADER := $(OUT)/fnresident-asm-disk-loader.xex
 RESIDENT_O65_DISK_IMAGE := $(OUT)/nio.o65
 MYDOS_PLAIN_ATR := $(OUT)/mydos-4534-plain.atr
 TBXL_PARSER := $(OUT)/tools/basicParser-v12-0-ga877718/basicParser
@@ -205,15 +207,38 @@ $(RESIDENT_O65_OPEN_ATR): $(RESIDENT_O65_OPEN_XEX) $(PICOBOOT) Makefile | $(OUT)
 $(RESIDENT_O65_DISK_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-disk-loader.cfg | $(OUT)
 	cl65 -t none --asm-define DISK_SOURCE=1 -C fnresident-o65-disk-loader.cfg -Ln $(@:.xex=.lbl) -o $@ $<
 
-$(RESIDENT_O65_DISK_IMAGE): $(RESIDENT_O65_MODULE) $(RESIDENT_O65_LABELS) ../make_resident_o65_image.py | $(OUT)
-	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --output $@
+$(RESIDENT_ASM_DISK_LOADER): $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-disk-loader.cfg | $(OUT)
+	cl65 -t none --asm-define DISK_SOURCE=1 --asm-define ASM_RESIDENT=1 -C fnresident-o65-disk-loader.cfg -Ln $(@:.xex=.lbl) -o $@ $<
 
-$(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) Makefile | $(OUT)
+$(OUT)/fnresident-asm-loader.xex: $(APPS)/apps/platform/atari/resident/fnresident_o65_loader.s fnresident-o65-loader.cfg | $(OUT)
+	cl65 -t none --asm-define ASM_RESIDENT=1 -C fnresident-o65-loader.cfg -o $@ $<
+
+.PHONY: resident-asm-build
+resident-asm-build:
+	$(MAKE) -C $(APPS) -f makefiles/build.mk TARGET=atari fnresident-asm
+
+$(RESIDENT_O65_DISK_IMAGE): resident-asm-build ../make_resident_o65_image.py | $(OUT)
+	python3 ../make_resident_o65_image.py --module $(RESIDENT_ASM_MODULE) --labels $(RESIDENT_ASM_MODULE:.o65=.lbl) --cstack 0 --output $@
+
+$(OUT)/fnresident-asm-stage.xex: $(RESIDENT_O65_DISK_IMAGE)
+	python3 ../make_resident_o65_image.py --module $(RESIDENT_ASM_MODULE) --labels $(RESIDENT_ASM_MODULE:.o65=.lbl) --cstack 0 --stage 0x4900 --max-stage-end 0x9380 --output $@
+
+.PHONY: test-resident-asm
+test-resident-asm: $(OUT)/fnresident-asm-stage.xex $(OUT)/fnresident-asm-loader.xex $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_OPEN_CONTROL) $(RESIDENT_O65_OPEN_SIOV) $(RESIDENT_O65_GET_CLOSE_CONTROL) $(RESIDENT_O65_GET_CLOSE_SIOV) $(RESIDENT_O65_PUT_CONTROL) $(RESIDENT_O65_PUT_SIOV) $(OUT)/fnresident-asm-open.xex
+	python3 ../test_resident_asm.py
+
+$(OUT)/fnresident-asm-open-probe.xex: fnresident_o65_open_probe.s fnresident-o65-open-probe.cfg | $(OUT)
+	cl65 -t none --start-addr 0x5800 -C fnresident-o65-open-probe.cfg -o $@ $<
+
+$(OUT)/fnresident-asm-open.xex: $(OUT)/fnresident-asm-stage.xex $(OUT)/fnresident-asm-loader.xex $(OUT)/fnresident-asm-open-probe.xex ../compose_resident_o65_xex.py
+	python3 ../compose_resident_o65_xex.py --loader $(OUT)/fnresident-asm-loader.xex --staged $(OUT)/fnresident-asm-stage.xex --probe $(OUT)/fnresident-asm-open-probe.xex --output $@
+
+$(RESIDENT_O65_MYDOS_ATR): $(RESIDENT_ASM_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(RESIDENT_O65_BASIC_PROGRAM) $(RESIDENT_O65_BASIC_WRITE) Makefile | $(OUT)
 	rm -rf $(OUT)/resident-o65-mydos-stage
 	mkdir -p $(OUT)/resident-o65-mydos-stage
 	cp $(ROOT)/repos/MyPicoDOS/mydos-dos.sys $(OUT)/resident-o65-mydos-stage/DOS.SYS
 	cp $(ROOT)/repos/MyPicoDOS/mydos-dup.sys $(OUT)/resident-o65-mydos-stage/DUP.SYS
-	cp $(RESIDENT_O65_DISK_LOADER) $(OUT)/resident-o65-mydos-stage/NIO.AR0
+	cp $(RESIDENT_ASM_DISK_LOADER) $(OUT)/resident-o65-mydos-stage/NIO.AR0
 	cp $(RESIDENT_O65_DISK_IMAGE) $(OUT)/resident-o65-mydos-stage/NIO.O65
 	cp $(RESIDENT_O65_BASIC_PROGRAM) $(OUT)/resident-o65-mydos-stage/fnread.bas
 	cp $(RESIDENT_O65_BASIC_WRITE) $(OUT)/resident-o65-mydos-stage/fnwrite.bas
@@ -266,8 +291,10 @@ clean:
 	rm -rf $(OUT)
 
 .PHONY: test-resident-o65-disk
-test-resident-o65-disk: $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_DISK_IMAGE) $(OUT)/fnresident-o65-disk-control.bin
-	soft65c02_tester -i fnresident_o65_disk.txt
+test-resident-o65-disk: $(RESIDENT_O65_DISK_LOADER) $(RESIDENT_O65_MODULE) $(OUT)/fnresident-o65-disk-control.bin
+	python3 ../make_resident_o65_image.py --module $(RESIDENT_O65_MODULE) --labels $(RESIDENT_O65_LABELS) --output $(OUT)/nio-prototype.o65
+	sed 's@build/nio.o65@build/nio-prototype.o65@g' fnresident_o65_disk.txt > $(OUT)/fnresident-prototype-disk.txt
+	soft65c02_tester -i $(OUT)/fnresident-prototype-disk.txt
 
 $(OUT)/fnresident-o65-disk-control.bin: fnresident_o65_disk_control.s fnresident-o65-disk-control.cfg | $(OUT)
 	cl65 -t none -C fnresident-o65-disk-control.cfg -o $@ $<

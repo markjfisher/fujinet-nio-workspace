@@ -1638,14 +1638,16 @@ def inspect_resident_o65_open(token, evidence_dir):
             'cio_get_bytes': probe[7:10:2].decode('ascii'),
             'screenshot': str(evidence_dir / 'resident-o65-open-screen.png')}
 
-def run_resident_o65_open(timeout, evidence_dir):
+def run_resident_o65_open(timeout, evidence_dir, *, assembly=False):
     """Live NetSIO proof using the normal production NetworkDevice fixture.
 
     This is intentionally a small assembled CIO caller, not a BASIC claim.
     The endpoint is the existing Story 2.4 real-core fixture process.
     """
-    if not RESIDENT_O65_OPEN_ATR.is_file():
-        raise RuntimeError(f'resident CIO OPEN ATR is missing: {RESIDENT_O65_OPEN_ATR}')
+    program = ROOT / ('integration-tests/atari-sio/boot-app/build/fnresident-asm-open.xex'
+                      if assembly else 'integration-tests/atari-sio/boot-app/build/fnresident-o65-open.xex')
+    if not program.is_file():
+        raise RuntimeError(f'resident CIO OPEN program is missing: {program}')
     if not PUBLIC_API_CLOCK_ENDPOINT.is_file():
         raise RuntimeError(f'production NetworkDevice fixture is missing: {PUBLIC_API_CLOCK_ENDPOINT}')
     run = Path(evidence_dir) / 'netsio'
@@ -1657,7 +1659,7 @@ def run_resident_o65_open(timeout, evidence_dir):
                       '--storage-root', str(run / 'fujinet-data')),
         sidecar_ready='Atari public-API Clock/File/Network/Disk acceptance initialized',
         inspector=inspect_resident_o65_open,
-        program=ROOT / 'integration-tests/atari-sio/boot-app/build/fnresident-o65-open.xex')
+        program=program)
     trace = (run / 'nio.log').read_text(errors='replace')
     if trace.count('NetworkDevice routed request') != 17:
         raise RuntimeError('resident CIOV OPEN/GET/CLOSE/PUT/STATUS did not dispatch seventeen real NetworkDevice requests')
