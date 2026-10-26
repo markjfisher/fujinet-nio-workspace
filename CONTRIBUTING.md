@@ -40,13 +40,15 @@ git submodule sync repos/fujinet-nio
 ## What goes in a workspace pull request
 
 - **Yes:** docs, `backlog/` notes, scripts, tools and their tests.
-- **No submodule pins.** Leave the `repos/*` pointer changes your work creates
-  unstaged. A pin to a commit that is only on your fork, or only in an open
-  pull request, breaks `git submodule update` for everyone else.
+- **Submodule pins:** maintainers bump a pin once the submodule pull request
+  is merged. If you are not a maintainer, leave the `repos/*` pointer changes
+  your work creates unstaged. A pin to a commit that is only on your fork, or
+  only in an open pull request, fails CI and breaks `git submodule update` for
+  everyone else.
 - **No `.gitmodules` URL changes.**
 
 Open the pull requests in the submodule repositories. Once they are merged,
-the maintainer bumps the workspace pins to the merged commits.
+the pins are bumped to the merged commits.
 
 ## Checks
 

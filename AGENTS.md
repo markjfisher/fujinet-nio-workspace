@@ -152,10 +152,11 @@ git config (`git config submodule.<path>.url <fork>`, then
 `git submodule sync <path>`), which is never committed.
 `scripts/check-gitmodules.sh` checks this, and CI runs it on every pull request.
 
-Workspace pull requests never carry submodule pin changes: pins move only to
-commits already merged into the submodule's repository, after its PR is
-merged. CI checks this with `scripts/check-submodule-pins.sh`. Work against
-forks as `CONTRIBUTING.md` describes (a `fork` remote inside each submodule).
+Submodule pins move only to commits already merged into the submodule's own
+repository (`scripts/check-submodule-pins.sh`, run by CI). Once a submodule PR
+is merged, bump its pin in a workspace commit or PR. Never pin a commit that
+exists only on a fork or in an open PR. Work against forks as `CONTRIBUTING.md`
+describes (a `fork` remote inside each submodule).
 
 ## Verification (FujiNet NIO product)
 
