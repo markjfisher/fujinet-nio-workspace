@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import unittest
 
-DATA = json.loads((Path(__file__).parents[1] / "fixtures/nio_v1.json").read_text())
+DATA = json.loads((Path(__file__).parents[3] / "repos/fujinet-nio/tests/fixtures/atari-sio/nio_v1.json").read_text())
 
 
 def sio_checksum(data):

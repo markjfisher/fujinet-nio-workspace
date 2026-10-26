@@ -33,7 +33,7 @@ NATIVE_RESET_TO_IDLE_XEX = ROOT / "integration-tests/atari-sio/native-projection
 NATIVE_INTERRUPTED_R_RECOVERY_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-interrupted-r-recovery.xex"
 NATIVE_CAPACITY_BOUNDS_XEX = ROOT / "integration-tests/atari-sio/native-projection-app/build/native-capacity-bounds.xex"
 PUBLIC_API_CLOCK_XEX = ROOT / "repos/nio-core-apps/build/atari/bin/fnaccept.xex"
-TRACE_FIXTURE = ROOT / "integration-tests/atari-sio/fixtures/boot_acceptance_trace.json"
+TRACE_FIXTURE = ROOT / "repos/fujinet-nio/tests/fixtures/atari-sio/boot_acceptance_trace.json"
 PROFILE = ROOT / "configs/atari/profiles/atari-nio-config-boot.yaml"
 ALTIRRA = ROOT / "repos/AltirraSDL/build/linux-debug/src/AltirraSDL/AltirraSDL"
 SDK = ROOT / "repos/AltirraSDL/src/AltirraSDL/AltirraBridge/sdk/python"
@@ -4632,7 +4632,7 @@ def _capacity_response_data_mutation(trace):
 
 
 def _assert_capacity_guest_state(run_result):
-    fixture_data = json.loads((ROOT / "integration-tests/atari-sio/fixtures/nio_v1.json").read_text())
+    fixture_data = json.loads((ROOT / "repos/fujinet-nio/tests/fixtures/atari-sio/nio_v1.json").read_text())
     fixtures = {item["id"]: item for item in fixture_data["scenarios"]}
     expected_response = fixture_payload(fixtures["r-ready-512"]).hex(' ')
     statuses = run_result["siov_statuses"].split()

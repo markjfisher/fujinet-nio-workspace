@@ -1,16 +1,19 @@
 # Atari SIO v1 conformance fixtures
 
-This directory is the canonical, implementation-independent contract for the
-standard Atari disk surface and native NIO application channel. It describes
-virtual protocol evidence only: it does **not** assert SIO electrical
-characteristics, timing, UART behaviour, or physical-drive compatibility.
+This directory holds the workspace-level acceptance tooling for the standard
+Atari disk surface and native NIO application channel. The implementation-
+independent contract itself, the fixtures below, is owned by fujinet-nio, which
+defines the protocol, and lives in
+`repos/fujinet-nio/tests/fixtures/atari-sio/`. The fixtures describe virtual
+protocol evidence only: they do **not** assert SIO electrical characteristics,
+timing, UART behaviour, or physical-drive compatibility.
 
-`fixtures/disk_v1.json` is the literal disk-v1 matrix.  Its stable scenario
+`disk_v1.json` is the literal disk-v1 matrix.  Its stable scenario
 IDs are the identifiers an adapter reports; it must not be regenerated from a
 production framer. `disk_v1.manifest.json` projects those scenarios as ordered
 SIO phases for virtual consumers.
 
-`fixtures/nio_v1.json` is the literal native packet-NIO v1 matrix for SIO
+`nio_v1.json` is the literal native packet-NIO v1 matrix for SIO
 address `0x7f`. It fixes the client-visible `Q`/`W`/`P`/`R` command, AUX, DCB
 count, control reply, state, capacity, rejection, timeout, recovery, and reset
 vectors. It is independent of the library assembly and firmware endpoint.
@@ -19,7 +22,7 @@ AUX and serial bytes, not the Atari DCB count. The matrix uses symbolic control
 bytes (`A`, `C`, `N`, and `E`) and literal packet/state byte strings, rather
 than claiming physical timing or device implementation details.
 
-`fixtures/nio_v1.virtual.manifest.json` is the reference-only virtual
+`nio_v1.virtual.manifest.json` is the reference-only virtual
 projection. It contains stable fixture IDs, ordered operations, and required
 observation categories for each native family, plus the existing D1 page-6
 boot references. It does not repeat wire bytes, generate responses, or permit

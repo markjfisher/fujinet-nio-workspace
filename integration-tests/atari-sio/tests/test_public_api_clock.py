@@ -13,7 +13,7 @@ import run_boot_acceptance as boot_runner
 
 class PublicApiClockTests(unittest.TestCase):
     def test_first_read_transaction_checksum_from_real_interleaved_trace(self):
-        trace = (ROOT / 'fixtures/first-sector-interleaved-hub.txt').read_text()
+        trace = (ROOT.parents[1] / 'repos/fujinet-nio/tests/fixtures/atari-sio/first-sector-interleaved-hub.txt').read_text()
         result = boot_runner.first_read_trace(trace)
         self.assertEqual(result['checksum']['status'], 'verified_valid')
         self.assertEqual((result['checksum']['sent'], result['checksum']['computed']), ('B8', 'B8'))

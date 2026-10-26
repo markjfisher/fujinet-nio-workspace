@@ -7,9 +7,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+FIXTURES = ROOT.parents[1] / "repos/fujinet-nio/tests/fixtures/atari-sio"
 WORKSPACE = ROOT.parents[1]
-FIXTURE = json.loads((ROOT / "fixtures" / "disk_v1.json").read_text())
-MANIFEST = json.loads((ROOT / "fixtures" / "disk_v1.manifest.json").read_text())
+FIXTURE = json.loads((FIXTURES / "disk_v1.json").read_text())
+MANIFEST = json.loads((FIXTURES / "disk_v1.manifest.json").read_text())
 SUPPORTED = {0x50, 0x52, 0x53, 0x57}
 ERROR_STATUS = {
     "BadImage": "04 5f 0f 00", "FileNotFound": "04 5f 0f 00",

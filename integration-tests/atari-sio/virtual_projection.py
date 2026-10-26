@@ -13,7 +13,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-FIXTURES = ROOT / "fixtures"
+# The wire fixtures are owned by fujinet-nio, which defines the protocol.
+FIXTURES = ROOT.parents[1] / "repos/fujinet-nio/tests/fixtures/atari-sio"
 MANIFEST_PATH = FIXTURES / "nio_v1.virtual.manifest.json"
 NIO_PATH = FIXTURES / "nio_v1.json"
 DISK_PATH = FIXTURES / "disk_v1.json"
