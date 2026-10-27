@@ -1,6 +1,6 @@
 # Atari native-endpoint read latency: the remaining savings
 
-Status: `TODO` (decisions, not yet scheduled)
+Status: `IN PROGRESS` - options 1 to 3 are implemented; waiting for the hardware run (option 1 measured: 51.6-52.2 ms at index 0)
 
 ## Context
 
@@ -15,14 +15,14 @@ recommended.
 
 ## Options
 
-### 1. Index 0 instead of 1 (about 3 ms) - configuration only
+### 1. Index 0 instead of 1 (about 3 ms) - configuration only - DONE (works; the index stays the user's choice)
 
 `sio.hsio 0` (or `atari_sio.hsio_index: 0`), then the T page. 124,017 baud against 108,800. Disk boot at
 index 0 measured about 30 ms a sector against 33. The risk is the Atari receive loop in
 `fujinet-nio-lib/src/platform/atari/fn_hsio.s`, which crosses a page and so costs cycles it cannot spare at
 that rate; the run shows whether `hs errors` stay at zero. No code change needed to try it.
 
-### 2. Optimistic read: skip the poll `P` (about 4.6 ms)
+### 2. Optimistic read: skip the poll `P` (about 4.6 ms) - DONE, needs a hardware run
 
 Today a call is `W` (request), `P` (state and response length), `R` (exactly that length). `P` exists only to
 learn the length, and the firmware's handler runs inside the `W` (`complete_write`), so the response is
@@ -30,8 +30,10 @@ already ready when `W` completes.
 
 Design, with no new command and no change to the packet format:
 
-- The firmware accepts `R` with a length greater than or equal to the response length and pads the
-  rest with zeros (today it NAKs anything but the exact length). The FujiBus header already carries the
+- The firmware accepts `R` with a length greater than or equal to the response length (up to the
+  capacity) and pads the rest with zeros (a shorter `R` is still refused; it was decided against accepting
+  prefixes, to keep the retained-response contract and its integration tests unchanged). The Q reply's flag
+  bit 0 advertises it. The FujiBus header already carries the
   packet length, so a client that reads more bytes than the packet needs still parses it correctly.
 - A client that knows the size of the response (a sector read: 7 + 11 + sector size) issues `R` straight
   after `W`. If the firmware NAKs (an older firmware, or the response is not ready), it falls back to `P`
@@ -45,7 +47,7 @@ Design, with no new command and no change to the packet format:
   (NAK, state kept), an `R` before the response is ready (NAK); a soft65c02 test that the hinted call
   makes two SIO calls, not three.
 
-### 3. Skip the second copy of the response (about 2.4 ms) - library only
+### 3. Skip the second copy of the response (about 2.4 ms) - library only - DONE (profile: 14,000 to 9,850 cycles after the response)
 
 The response is copied twice: response buffer to the disk reply buffer (`fn_raw_call`), then to the
 caller's buffer (`memcpy` in `fn_disk_read_sector`). A raw-call variant that returns a pointer and length
