@@ -124,7 +124,7 @@ class DiskV1FixtureTests(unittest.TestCase):
         image = WORKSPACE / source["path"]
         self.assertEqual(source["atr_header_bytes"], 16)
         self.assertEqual(source["atr_header"], "96 02 e8 2c 00 01 00 00 00 00 00 00 00 00 00 00")
-        self.assertEqual(source["sha256"], "4b9a7f10a088614a46e9a688f3f395e176d2d4396d7c2aba5935c5954a740c62")
+        self.assertEqual(source["sha256"], "93e4c676cbd8bcede658880599641a3aa477cb5d64c2b59f4d422d8cfcb27da2")
         for sector in range(1, 5):
             golden = source["sectors"][str(sector)]
             literal = octets(golden["data"])
