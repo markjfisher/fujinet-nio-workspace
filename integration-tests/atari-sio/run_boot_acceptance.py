@@ -4117,7 +4117,7 @@ def write_altirra_embedded_native_core_dispatch_projection(run_result):
     altirra = (run / 'altirra.log').read_text(errors='replace')
     observed = compare_altirra_embedded_native_core_dispatch(pokey, altirra, manifest)
     if (run_result['guest_result'] != 'NVP!' or
-            run_result['q_reply'] != '01 00 02 00' or
+            run_result['q_reply'] != '01 00 02 01' or
             run_result['p_ready'] != '02 09 00' or
             run_result['r_reply'] != '01 02 09 00 0d 01 00 aa 55' or
             run_result['p_idle'] != '00 00 00'):

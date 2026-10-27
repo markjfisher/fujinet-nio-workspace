@@ -64,8 +64,8 @@ class VirtualProjectionTests(unittest.TestCase):
             "udp: Received 7 bytes: 02 7F 51 00 00 D0 01",
             "udp: Sending 6 bytes: 81 01 01 41 00 00",
             "udp: Sending 2 bytes: 01 43",
-            "udp: Sending 5 bytes: 02 01 00 02 00",
-            "udp: Sending 2 bytes: 01 03",
+            "udp: Sending 5 bytes: 02 01 00 02 01",
+            "udp: Sending 2 bytes: 01 04",
             "udp: Received 7 bytes: 02 7F 57 06 00 DC 02",
             "udp: Sending 6 bytes: 81 02 01 41 07 00",
             "udp: Received 8 bytes: 02 01 02 06 00 09 00 03",
@@ -135,7 +135,7 @@ class VirtualProjectionTests(unittest.TestCase):
             bytes.fromhex("7f 50 00 00 cf"),
         )
         replies = (
-            b"AC\x01\x00\x02\x00\x03", b"AAC", b"AC\x02\x09\x00\x0b",
+            b"AC\x01\x00\x02\x01\x04", b"AAC", b"AC\x02\x09\x00\x0b",
             bytes.fromhex("41 43 01 02 09 00 0d 01 00 aa 55 1a"),
             b"AC\x00\x00\x00\x00",
         )
@@ -180,7 +180,7 @@ class VirtualProjectionTests(unittest.TestCase):
             bytes.fromhex("7f 52 09 00 da"), bytes.fromhex("7f 50 00 00 cf"),
         )
         replies = (
-            b"AC\x01\x00\x02\x00\x03", b"AAC", b"AC\x02\x09\x00\x0b",
+            b"AC\x01\x00\x02\x01\x04", b"AAC", b"AC\x02\x09\x00\x0b",
             b"N", b"N", b"AC\x02\x09\x00\x0b",
             bytes.fromhex("41 43 01 02 09 00 0d 01 00 aa 55 1a"),
             b"AC\x00\x00\x00\x00",
@@ -220,7 +220,7 @@ class VirtualProjectionTests(unittest.TestCase):
             "core-dispatch fixture route invocation 1",
             "udp: Received 7 bytes: 02 7F 51 00 00 D0 01",
             "udp: Sending 6 bytes: 81 01 01 41 00 00", "udp: Sending 2 bytes: 01 43",
-            "udp: Sending 5 bytes: 02 01 00 02 00", "udp: Sending 2 bytes: 01 03",
+            "udp: Sending 5 bytes: 02 01 00 02 01", "udp: Sending 2 bytes: 01 04",
             "udp: Received 7 bytes: 02 7F 57 06 00 DC 02",
             "udp: Sending 6 bytes: 81 02 01 41 07 00",
             "udp: Received 8 bytes: 02 01 02 06 00 09 00 03", "udp: Received 4 bytes: 09 12 04 12",
@@ -265,7 +265,7 @@ class VirtualProjectionTests(unittest.TestCase):
             return [f"udp: Received 7 bytes: 02 {frame} {sequence:02X}", *response]
 
         q = ["udp: Sending 6 bytes: 81 01 01 41 00 00", "udp: Sending 2 bytes: 01 43",
-             "udp: Sending 5 bytes: 02 01 00 02 00", "udp: Sending 2 bytes: 01 03"]
+             "udp: Sending 5 bytes: 02 01 00 02 01", "udp: Sending 2 bytes: 01 04"]
         w = ["udp: Sending 6 bytes: 81 02 01 41 07 00",
              "udp: Received 8 bytes: 02 01 02 06 00 09 00 03",
              "udp: Received 4 bytes: 09 12 04 12",
@@ -325,7 +325,7 @@ class VirtualProjectionTests(unittest.TestCase):
             bytes.fromhex("7f 52 09 00 da"), bytes.fromhex("7f 50 00 00 cf"),
         )
         replies = (
-            b"AC\x01\x00\x02\x00\x03", b"AAC", b"AC\x02\x09\x00\x0b",
+            b"AC\x01\x00\x02\x01\x04", b"AAC", b"AC\x02\x09\x00\x0b",
             b"AC\x00\x00\x00\x00", b"AAC", b"AC\x02\x09\x00\x0b",
             bytes.fromhex("41 43 01 03 09 00 0e 01 00 33 cc 1c"),
             b"AC\x00\x00\x00\x00",
@@ -393,7 +393,7 @@ class VirtualProjectionTests(unittest.TestCase):
             bytes.fromhex("7f 50 00 00 cf"),
         )
         replies = (
-            b"AC\x01\x00\x02\x00\x03", b"AAC", b"AC\x02\x09\x00\x0b",
+            b"AC\x01\x00\x02\x01\x04", b"AAC", b"AC\x02\x09\x00\x0b",
             bytes.fromhex("41 43 01 02 09 00 0d 01 00 aa 55 1b"), b"N", b"N",
             b"AC\x00\x00\x00\x00", b"AAC", b"AC\x02\x09\x00\x0b",
             bytes.fromhex("41 43 01 04 09 00 0f 01 00 5a a5 1e"),
