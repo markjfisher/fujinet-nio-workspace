@@ -1,6 +1,6 @@
 # Atari native-endpoint read latency: the remaining savings
 
-Status: `IN PROGRESS` - options 1 to 3 are implemented; waiting for the hardware run (option 1 measured: 51.6-52.2 ms at index 0)
+Status: `DONE` - options 1 to 3 implemented and measured: a 256-byte read is 46.5 ms at index 0 (from 55 ms at index 1; 246 ms at 19200 before this work)
 
 ## Context
 
@@ -22,7 +22,7 @@ index 0 measured about 30 ms a sector against 33. The risk is the Atari receive 
 `fujinet-nio-lib/src/platform/atari/fn_hsio.s`, which crosses a page and so costs cycles it cannot spare at
 that rate; the run shows whether `hs errors` stay at zero. No code change needed to try it.
 
-### 2. Optimistic read: skip the poll `P` (about 4.6 ms) - DONE, needs a hardware run
+### 2. Optimistic read: skip the poll `P` (about 4.6 ms) - DONE (measured: no `P` for sector reads, about 5.5 ms saved together with option 3)
 
 Today a call is `W` (request), `P` (state and response length), `R` (exactly that length). `P` exists only to
 learn the length, and the firmware's handler runs inside the `W` (`complete_write`), so the response is
