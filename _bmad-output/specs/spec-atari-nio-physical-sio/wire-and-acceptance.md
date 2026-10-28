@@ -43,11 +43,11 @@ NetSIO host-reset events reclaim owned remote sessions without flushing or commi
 The default backend polls. An application that owns or chains the Atari PROC (`VPRCED`) handler may opt in to notification (`fn_atari_proc_enable`):
 
 - Off unless the FujiNet setting `atari_sio.proc_notify` is on; Q flag bit 1 advertises it only while it is.
-- What PROC means: **a read that would have been refused (`NotReady`) would now succeed**. FujiNet sends a bounded, rate-limited open-drain PROC pulse (500 us low, at least 5 ms apart, only while the Atari is not mid-transaction) when a network session owned by the client becomes readable: bytes buffered, or the peer closed or failed. A read re-arms it, so data left behind is announced again. Only TCP sessions report readiness so far; HTTP/TLS clients keep polling.
+- What PROC means: **a read that would have been refused (`NotReady`) would now succeed**. FujiNet sends a bounded, rate-limited open-drain PROC pulse (500 us low, at least 5 ms apart, only while the Atari is not mid-transaction) when a network session owned by the client becomes readable: bytes buffered, or the peer closed or failed. A read re-arms it, so data left behind is announced again. TCP, TLS and HTTP sessions report readiness (an HTTP client is told when the status is known and again when body bytes arrive); a session still waiting for its request body says nothing.
 - A pulse is **not** tied to the `W`/`P`/`R` response queue: the request runs inside the `W`, so a response is ready when `W` completes and a pulse then would carry no information. The `pending` `P` state is not produced yet; a deferred-processing mode would be a separate, opt-in change.
 - The library handler only counts, latches a flag and chains the previous handler (ISR-safe, constant time). Outside IRQ context the client repeats the read (`fn_read`), which answers `NotReady` if the notice was early or for data already taken.
 - PROC conveys neither source, request ID, length nor reason on the shared SIO bus. False, repeated or missed pulses are harmless because the data stays buffered and the polling path is complete.
-- Proved on hardware: the line and the VPRCED path (PROCTEST, `repos/fujinet-nio/docs/atari/proc.md`); the data-ready pulse with a real TCP session is the next run.
+- Proved on hardware: the line, the VPRCED path, and the data-ready pulse with a real TCP session (PROCTEST, `repos/fujinet-nio/docs/atari/proc.md`). HTTP and TLS readiness are built and host-tested; their hardware run is next.
 
 ## Disk bootstrap and configured drives
 
