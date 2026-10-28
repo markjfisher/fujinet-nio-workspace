@@ -30,7 +30,7 @@ NetSIO host-reset events reclaim owned remote sessions without flushing or commi
 | Concern | Contract |
 | --- | --- |
 | Address | SIO device `0x7F` is permanently the NIO application-channel address. It is unrelated to FujiBus `WireDeviceId` values such as Clock, Disk, Network, and File. |
-| Capability query | `Q` is an optional, direct fixed-size query. The client/fixture uses AUX `0` and DCB receive length `4`; at `P=idle`, the device returns ACK, COMPLETE, then four bytes: wire revision `1`, little-endian advertised maximum payload (at least 512 for v1), and feature flags. Bit 0 advertises advisory PROC readiness notification; all other bits are zero and ignored by v1 clients. The device validates AUX and state—not DCB length, which is not observable on the SIO wire—and rejects nonzero AUX or `Q` while pending/ready with `NAK`. `Q` neither creates nor consumes a `W`/`P`/`R` transaction. |
+| Capability query | `Q` is an optional, direct fixed-size query. The client/fixture uses AUX `0` and DCB receive length `4`; at `P=idle`, the device returns ACK, COMPLETE, then four bytes: wire revision `1`, little-endian advertised maximum payload (at least 512 for v1), and feature flags. Bit 0 advertises that `R` may ask for more than the response length (the reply is zero padded; `docs/atari/hsio-report.md`). Bit 1 advertises advisory PROC notification (below). All other bits are zero and ignored by v1 clients. The device validates AUX and state—not DCB length, which is not observable on the SIO wire—and rejects nonzero AUX or `Q` while pending/ready with `NAK`. `Q` neither creates nor consumes a `W`/`P`/`R` transaction. |
 | Request | The client/fixture uses matching AUX and DCB byte counts for `W`; it carries exactly one packet-native FujiBus request plus its standard SIO checksum. It is valid only at `P=idle`; a `W` while pending or ready is rejected with `NAK`. Valid receipt returns ACK then COMPLETE. |
 | Poll | The client/fixture uses `P` AUX `0` and DCB receive length `3`; the device returns ACK, COMPLETE, then exactly three bytes: state `0=idle`, `1=pending`, or `2=ready`, then a little-endian queued-response size which is nonzero only for `ready`. |
 | Response | After `P=ready`, the client/fixture uses `R` AUX and DCB byte counts equal to the reported size and the device returns exactly one packet-native FujiBus response plus the SIO checksum. A wrong observable `R` AUX length or bad command frame is rejected with `NAK` and retains the response. Once a valid `R` is accepted, its response slot is consumed and the next `P` is idle even if the data transfer is interrupted at the client. No zero padding is used. |
@@ -40,12 +40,14 @@ NetSIO host-reset events reclaim owned remote sessions without flushing or commi
 
 ### PROC readiness notification
 
-The default backend polls `P`. An application that owns or chains the Atari PROC (`VPRCED`) handler may opt in to notification:
+The default backend polls. An application that owns or chains the Atari PROC (`VPRCED`) handler may opt in to notification (`fn_atari_proc_enable`):
 
-- FujiNet sends a bounded, rate-limited open-drain PROC pulse when the NIO response queue transitions to ready, including a ready error response.
-- The application handler may call the library's ISR-safe constant-time notification hook, which only latches a flag.
-- Outside IRQ context, the client issues `P` before `R`; PROC conveys neither source, request ID, response length, nor reason on the shared SIO bus.
-- False or missed pulses are harmless because the response remains queued and the polling path is complete.
+- Off unless the FujiNet setting `atari_sio.proc_notify` is on; Q flag bit 1 advertises it only while it is.
+- What PROC means: **a read that would have been refused (`NotReady`) would now succeed**. FujiNet sends a bounded, rate-limited open-drain PROC pulse (500 us low, at least 5 ms apart, only while the Atari is not mid-transaction) when a network session owned by the client becomes readable: bytes buffered, or the peer closed or failed. A read re-arms it, so data left behind is announced again. Only TCP sessions report readiness so far; HTTP/TLS clients keep polling.
+- A pulse is **not** tied to the `W`/`P`/`R` response queue: the request runs inside the `W`, so a response is ready when `W` completes and a pulse then would carry no information. The `pending` `P` state is not produced yet; a deferred-processing mode would be a separate, opt-in change.
+- The library handler only counts, latches a flag and chains the previous handler (ISR-safe, constant time). Outside IRQ context the client repeats the read (`fn_read`), which answers `NotReady` if the notice was early or for data already taken.
+- PROC conveys neither source, request ID, length nor reason on the shared SIO bus. False, repeated or missed pulses are harmless because the data stays buffered and the polling path is complete.
+- Proved on hardware: the line and the VPRCED path (PROCTEST, `repos/fujinet-nio/docs/atari/proc.md`); the data-ready pulse with a real TCP session is the next run.
 
 ## Disk bootstrap and configured drives
 
