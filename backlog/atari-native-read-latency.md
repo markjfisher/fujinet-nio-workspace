@@ -68,8 +68,8 @@ writes, data gap 0 by default, `atari_sio` settings in `fujinet.yaml`, `sio.tune
 ## Open, not about latency
 
 - About 10 ACK timeouts per 600 calls remain; cause unknown.
-- U1MB: it never sends `3F` to `$70`, `$71` or `$7F`. The author says devices other than disks do reach
-  the HSIO handler with "All" and suspects a bug in the SIDE3 PBI BIOS build (fixed). This machine is a
-  U1MB (Ultimate BIOS 4.20, plugin SOS3P2 2.20, no SIDE3), so that bug should not apply; reply to the
-  author with the observed frames (device, command, speed) and ask whether `$7F` is probed at all.
+- U1MB: resolved. Ultimate BIOS 4.20 (the released one) never polls non-disk devices; 4.33 sends `3F` to
+  every device and speeds up `$7F` with no library driver (`docs/atari/hsio-report.md`, "The U1MB's own
+  handler"). To do: a same-boot run of the T page with `H` pressed, to see whether the 5-14 ACK timeouts a
+  run belong to the library driver (the U1MB handler had none in 1,400 transactions).
 - AltirraSDL / NetSIO answering `3F` so an emulated HSIO driver is exercised.
