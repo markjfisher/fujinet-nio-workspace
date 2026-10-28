@@ -70,6 +70,8 @@ writes, data gap 0 by default, `atari_sio` settings in `fujinet.yaml`, `sio.tune
 - About 10 ACK timeouts per 600 calls remain; cause unknown.
 - U1MB: resolved. Ultimate BIOS 4.20 (the released one) never polls non-disk devices; 4.33 sends `3F` to
   every device and speeds up `$7F` with no library driver (`docs/atari/hsio-report.md`, "The U1MB's own
-  handler"). To do: a same-boot run of the T page with `H` pressed, to see whether the 5-14 ACK timeouts a
-  run belong to the library driver (the U1MB handler had none in 1,400 transactions).
+  handler"). To do: flash the firmware with the "command frames lost" counter (`sio.status`) and run the T
+  page both ways (index 0, `H` off, then `sio.reset` and `H` on, one boot). The library driver counted 12
+  timeouts in 1,400 transactions (log 023), each a command frame the firmware never decoded; the U1MB
+  handler's retries are not visible any other way.
 - AltirraSDL / NetSIO answering `3F` so an emulated HSIO driver is exercised.
