@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Stage an Atari boot disk where the ESP32 build packs it, ready for
+# `./build.sh -f` (flash filesystem) in repos/fujinet-nio.
+#
+#   scripts/atari-boot-swap a        # diag-a.atr (normal app, display interrupts on)
+#   scripts/atari-boot-swap b        # diag-b.atr (no display interrupts)
+#   scripts/atari-boot-swap std      # the standard boot disk (nio-core-apps build/atari/disk/boot)
+#   scripts/atari-boot-swap FILE.atr
+#   scripts/atari-boot-swap -f a     # stage, then run ./build.sh -f
+#
+# It copies the image to distfiles/esp32-data/boot/atari/autorun.atr (and the
+# POSIX distfiles/boot/atari/autorun.atr). The board's platformio.local.ini must
+# list `atari` in [fujinet] boot_images (./build.sh -s <atari board> does).
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=env.sh
+source "$SCRIPT_DIR/env.sh"
+
+flash=0
+if [[ "${1:-}" == "-f" ]]; then flash=1; shift; fi
+which="${1:-}"
+disks="$NIO_CORE_APPS/build/atari/disk"
+case "$which" in
+  a)   image="$disks/diag-a.atr" ;;
+  b)   image="$disks/diag-b.atr" ;;
+  std) image="$disks/boot/autorun.atr" ;;
+  "")  echo "usage: $0 [-f] a|b|std|FILE.atr" >&2; exit 2 ;;
+  *)   image="$which" ;;
+esac
+[[ -f "$image" ]] || { echo "no such image: $image" >&2; exit 1; }
+
+fn="$NIO_WORKSPACE/repos/fujinet-nio"
+for dest in "$fn/distfiles/esp32-data/boot/atari" "$fn/distfiles/boot/atari"; do
+  mkdir -p "$dest"
+  cp "$image" "$dest/autorun.atr"
+  echo "staged $(basename "$image") -> $dest/autorun.atr"
+done
+md5sum "$fn/distfiles/esp32-data/boot/atari/autorun.atr"
+
+if (( flash )); then
+  cd "$fn" && ./build.sh -f
+else
+  echo "now flash it:  cd $fn && ./build.sh -f"
+fi
