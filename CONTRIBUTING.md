@@ -16,7 +16,7 @@ Clone the workspace as usual (from your fork of it, if you have one):
 git clone --recurse-submodules <workspace-url>
 ```
 
-Submodules are cloned from `github.com/markjfisher/...` or `github.com/fujinet-nio/...` (repos are moving to the org), as `.gitmodules`
+Submodules are cloned from `github.com/fujinet-nio/...` (or `github.com/FujiNetWIFI/...` for upstream projects we track), as `.gitmodules`
 says. **Don't change those URLs.** In each submodule you work on, add your fork
 as a second remote and push your branch there:
 
@@ -59,7 +59,7 @@ the pins are bumped to the merged commits.
 CI runs both on every pull request; run them yourself first:
 
 ```sh
-scripts/check-gitmodules.sh                    # every URL is on markjfisher/, fujinet-nio/ or FujiNetWIFI/
+scripts/check-gitmodules.sh                    # every URL is on fujinet-nio/ or FujiNetWIFI/
 scripts/check-submodule-pins.sh origin/master  # changed pins are on an upstream branch
 ```
 

@@ -1,7 +1,7 @@
 # Headless Atari800 NetSIO test
 
 This path builds the exact `mozzwald/atari800` `netsio-feb2026` revision
-reported in [fujinet-nio issue 26](https://github.com/markjfisher/fujinet-nio/issues/26).
+reported in [fujinet-nio issue 26](https://github.com/fujinet-nio/fujinet-nio/issues/26).
 The source is checked out into ignored `build/`, not installed as another
 workspace repository. It uses Atari800's no-video/no-sound target and never
 opens a window. A tiny test-only observer in its headless main loop reads a

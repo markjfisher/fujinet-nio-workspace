@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks that every submodule pin changed since BASE points at a commit on a
 # branch of the submodule's own repository (the .gitmodules URL, i.e.
-# markjfisher/...). A pin to a commit that is only on a fork, or only in an
+# fujinet-nio/...). A pin to a commit that is only on a fork, or only in an
 # open pull request, breaks `git submodule update` for everyone else: merge
 # the submodule PR first, then bump the pin.
 #
