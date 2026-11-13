@@ -9,7 +9,7 @@
 	url = git@github.com:fujinet-nio/nio-apps.git
 [submodule "repos/fujinet-qemu-msdos"]
 	path = repos/fujinet-qemu-msdos
-	url = git@github.com:markjfisher/fujinet-qemu-msdos.git
+	url = git@github.com:fujinet-nio/fujinet-qemu-msdos.git
 [submodule "repos/fn-rom"]
 	path = repos/fn-rom
 	url = git@github.com:fujinet-nio/fn-rom.git
@@ -21,7 +21,7 @@
 	url = git@github.com:FujiNetWIFI/fujinet-emulator-bridge.git
 [submodule "repos/AltirraSDL"]
 	path = repos/AltirraSDL
-	url = git@github.com:markjfisher/AltirraSDL.git
+	url = git@github.com:fujinet-nio/AltirraSDL.git
 [submodule "repos/cc65"]
 	path = repos/cc65
 	url = git@github.com:markjfisher/cc65.git
