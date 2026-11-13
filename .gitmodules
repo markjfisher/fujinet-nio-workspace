@@ -1,6 +1,6 @@
 [submodule "repos/fujinet-nio"]
 	path = repos/fujinet-nio
-	url = git@github.com:markjfisher/fujinet-nio.git
+	url = git@github.com:fujinet-nio/fujinet-nio.git
 [submodule "repos/fujinet-nio-lib"]
 	path = repos/fujinet-nio-lib
 	url = git@github.com:fujinet-nio/fujinet-nio-lib.git
