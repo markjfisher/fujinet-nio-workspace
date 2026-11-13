@@ -18,7 +18,7 @@
 	url = git@github.com:fujinet-nio/bounce-world-client-nio.git
 [submodule "repos/fujinet-emulator-bridge"]
 	path = repos/fujinet-emulator-bridge
-	url = git@github.com:markjfisher/fujinet-emulator-bridge.git
+	url = git@github.com:FujiNetWIFI/fujinet-emulator-bridge.git
 [submodule "repos/AltirraSDL"]
 	path = repos/AltirraSDL
 	url = git@github.com:markjfisher/AltirraSDL.git

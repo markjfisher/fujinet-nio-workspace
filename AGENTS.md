@@ -152,7 +152,7 @@ Commit as the person doing the work, not as an agent identity, and leave out
 agent session links (such as `Claude-Session:` lines).
 
 Never commit changes to submodule URLs in `.gitmodules`: they must stay on
-`github.com/markjfisher/` or `github.com/fujinet-nio/`. To work against a fork, override the URL in local
+`github.com/markjfisher/`, `github.com/fujinet-nio/` or `github.com/FujiNetWIFI/`. To work against a fork, override the URL in local
 git config (`git config submodule.<path>.url <fork>`, then
 `git submodule sync <path>`), which is never committed.
 `scripts/check-gitmodules.sh` checks this, and CI runs it on every pull request.

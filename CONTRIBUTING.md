@@ -59,7 +59,7 @@ the pins are bumped to the merged commits.
 CI runs both on every pull request; run them yourself first:
 
 ```sh
-scripts/check-gitmodules.sh                    # every URL is on markjfisher/ or fujinet-nio/
+scripts/check-gitmodules.sh                    # every URL is on markjfisher/, fujinet-nio/ or FujiNetWIFI/
 scripts/check-submodule-pins.sh origin/master  # changed pins are on an upstream branch
 ```
 
